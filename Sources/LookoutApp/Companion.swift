@@ -100,8 +100,12 @@ final class Companion {
 
     func snapshot(includeImage: Bool) async -> Snapshot {
         let running = NSWorkspace.shared.runningApplications.compactMap { $0.localizedName }
-        if demoInFront, let s = await demoBrowser.snapshot(runningApps: running, includeImage: includeImage, mapToScreen: true) {
-            return s
+        if demoInFront {
+            // Demo mode never falls back to the live screen: if the page can't be read this instant, skip the pass.
+            if let s = await demoBrowser.snapshot(runningApps: running, includeImage: includeImage, mapToScreen: true) { return s }
+            var empty = Snapshot(context: ScreenContext(text: "", runningApps: running))
+            empty.isFixture = true
+            return empty
         }
         return await observer.snapshot(includeImage: includeImage)
     }

@@ -1,0 +1,819 @@
+{
+ "version": 1,
+ "about": "LEARNED by lookout_detect/learn.py (MAP Baum-Welch on emissions, Beta prior centred on the hand-set values). Lookout scam playbook model. One combined HMM: benign states (idle + look-alike activities) plus one branch of stages per scam playbook. Each observation is a SET of evidence flags seen together; each flag is an independent Bernoulli given the hidden state. Edit numbers here; Python (lookout_detect) and Swift (LookoutCore/Playbook) both read this file.",
+ "events": [
+  "URGENT_LANGUAGE",
+  "PHONE_NUMBER_IN_POPUP",
+  "BRAND_IMPERSONATION",
+  "LOOKALIKE_DOMAIN",
+  "INFECTED_CLAIM",
+  "REFUND_OVERPAYMENT",
+  "REMOTE_ACCESS_STARTED",
+  "SCREEN_SHARE_ACTIVE",
+  "BANK_SITE_OPENED",
+  "SENSITIVE_FIELD_ON_UNKNOWN_SITE",
+  "PAYMENT_DEMAND",
+  "GIFT_CARD_PAGE",
+  "WIRE_OR_CRYPTO_PAGE",
+  "SECRECY_REQUEST",
+  "FAMILY_EMERGENCY_STORY",
+  "LEGAL_THREAT",
+  "GOV_IMPERSONATION",
+  "CLAUDE_FLAG"
+ ],
+ "model_reported_events": [
+  "CLAUDE_FLAG"
+ ],
+ "model_reported_note": "Model-reported flags only count (present OR absent) on observations where the model actually ran. P(CLAUDE_FLAG | scam stage) ~0.9 and P(CLAUDE_FLAG | benign) = 0.045 come from the bench: Claude confirmation had 100% precision on 154 fixtures and ~90% recall when consulted; 0.045 (not ~0) caps one model report at log(0.9/0.045) = +3.0 nats so the model can never decide alone.",
+ "distraction": 0.3,
+ "distraction_why": "During any activity (a scam in progress, a family remote session) some screens are simply not about it: the person checks the weather, or the extractor misses a cue. Each non-idle state emits like idle with this probability: b_s(x) = (1 - d) * b_stage(x) + d * b_idle(x). Without it, one quiet screen collapses a real scam.",
+ "probability_floor": 0.0001,
+ "default_benign_rate": 0.002,
+ "default_scam_rate": 0.01,
+ "timing": {
+  "scam_return_tau_s": 1800,
+  "benign_return_tau_s": 900,
+  "why": "Time between observations matters: a scam stage drifts back to idle with probability 1 - exp(-dt / tau). 30 min for scams (a remote-access launch 40 s after a fake pop-up is linked; three days later it is not), 15 min for benign activities."
+ },
+ "order": {
+  "why": "State order shared by the Python and Swift engines (JSON object key order is not portable).",
+  "benign": [
+   "idle",
+   "remote_help",
+   "gift_shopping",
+   "banking",
+   "paying_people",
+   "reading_about_scams"
+  ],
+  "playbooks": [
+   "tech_support",
+   "refund",
+   "grandparent",
+   "government"
+  ]
+ },
+ "benign": {
+  "states": {
+   "idle": {
+    "why": "Everyday use: email, news, photos, recipes. Scam-flavoured flags occur rarely (ads shout 'today only', real sites show brand names).",
+    "start": 0.965,
+    "emit": {
+     "URGENT_LANGUAGE": 0.02061,
+     "PHONE_NUMBER_IN_POPUP": 0.00291,
+     "BRAND_IMPERSONATION": 0.00594,
+     "LOOKALIKE_DOMAIN": 0.0001,
+     "INFECTED_CLAIM": 0.00393,
+     "REFUND_OVERPAYMENT": 0.00019,
+     "REMOTE_ACCESS_STARTED": 0.00168,
+     "SCREEN_SHARE_ACTIVE": 0.00015,
+     "BANK_SITE_OPENED": 0.03437,
+     "SENSITIVE_FIELD_ON_UNKNOWN_SITE": 0.07701,
+     "PAYMENT_DEMAND": 0.00017,
+     "GIFT_CARD_PAGE": 0.02525,
+     "WIRE_OR_CRYPTO_PAGE": 0.0001,
+     "SECRECY_REQUEST": 0.00696,
+     "FAMILY_EMERGENCY_STORY": 0.00707,
+     "LEGAL_THREAT": 0.00165,
+     "GOV_IMPERSONATION": 0.04445,
+     "CLAUDE_FLAG": 0.045
+    }
+   },
+   "remote_help": {
+    "why": "A grandchild or IT friend helping over AnyDesk / TeamViewer / screen sharing. The main look-alike for tech-support and refund scams: remote access alone must stay explainable.",
+    "start": 0.005,
+    "enter": 0.002,
+    "stay": 0.85,
+    "emit": {
+     "URGENT_LANGUAGE": 0.01845,
+     "PHONE_NUMBER_IN_POPUP": 0.00036,
+     "BRAND_IMPERSONATION": 0.00363,
+     "LOOKALIKE_DOMAIN": 0.00036,
+     "INFECTED_CLAIM": 0.01848,
+     "REFUND_OVERPAYMENT": 0.00036,
+     "REMOTE_ACCESS_STARTED": 0.81375,
+     "SCREEN_SHARE_ACTIVE": 0.23523,
+     "BANK_SITE_OPENED": 0.03469,
+     "SENSITIVE_FIELD_ON_UNKNOWN_SITE": 0.00785,
+     "PAYMENT_DEMAND": 0.00036,
+     "GIFT_CARD_PAGE": 0.00036,
+     "WIRE_OR_CRYPTO_PAGE": 0.00036,
+     "SECRECY_REQUEST": 0.00036,
+     "FAMILY_EMERGENCY_STORY": 0.00036,
+     "LEGAL_THREAT": 0.00036,
+     "GOV_IMPERSONATION": 0.00942,
+     "CLAUDE_FLAG": 0.045
+    }
+   },
+   "gift_shopping": {
+    "why": "Buying a gift card as a present. Retail sites say 'sale ends today' and show card entry, but nobody demands payment.",
+    "start": 0.01,
+    "enter": 0.004,
+    "stay": 0.8,
+    "emit": {
+     "URGENT_LANGUAGE": 0.07152,
+     "PHONE_NUMBER_IN_POPUP": 0.00043,
+     "BRAND_IMPERSONATION": 0.00043,
+     "LOOKALIKE_DOMAIN": 0.00043,
+     "INFECTED_CLAIM": 0.00043,
+     "REFUND_OVERPAYMENT": 0.00043,
+     "REMOTE_ACCESS_STARTED": 0.00043,
+     "SCREEN_SHARE_ACTIVE": 0.00043,
+     "BANK_SITE_OPENED": 0.00043,
+     "SENSITIVE_FIELD_ON_UNKNOWN_SITE": 0.02332,
+     "PAYMENT_DEMAND": 0.09333,
+     "GIFT_CARD_PAGE": 0.9469,
+     "WIRE_OR_CRYPTO_PAGE": 0.00046,
+     "SECRECY_REQUEST": 0.00043,
+     "FAMILY_EMERGENCY_STORY": 0.00044,
+     "LEGAL_THREAT": 0.00043,
+     "GOV_IMPERSONATION": 0.00043,
+     "CLAUDE_FLAG": 0.045
+    }
+   },
+   "banking": {
+    "why": "Normal online banking: checking a statement or paying a bill on the real bank site.",
+    "start": 0.015,
+    "enter": 0.008,
+    "stay": 0.8,
+    "emit": {
+     "URGENT_LANGUAGE": 0.01509,
+     "PHONE_NUMBER_IN_POPUP": 0.00069,
+     "BRAND_IMPERSONATION": 0.00069,
+     "LOOKALIKE_DOMAIN": 0.00069,
+     "INFECTED_CLAIM": 0.00069,
+     "REFUND_OVERPAYMENT": 0.00069,
+     "REMOTE_ACCESS_STARTED": 0.00069,
+     "SCREEN_SHARE_ACTIVE": 0.00069,
+     "BANK_SITE_OPENED": 0.9496,
+     "SENSITIVE_FIELD_ON_UNKNOWN_SITE": 0.00077,
+     "PAYMENT_DEMAND": 0.00078,
+     "GIFT_CARD_PAGE": 0.0007,
+     "WIRE_OR_CRYPTO_PAGE": 0.01045,
+     "SECRECY_REQUEST": 0.00069,
+     "FAMILY_EMERGENCY_STORY": 0.00069,
+     "LEGAL_THREAT": 0.00069,
+     "GOV_IMPERSONATION": 0.00069,
+     "CLAUDE_FLAG": 0.045
+    }
+   },
+   "paying_people": {
+    "why": "Sending money to people you know: a grandchild asks for $20 on Venmo, splitting a bill on Zelle. Money requests and payment apps without secrecy, threats or a stranger's story.",
+    "start": 0.005,
+    "enter": 0.003,
+    "stay": 0.7,
+    "emit": {
+     "URGENT_LANGUAGE": 0.04912,
+     "PHONE_NUMBER_IN_POPUP": 0.00048,
+     "BRAND_IMPERSONATION": 0.00048,
+     "LOOKALIKE_DOMAIN": 0.00048,
+     "INFECTED_CLAIM": 0.00048,
+     "REFUND_OVERPAYMENT": 0.00048,
+     "REMOTE_ACCESS_STARTED": 0.00048,
+     "SCREEN_SHARE_ACTIVE": 0.00048,
+     "BANK_SITE_OPENED": 0.00061,
+     "SENSITIVE_FIELD_ON_UNKNOWN_SITE": 0.01306,
+     "PAYMENT_DEMAND": 0.86768,
+     "GIFT_CARD_PAGE": 0.11211,
+     "WIRE_OR_CRYPTO_PAGE": 0.8905,
+     "SECRECY_REQUEST": 0.00058,
+     "FAMILY_EMERGENCY_STORY": 0.08405,
+     "LEGAL_THREAT": 0.02453,
+     "GOV_IMPERSONATION": 0.00058,
+     "CLAUDE_FLAG": 0.045
+    }
+   },
+   "reading_about_scams": {
+    "why": "News articles, AARP alerts and bank 'fraud tips' are full of scam vocabulary but nobody is asking for anything. The extractor already drops advice sentences and damps article-like screens, so only ~5-15% of such screens leak a given flag; this state absorbs those leaks.",
+    "start": 0.005,
+    "enter": 0.002,
+    "stay": 0.5,
+    "emit": {
+     "URGENT_LANGUAGE": 0.12263,
+     "PHONE_NUMBER_IN_POPUP": 0.01621,
+     "BRAND_IMPERSONATION": 0.0486,
+     "LOOKALIKE_DOMAIN": 0.00157,
+     "INFECTED_CLAIM": 0.02713,
+     "REFUND_OVERPAYMENT": 0.00157,
+     "REMOTE_ACCESS_STARTED": 0.0016,
+     "SCREEN_SHARE_ACTIVE": 0.00157,
+     "BANK_SITE_OPENED": 0.00162,
+     "SENSITIVE_FIELD_ON_UNKNOWN_SITE": 0.004,
+     "PAYMENT_DEMAND": 0.15345,
+     "GIFT_CARD_PAGE": 0.0982,
+     "WIRE_OR_CRYPTO_PAGE": 0.12623,
+     "SECRECY_REQUEST": 0.08004,
+     "FAMILY_EMERGENCY_STORY": 0.15128,
+     "LEGAL_THREAT": 0.13683,
+     "GOV_IMPERSONATION": 0.1389,
+     "CLAUDE_FLAG": 0.045
+    }
+   }
+  }
+ },
+ "playbooks": {
+  "tech_support": {
+   "entry_stages": [
+    0.8,
+    0.2,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "entry_why": "Usually starts with the pop-up; ~20% start with a cold call we never see.",
+   "label": "Fake tech support",
+   "why": "Pop-up claims infection and shows a phone number \u2192 victim calls \u2192 'technician' installs remote access \u2192 victim logs into bank 'to check' \u2192 payment by gift card / wire / crypto.",
+   "enter": 6e-05,
+   "stages": [
+    {
+     "name": "popup",
+     "hint": "a scary pop-up with a phone number",
+     "why": "Fake virus warning: infection claim + phone number + Microsoft/Apple branding + urgency, often on a misspelled domain.",
+     "emit": {
+      "URGENT_LANGUAGE": 0.68731,
+      "PHONE_NUMBER_IN_POPUP": 0.83389,
+      "BRAND_IMPERSONATION": 0.79238,
+      "LOOKALIKE_DOMAIN": 0.2917,
+      "INFECTED_CLAIM": 0.83192,
+      "REFUND_OVERPAYMENT": 0.00537,
+      "REMOTE_ACCESS_STARTED": 0.00536,
+      "SCREEN_SHARE_ACTIVE": 0.00535,
+      "BANK_SITE_OPENED": 0.00535,
+      "SENSITIVE_FIELD_ON_UNKNOWN_SITE": 0.00536,
+      "PAYMENT_DEMAND": 0.00535,
+      "GIFT_CARD_PAGE": 0.00535,
+      "WIRE_OR_CRYPTO_PAGE": 0.00535,
+      "SECRECY_REQUEST": 0.00536,
+      "FAMILY_EMERGENCY_STORY": 0.00535,
+      "LEGAL_THREAT": 0.04252,
+      "GOV_IMPERSONATION": 0.00536,
+      "CLAUDE_FLAG": 0.9
+     }
+    },
+    {
+     "name": "call",
+     "hint": "a phone call with the fake technician",
+     "why": "The call happens on the phone, invisible to the Mac. Mostly quiet screens; sometimes the pop-up is still up.",
+     "emit": {
+      "URGENT_LANGUAGE": 0.13424,
+      "PHONE_NUMBER_IN_POPUP": 0.12943,
+      "BRAND_IMPERSONATION": 0.19046,
+      "LOOKALIKE_DOMAIN": 0.06949,
+      "INFECTED_CLAIM": 0.03003,
+      "REFUND_OVERPAYMENT": 0.006,
+      "REMOTE_ACCESS_STARTED": 0.08358,
+      "SCREEN_SHARE_ACTIVE": 0.006,
+      "BANK_SITE_OPENED": 0.006,
+      "SENSITIVE_FIELD_ON_UNKNOWN_SITE": 0.006,
+      "PAYMENT_DEMAND": 0.006,
+      "GIFT_CARD_PAGE": 0.006,
+      "WIRE_OR_CRYPTO_PAGE": 0.006,
+      "SECRECY_REQUEST": 0.03594,
+      "FAMILY_EMERGENCY_STORY": 0.006,
+      "LEGAL_THREAT": 0.06263,
+      "GOV_IMPERSONATION": 0.006,
+      "CLAUDE_FLAG": 0.5
+     }
+    },
+    {
+     "name": "remote",
+     "hint": "installing a program like AnyDesk so they can control the computer",
+     "why": "Caller talks the victim into AnyDesk / TeamViewer / ScreenConnect.",
+     "emit": {
+      "URGENT_LANGUAGE": 0.03748,
+      "PHONE_NUMBER_IN_POPUP": 0.00407,
+      "BRAND_IMPERSONATION": 0.22031,
+      "LOOKALIKE_DOMAIN": 0.04415,
+      "INFECTED_CLAIM": 0.00408,
+      "REFUND_OVERPAYMENT": 0.00407,
+      "REMOTE_ACCESS_STARTED": 0.95435,
+      "SCREEN_SHARE_ACTIVE": 0.16263,
+      "BANK_SITE_OPENED": 0.00501,
+      "SENSITIVE_FIELD_ON_UNKNOWN_SITE": 0.07491,
+      "PAYMENT_DEMAND": 0.00407,
+      "GIFT_CARD_PAGE": 0.00407,
+      "WIRE_OR_CRYPTO_PAGE": 0.00407,
+      "SECRECY_REQUEST": 0.00412,
+      "FAMILY_EMERGENCY_STORY": 0.00407,
+      "LEGAL_THREAT": 0.00413,
+      "GOV_IMPERSONATION": 0.00407,
+      "CLAUDE_FLAG": 0.7
+     }
+    },
+    {
+     "name": "banking",
+     "hint": "logging into the bank 'to check for hackers'",
+     "why": "With remote control still open, victim is told to open online banking.",
+     "emit": {
+      "URGENT_LANGUAGE": 0.20305,
+      "PHONE_NUMBER_IN_POPUP": 0.00609,
+      "BRAND_IMPERSONATION": 0.01197,
+      "LOOKALIKE_DOMAIN": 0.00649,
+      "INFECTED_CLAIM": 0.02537,
+      "REFUND_OVERPAYMENT": 0.00609,
+      "REMOTE_ACCESS_STARTED": 0.81652,
+      "SCREEN_SHARE_ACTIVE": 0.18277,
+      "BANK_SITE_OPENED": 0.65108,
+      "SENSITIVE_FIELD_ON_UNKNOWN_SITE": 0.30259,
+      "PAYMENT_DEMAND": 0.00629,
+      "GIFT_CARD_PAGE": 0.0061,
+      "WIRE_OR_CRYPTO_PAGE": 0.00628,
+      "SECRECY_REQUEST": 0.00609,
+      "FAMILY_EMERGENCY_STORY": 0.00609,
+      "LEGAL_THREAT": 0.0061,
+      "GOV_IMPERSONATION": 0.00609,
+      "CLAUDE_FLAG": 0.8
+     }
+    },
+    {
+     "name": "payment",
+     "hint": "buying gift cards or sending a wire",
+     "why": "The cash-out: gift cards, wire, crypto ATM, often 'don't tell the bank'.",
+     "emit": {
+      "URGENT_LANGUAGE": 0.32019,
+      "PHONE_NUMBER_IN_POPUP": 0.02876,
+      "BRAND_IMPERSONATION": 0.029,
+      "LOOKALIKE_DOMAIN": 0.02887,
+      "INFECTED_CLAIM": 0.03751,
+      "REFUND_OVERPAYMENT": 0.02876,
+      "REMOTE_ACCESS_STARTED": 0.73686,
+      "SCREEN_SHARE_ACTIVE": 0.00479,
+      "BANK_SITE_OPENED": 0.08367,
+      "SENSITIVE_FIELD_ON_UNKNOWN_SITE": 0.47554,
+      "PAYMENT_DEMAND": 0.65325,
+      "GIFT_CARD_PAGE": 0.47251,
+      "WIRE_OR_CRYPTO_PAGE": 0.41414,
+      "SECRECY_REQUEST": 0.2006,
+      "FAMILY_EMERGENCY_STORY": 0.00479,
+      "LEGAL_THREAT": 0.05218,
+      "GOV_IMPERSONATION": 0.00479,
+      "CLAUDE_FLAG": 0.9
+     }
+    }
+   ],
+   "transitions": {
+    "why": "Each row: [stay, advance one, skip one, abandon\u2192idle]. Calls are short and usually lead straight to remote access.",
+    "rows": [
+     [
+      0.55,
+      0.33,
+      0.04,
+      0.08
+     ],
+     [
+      0.35,
+      0.55,
+      0.04,
+      0.06
+     ],
+     [
+      0.55,
+      0.33,
+      0.04,
+      0.08
+     ],
+     [
+      0.55,
+      0.37,
+      0.0,
+      0.08
+     ],
+     [
+      0.75,
+      0.0,
+      0.0,
+      0.25
+     ]
+    ]
+   }
+  },
+  "refund": {
+   "entry_stages": [
+    0.75,
+    0.25,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "entry_why": "Invoice is often read on a phone, so ~25% start at the call.",
+   "label": "Refund / overpayment scam",
+   "why": "Fake invoice (Norton, Geek Squad, Amazon) with a phone number \u2192 call \u2192 remote access 'to process the refund' \u2192 victim logs into bank, scammer edits the page to fake an over-refund \u2192 victim 'returns' the difference.",
+   "enter": 6e-05,
+   "stages": [
+    {
+     "name": "invoice",
+     "hint": "a surprise invoice with a number to call",
+     "why": "Auto-renewal / unexpected charge with a 'call to cancel' number.",
+     "emit": {
+      "URGENT_LANGUAGE": 0.5346,
+      "PHONE_NUMBER_IN_POPUP": 0.7495,
+      "BRAND_IMPERSONATION": 0.78214,
+      "LOOKALIKE_DOMAIN": 0.0975,
+      "INFECTED_CLAIM": 0.02948,
+      "REFUND_OVERPAYMENT": 0.87124,
+      "REMOTE_ACCESS_STARTED": 0.00517,
+      "SCREEN_SHARE_ACTIVE": 0.00486,
+      "BANK_SITE_OPENED": 0.00486,
+      "SENSITIVE_FIELD_ON_UNKNOWN_SITE": 0.00486,
+      "PAYMENT_DEMAND": 0.00486,
+      "GIFT_CARD_PAGE": 0.00486,
+      "WIRE_OR_CRYPTO_PAGE": 0.00486,
+      "SECRECY_REQUEST": 0.0049,
+      "FAMILY_EMERGENCY_STORY": 0.00486,
+      "LEGAL_THREAT": 0.00486,
+      "GOV_IMPERSONATION": 0.00486,
+      "CLAUDE_FLAG": 0.85
+     }
+    },
+    {
+     "name": "call",
+     "hint": "a phone call about the refund",
+     "why": "Off-device call; quiet screens.",
+     "emit": {
+      "URGENT_LANGUAGE": 0.00718,
+      "PHONE_NUMBER_IN_POPUP": 0.0117,
+      "BRAND_IMPERSONATION": 0.104,
+      "LOOKALIKE_DOMAIN": 0.04305,
+      "INFECTED_CLAIM": 0.07305,
+      "REFUND_OVERPAYMENT": 0.11282,
+      "REMOTE_ACCESS_STARTED": 0.01246,
+      "SCREEN_SHARE_ACTIVE": 0.00696,
+      "BANK_SITE_OPENED": 0.00696,
+      "SENSITIVE_FIELD_ON_UNKNOWN_SITE": 0.00696,
+      "PAYMENT_DEMAND": 0.00696,
+      "GIFT_CARD_PAGE": 0.00696,
+      "WIRE_OR_CRYPTO_PAGE": 0.00696,
+      "SECRECY_REQUEST": 0.04279,
+      "FAMILY_EMERGENCY_STORY": 0.00696,
+      "LEGAL_THREAT": 0.03031,
+      "GOV_IMPERSONATION": 0.00696,
+      "CLAUDE_FLAG": 0.5
+     }
+    },
+    {
+     "name": "remote",
+     "hint": "installing a program like AnyDesk 'to process the refund'",
+     "why": "Remote-access install is the hallmark of this scam.",
+     "emit": {
+      "URGENT_LANGUAGE": 0.00554,
+      "PHONE_NUMBER_IN_POPUP": 0.00561,
+      "BRAND_IMPERSONATION": 0.03307,
+      "LOOKALIKE_DOMAIN": 0.03181,
+      "INFECTED_CLAIM": 0.11686,
+      "REFUND_OVERPAYMENT": 0.34914,
+      "REMOTE_ACCESS_STARTED": 0.94007,
+      "SCREEN_SHARE_ACTIVE": 0.22142,
+      "BANK_SITE_OPENED": 0.00568,
+      "SENSITIVE_FIELD_ON_UNKNOWN_SITE": 0.08085,
+      "PAYMENT_DEMAND": 0.00554,
+      "GIFT_CARD_PAGE": 0.0056,
+      "WIRE_OR_CRYPTO_PAGE": 0.00554,
+      "SECRECY_REQUEST": 0.03236,
+      "FAMILY_EMERGENCY_STORY": 0.00554,
+      "LEGAL_THREAT": 0.00561,
+      "GOV_IMPERSONATION": 0.00554,
+      "CLAUDE_FLAG": 0.75
+     }
+    },
+    {
+     "name": "overpay",
+     "hint": "logging into the bank while they 'fix' the refund",
+     "why": "Bank site open under remote control; scammer claims they refunded too much.",
+     "emit": {
+      "URGENT_LANGUAGE": 0.26691,
+      "PHONE_NUMBER_IN_POPUP": 0.00667,
+      "BRAND_IMPERSONATION": 0.00668,
+      "LOOKALIKE_DOMAIN": 0.00667,
+      "INFECTED_CLAIM": 0.00677,
+      "REFUND_OVERPAYMENT": 0.37603,
+      "REMOTE_ACCESS_STARTED": 0.79979,
+      "SCREEN_SHARE_ACTIVE": 0.20018,
+      "BANK_SITE_OPENED": 0.72545,
+      "SENSITIVE_FIELD_ON_UNKNOWN_SITE": 0.14001,
+      "PAYMENT_DEMAND": 0.00712,
+      "GIFT_CARD_PAGE": 0.00705,
+      "WIRE_OR_CRYPTO_PAGE": 0.00712,
+      "SECRECY_REQUEST": 0.00668,
+      "FAMILY_EMERGENCY_STORY": 0.00667,
+      "LEGAL_THREAT": 0.00668,
+      "GOV_IMPERSONATION": 0.00667,
+      "CLAUDE_FLAG": 0.85
+     }
+    },
+    {
+     "name": "payment",
+     "hint": "sending money back by gift card or wire",
+     "why": "Victim 'returns' the overpayment via gift cards, wire or crypto.",
+     "emit": {
+      "URGENT_LANGUAGE": 0.29346,
+      "PHONE_NUMBER_IN_POPUP": 0.00391,
+      "BRAND_IMPERSONATION": 0.04304,
+      "LOOKALIKE_DOMAIN": 0.04304,
+      "INFECTED_CLAIM": 0.00392,
+      "REFUND_OVERPAYMENT": 0.00391,
+      "REMOTE_ACCESS_STARTED": 0.7848,
+      "SCREEN_SHARE_ACTIVE": 0.00391,
+      "BANK_SITE_OPENED": 0.07603,
+      "SENSITIVE_FIELD_ON_UNKNOWN_SITE": 0.22142,
+      "PAYMENT_DEMAND": 0.6011,
+      "GIFT_CARD_PAGE": 0.70901,
+      "WIRE_OR_CRYPTO_PAGE": 0.28759,
+      "SECRECY_REQUEST": 0.3645,
+      "FAMILY_EMERGENCY_STORY": 0.00391,
+      "LEGAL_THREAT": 0.08215,
+      "GOV_IMPERSONATION": 0.00391,
+      "CLAUDE_FLAG": 0.9
+     }
+    }
+   ],
+   "transitions": {
+    "why": "[stay, advance, skip, abandon]. Many recipients never call (high abandon from invoice).",
+    "rows": [
+     [
+      0.5,
+      0.3,
+      0.05,
+      0.15
+     ],
+     [
+      0.35,
+      0.55,
+      0.04,
+      0.06
+     ],
+     [
+      0.55,
+      0.35,
+      0.02,
+      0.08
+     ],
+     [
+      0.55,
+      0.37,
+      0.0,
+      0.08
+     ],
+     [
+      0.75,
+      0.0,
+      0.0,
+      0.25
+     ]
+    ]
+   }
+  },
+  "grandparent": {
+   "entry_stages": [
+    0.7,
+    0.3,
+    0.0,
+    0.0
+   ],
+   "entry_why": "Often starts with a phone call that goes straight to the story.",
+   "label": "Grandparent emergency scam",
+   "why": "'Grandma, it's me' \u2192 story (accident, jail) often with a fake lawyer \u2192 plea for secrecy \u2192 bail by wire / gift cards / cash courier.",
+   "enter": 6e-05,
+   "stages": [
+    {
+     "name": "contact",
+     "hint": "a message from a 'grandchild' with a new number",
+     "why": "Opening: family voice, new number, mild urgency.",
+     "emit": {
+      "URGENT_LANGUAGE": 0.38076,
+      "PHONE_NUMBER_IN_POPUP": 0.00762,
+      "BRAND_IMPERSONATION": 0.00762,
+      "LOOKALIKE_DOMAIN": 0.00761,
+      "INFECTED_CLAIM": 0.00762,
+      "REFUND_OVERPAYMENT": 0.00761,
+      "REMOTE_ACCESS_STARTED": 0.00762,
+      "SCREEN_SHARE_ACTIVE": 0.00761,
+      "BANK_SITE_OPENED": 0.00762,
+      "SENSITIVE_FIELD_ON_UNKNOWN_SITE": 0.00762,
+      "PAYMENT_DEMAND": 0.00762,
+      "GIFT_CARD_PAGE": 0.04099,
+      "WIRE_OR_CRYPTO_PAGE": 0.00762,
+      "SECRECY_REQUEST": 0.01655,
+      "FAMILY_EMERGENCY_STORY": 0.65096,
+      "LEGAL_THREAT": 0.00952,
+      "GOV_IMPERSONATION": 0.00778,
+      "CLAUDE_FLAG": 0.5
+     }
+    },
+    {
+     "name": "story",
+     "hint": "a story about an accident or jail",
+     "why": "Emergency story with legal trouble and pressure.",
+     "emit": {
+      "URGENT_LANGUAGE": 0.50457,
+      "PHONE_NUMBER_IN_POPUP": 0.03692,
+      "BRAND_IMPERSONATION": 0.00617,
+      "LOOKALIKE_DOMAIN": 0.00617,
+      "INFECTED_CLAIM": 0.00617,
+      "REFUND_OVERPAYMENT": 0.00617,
+      "REMOTE_ACCESS_STARTED": 0.00617,
+      "SCREEN_SHARE_ACTIVE": 0.00617,
+      "BANK_SITE_OPENED": 0.00617,
+      "SENSITIVE_FIELD_ON_UNKNOWN_SITE": 0.00617,
+      "PAYMENT_DEMAND": 0.13437,
+      "GIFT_CARD_PAGE": 0.00748,
+      "WIRE_OR_CRYPTO_PAGE": 0.13437,
+      "SECRECY_REQUEST": 0.07439,
+      "FAMILY_EMERGENCY_STORY": 0.90359,
+      "LEGAL_THREAT": 0.60833,
+      "GOV_IMPERSONATION": 0.00632,
+      "CLAUDE_FLAG": 0.75
+     }
+    },
+    {
+     "name": "secrecy",
+     "hint": "a plea to keep it secret from the family",
+     "why": "'Don't tell Mom and Dad' isolates the victim.",
+     "emit": {
+      "URGENT_LANGUAGE": 0.49565,
+      "PHONE_NUMBER_IN_POPUP": 0.00791,
+      "BRAND_IMPERSONATION": 0.0079,
+      "LOOKALIKE_DOMAIN": 0.0079,
+      "INFECTED_CLAIM": 0.0079,
+      "REFUND_OVERPAYMENT": 0.0079,
+      "REMOTE_ACCESS_STARTED": 0.0079,
+      "SCREEN_SHARE_ACTIVE": 0.0079,
+      "BANK_SITE_OPENED": 0.00812,
+      "SENSITIVE_FIELD_ON_UNKNOWN_SITE": 0.00791,
+      "PAYMENT_DEMAND": 0.30862,
+      "GIFT_CARD_PAGE": 0.00792,
+      "WIRE_OR_CRYPTO_PAGE": 0.04004,
+      "SECRECY_REQUEST": 0.81969,
+      "FAMILY_EMERGENCY_STORY": 0.59648,
+      "LEGAL_THREAT": 0.00925,
+      "GOV_IMPERSONATION": 0.0079,
+      "CLAUDE_FLAG": 0.85
+     }
+    },
+    {
+     "name": "payment",
+     "hint": "a request for bail money by wire or gift card",
+     "why": "Bail / lawyer fees by wire, Zelle, gift cards or a courier.",
+     "emit": {
+      "URGENT_LANGUAGE": 0.31017,
+      "PHONE_NUMBER_IN_POPUP": 0.00474,
+      "BRAND_IMPERSONATION": 0.00474,
+      "LOOKALIKE_DOMAIN": 0.00474,
+      "INFECTED_CLAIM": 0.00474,
+      "REFUND_OVERPAYMENT": 0.00474,
+      "REMOTE_ACCESS_STARTED": 0.00474,
+      "SCREEN_SHARE_ACTIVE": 0.00474,
+      "BANK_SITE_OPENED": 0.00484,
+      "SENSITIVE_FIELD_ON_UNKNOWN_SITE": 0.10025,
+      "PAYMENT_DEMAND": 0.85377,
+      "GIFT_CARD_PAGE": 0.50522,
+      "WIRE_OR_CRYPTO_PAGE": 0.73456,
+      "SECRECY_REQUEST": 0.33234,
+      "FAMILY_EMERGENCY_STORY": 0.25442,
+      "LEGAL_THREAT": 0.08443,
+      "GOV_IMPERSONATION": 0.0284,
+      "CLAUDE_FLAG": 0.9
+     }
+    }
+   ],
+   "transitions": {
+    "why": "[stay, advance, skip, abandon]. Stories move fast; secrecy is sometimes skipped.",
+    "rows": [
+     [
+      0.4,
+      0.45,
+      0.07,
+      0.08
+     ],
+     [
+      0.45,
+      0.35,
+      0.12,
+      0.08
+     ],
+     [
+      0.45,
+      0.47,
+      0.0,
+      0.08
+     ],
+     [
+      0.75,
+      0.0,
+      0.0,
+      0.25
+     ]
+    ]
+   }
+  },
+  "government": {
+   "entry_stages": [
+    0.75,
+    0.25,
+    0.0
+   ],
+   "entry_why": "Robocalls skip the on-screen notice ~25% of the time.",
+   "label": "Government impersonation",
+   "why": "IRS / SSA / Medicare 'notice' \u2192 threat of arrest or suspension \u2192 immediate payment by gift card, wire or crypto.",
+   "enter": 6e-05,
+   "stages": [
+    {
+     "name": "notice",
+     "hint": "an official-looking notice from 'the government'",
+     "why": "Government branding on a non-.gov sender or domain, urgency, a callback number.",
+     "emit": {
+      "URGENT_LANGUAGE": 0.62092,
+      "PHONE_NUMBER_IN_POPUP": 0.27753,
+      "BRAND_IMPERSONATION": 0.43654,
+      "LOOKALIKE_DOMAIN": 0.4377,
+      "INFECTED_CLAIM": 0.03378,
+      "REFUND_OVERPAYMENT": 0.00552,
+      "REMOTE_ACCESS_STARTED": 0.00552,
+      "SCREEN_SHARE_ACTIVE": 0.00552,
+      "BANK_SITE_OPENED": 0.00552,
+      "SENSITIVE_FIELD_ON_UNKNOWN_SITE": 0.13836,
+      "PAYMENT_DEMAND": 0.0331,
+      "GIFT_CARD_PAGE": 0.00552,
+      "WIRE_OR_CRYPTO_PAGE": 0.0331,
+      "SECRECY_REQUEST": 0.00555,
+      "FAMILY_EMERGENCY_STORY": 0.00552,
+      "LEGAL_THREAT": 0.00795,
+      "GOV_IMPERSONATION": 0.92064,
+      "CLAUDE_FLAG": 0.8
+     }
+    },
+    {
+     "name": "threat",
+     "hint": "a threat of arrest or losing benefits",
+     "why": "Arrest warrant, suspended Social Security number, legal action.",
+     "emit": {
+      "URGENT_LANGUAGE": 0.6017,
+      "PHONE_NUMBER_IN_POPUP": 0.26436,
+      "BRAND_IMPERSONATION": 0.11754,
+      "LOOKALIKE_DOMAIN": 0.26881,
+      "INFECTED_CLAIM": 0.11459,
+      "REFUND_OVERPAYMENT": 0.00443,
+      "REMOTE_ACCESS_STARTED": 0.00443,
+      "SCREEN_SHARE_ACTIVE": 0.00443,
+      "BANK_SITE_OPENED": 0.00443,
+      "SENSITIVE_FIELD_ON_UNKNOWN_SITE": 0.15939,
+      "PAYMENT_DEMAND": 0.00446,
+      "GIFT_CARD_PAGE": 0.00443,
+      "WIRE_OR_CRYPTO_PAGE": 0.00447,
+      "SECRECY_REQUEST": 0.41876,
+      "FAMILY_EMERGENCY_STORY": 0.00443,
+      "LEGAL_THREAT": 0.90265,
+      "GOV_IMPERSONATION": 0.7553,
+      "CLAUDE_FLAG": 0.85
+     }
+    },
+    {
+     "name": "payment",
+     "hint": "a demand to pay right now with gift cards",
+     "why": "Government never takes gift cards; this is the cash-out.",
+     "emit": {
+      "URGENT_LANGUAGE": 0.34801,
+      "PHONE_NUMBER_IN_POPUP": 0.00483,
+      "BRAND_IMPERSONATION": 0.07883,
+      "LOOKALIKE_DOMAIN": 0.1059,
+      "INFECTED_CLAIM": 0.00494,
+      "REFUND_OVERPAYMENT": 0.00483,
+      "REMOTE_ACCESS_STARTED": 0.00483,
+      "SCREEN_SHARE_ACTIVE": 0.00483,
+      "BANK_SITE_OPENED": 0.02939,
+      "SENSITIVE_FIELD_ON_UNKNOWN_SITE": 0.52984,
+      "PAYMENT_DEMAND": 0.82066,
+      "GIFT_CARD_PAGE": 0.36241,
+      "WIRE_OR_CRYPTO_PAGE": 0.65121,
+      "SECRECY_REQUEST": 0.17565,
+      "FAMILY_EMERGENCY_STORY": 0.00483,
+      "LEGAL_THREAT": 0.34083,
+      "GOV_IMPERSONATION": 0.065,
+      "CLAUDE_FLAG": 0.9
+     }
+    }
+   ],
+   "transitions": {
+    "why": "[stay, advance, skip, abandon]. Notice and threat often arrive together (skip).",
+    "rows": [
+     [
+      0.4,
+      0.4,
+      0.12,
+      0.08
+     ],
+     [
+      0.45,
+      0.47,
+      0.0,
+      0.08
+     ],
+     [
+      0.75,
+      0.0,
+      0.0,
+      0.25
+     ]
+    ]
+   }
+  }
+ }
+}

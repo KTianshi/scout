@@ -15,6 +15,7 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/Lookout"
 rsync -a --exclude ".DS_Store" "$ROOT/demo" "$APP/Contents/Resources/"
+mkdir -p "$APP/Contents/Resources/model" && cp "$ROOT/model/playbooks.json" "$APP/Contents/Resources/model/"
 VERSION="0.1.$(git -C "$ROOT" rev-list --count HEAD 2>/dev/null || echo 0)"
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>

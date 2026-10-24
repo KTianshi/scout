@@ -196,20 +196,13 @@ def main():
     a = ap.parse_args()
     out = Path(a.out); out.mkdir(parents=True, exist_ok=True)
     model = load_model(a.model) if a.model else load_model()
-    if a.model:  # the Swift engine reads model/playbooks.json; skip the parity assert for alternate models
-        global score
-        _score = score
-        def score(session, extracted, model):  # noqa: F811
-            for ex in extracted:
-                ex["p_scam"] = None
-            return _score_noassert(session, extracted, model)
-
     sessions = []
     for f in a.files:
         sessions += [json.loads(l) for l in open(f) if l.strip()]
     all_series = {}
     for s in sessions:
-        all_series[s["id"]] = score(s, extract(s), model)
+        # With an alternate model the Swift engine (default parameters) can't be parity-checked.
+        all_series[s["id"]] = (_score_noassert if a.model else score)(s, extract(s), model)
 
     report = {"threshold": a.threshold, "files": a.files, "n_sessions": len(sessions)}
     sources = sorted({s["source"] for s in sessions})
