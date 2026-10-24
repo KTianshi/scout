@@ -192,7 +192,8 @@ final class Companion {
             && NSWorkspace.shared.frontmostApplication?.processIdentifier == getpid()
     }
 
-    func snapshot(includeImage: Bool) async -> Snapshot {
+    /// `fast`: for help, where a quick answer beats reading every row of a huge list.
+    func snapshot(includeImage: Bool, fast: Bool = false) async -> Snapshot {
         let running = NSWorkspace.shared.runningApplications.compactMap { $0.localizedName }
         if demoInFront {
             // Demo mode never falls back to the live screen: if the page can't be read this instant, skip the pass.
@@ -202,7 +203,7 @@ final class Companion {
             return empty
         }
         observer.displayID = overlay.displayID
-        return await observer.snapshot(includeImage: includeImage)
+        return await observer.snapshot(includeImage: includeImage, fast: fast)
     }
 
     func overlayPoint(fromScreenTopLeft p: CGPoint) -> CGPoint { overlay.fromTopLeftGlobal(p) }
@@ -294,7 +295,7 @@ final class Companion {
         claude.warmUp()
         (speech as? CartesiaSpeech)?.client.warmUp()
         let app = NSWorkspace.shared.frontmostApplication?.processIdentifier
-        prefetched = (Task { await self.snapshot(includeImage: true) }, Date(), app)
+        prefetched = (Task { await self.snapshot(includeImage: true, fast: true) }, Date(), app)
     }
 
     /// The screenshot taken when they started asking, if it still describes the screen they asked about.
@@ -364,7 +365,7 @@ final class Companion {
             stepNo += 1; looks += 1
             let t0 = Date()
             let snap: Snapshot
-            if let e = early { snap = e; early = nil } else { snap = await snapshot(includeImage: true) }
+            if let e = early { snap = e; early = nil } else { snap = await snapshot(includeImage: true, fast: true) }
             if Task.isCancelled || generation != gen { return }
             // If they click while Claude is still writing, that answer is about a screen that's gone: look again.
             let interrupter = stepNo > 1 ? ActionWatcher() : nil

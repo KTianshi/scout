@@ -96,7 +96,7 @@ final class ScreenObserver {
     /// The display to capture (where Lookout is); nil means the main display.
     var displayID: CGDirectDisplayID?
 
-    func snapshot(includeImage: Bool) async -> Snapshot {
+    func snapshot(includeImage: Bool, fast: Bool = false) async -> Snapshot {
         let front = NSWorkspace.shared.frontmostApplication
         let running = NSWorkspace.shared.runningApplications.compactMap { $0.localizedName }
         var ctx = ScreenContext(text: "", appName: front?.localizedName, runningApps: running)
@@ -104,7 +104,7 @@ final class ScreenObserver {
 
         if Permissions.accessibility, let pid = front?.processIdentifier, pid != getpid() {
             let ax = AXReader(pid: pid)
-            let r = ax.read()
+            let r = ax.read(timeBudget: fast ? 0.7 : nil)
             ctx.text = r.text
             ctx.windowTitle = r.windowTitle
             ctx.url = r.url
@@ -205,7 +205,8 @@ struct AXReader {
         return CGRect(origin: p, size: s)
     }
 
-    func read(maxNodes: Int = 2500) -> Result {
+    /// `timeBudget` (help only): stop walking after this long. The guardian reads everything (scam text can be deep).
+    func read(maxNodes: Int = 2500, timeBudget: TimeInterval? = nil) -> Result {
         var r = Result()
         let app = AXUIElementCreateApplication(pid)
         AXUIElementSetMessagingTimeout(app, 0.4)
@@ -220,7 +221,10 @@ struct AXReader {
         var queue: [AXUIElement] = [w]
         var visited = 0
         let actionable: Set<String> = ["AXButton", "AXLink", "AXTextField", "AXSecureTextField", "AXMenuItem", "AXCheckBox", "AXPopUpButton", "AXTab", "AXRadioButton", "AXComboBox", "AXTextArea", "AXImage", "AXStaticText"]
-        while !queue.isEmpty && visited < maxNodes {
+        // Time budget as well as a node cap: huge lists (a Finder folder, a long inbox) took 2+ s to walk.
+        // Breadth-first means the window's toolbars and visible controls come first; the screenshot covers the rest.
+        let deadline = Date().addingTimeInterval(timeBudget ?? .infinity)
+        while !queue.isEmpty && visited < maxNodes && (visited % 50 != 0 || Date() < deadline) {
             let e = queue.removeFirst()
             visited += 1
             let role = str(e, kAXRoleAttribute) ?? ""
