@@ -428,3 +428,125 @@ final class Listener {
         f.resume(returning: latest)
     }
 }
+
+// MARK: - "Hey Lookout"
+
+/// Optional hands-free wake word. Listens with Apple's on-device recognizer only (never the network), so nothing
+/// leaves the Mac until the person says "Hey Lookout". Then everything they say until a short pause is the question.
+@MainActor
+final class WakeListener {
+    static var enabled: Bool {
+        get { UserDefaults.standard.bool(forKey: "wakeWord") }
+        set { UserDefaults.standard.set(newValue, forKey: "wakeWord") }
+    }
+
+    var onWake: (() -> Void)?
+    var onPartialQuestion: ((String) -> Void)?
+    var onQuestion: ((String) -> Void)?
+    private(set) var isRunning = false
+
+    private let engine = AVAudioEngine()
+    private let recognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
+    private var request: SFSpeechAudioBufferRecognitionRequest?
+    private var task: SFSpeechRecognitionTask?
+    private var watchdog: Task<Void, Never>?
+    private var startedAt = Date()
+    private var woke: (at: Date, offset: String.Index)?
+    private var transcript = ""
+    private var lastChange = Date()
+
+    /// "hey lookout", and how the recognizer tends to hear it.
+    static let phrases = ["hey lookout", "hey look out", "hi lookout", "hi look out", "okay lookout", "ok lookout", "hey, lookout", "hey lookup"]
+
+    var canRun: Bool { recognizer?.supportsOnDeviceRecognition == true && Listener.micAuthorized && Listener.speechAuthorized }
+
+    func start() {
+        guard !isRunning, canRun, let recognizer else { return }
+        let req = SFSpeechAudioBufferRecognitionRequest()
+        req.requiresOnDeviceRecognition = true
+        req.shouldReportPartialResults = true
+        req.taskHint = .dictation
+        req.contextualStrings = ["Hey Lookout", "Lookout"] + Listener.commonNames
+        request = req
+        let input = engine.inputNode
+        input.removeTap(onBus: 0)
+        input.installTap(onBus: 0, bufferSize: 1024, format: input.outputFormat(forBus: 0)) { [weak req] buffer, _ in req?.append(buffer) }
+        engine.prepare()
+        do { try engine.start() } catch { Log.info("wake word: mic didn't start: \(error)"); input.removeTap(onBus: 0); return }
+        isRunning = true
+        startedAt = Date()
+        transcript = ""
+        woke = nil
+        task = recognizer.recognitionTask(with: req) { [weak self] result, error in
+            let text = result?.bestTranscription.formattedString
+            let ended = (result?.isFinal ?? false) || error != nil
+            Task { @MainActor in
+                guard let self, self.isRunning else { return }
+                if let text, text != self.transcript { self.transcript = text; self.lastChange = Date(); self.heard(text) }
+                if ended { self.restart() }
+            }
+        }
+        // Delivers the question after a pause, and restarts the recognizer before Apple's ~1 minute limit.
+        watchdog = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 250_000_000)
+                guard let self, self.isRunning else { return }
+                self.tick()
+            }
+        }
+    }
+
+    func stop() {
+        guard isRunning else { return }
+        isRunning = false
+        watchdog?.cancel(); watchdog = nil
+        task?.cancel(); task = nil
+        request?.endAudio(); request = nil
+        engine.stop()
+        engine.inputNode.removeTap(onBus: 0)
+        woke = nil
+    }
+
+    private func restart() {
+        stop()
+        start()
+    }
+
+    private func heard(_ text: String) {
+        if woke == nil {
+            let lower = text.lowercased()
+            for p in Self.phrases {
+                if let r = lower.range(of: p, options: .backwards) {
+                    // Map the match back onto the original string (same length: lowercasing ASCII).
+                    let offset = text.index(text.startIndex, offsetBy: lower.distance(from: lower.startIndex, to: r.upperBound))
+                    woke = (Date(), offset)
+                    Log.info("wake word heard")
+                    onWake?()
+                    break
+                }
+            }
+        }
+        if let w = woke { onPartialQuestion?(question(after: w.offset)) }
+    }
+
+    private func question(after offset: String.Index) -> String {
+        guard offset <= transcript.endIndex else { return "" }
+        return String(transcript[offset...]).trimmingCharacters(in: CharacterSet(charactersIn: " ,.!?").union(.whitespaces))
+    }
+
+    private func tick() {
+        if let w = woke {
+            let q = question(after: w.offset)
+            let quiet = Date().timeIntervalSince(lastChange)
+            if !q.isEmpty, quiet > 1.3 {
+                stop()
+                onQuestion?(q)
+            } else if q.isEmpty, Date().timeIntervalSince(w.at) > 7 {
+                Log.info("wake word: no question followed")
+                restart()
+            }
+        } else if Date().timeIntervalSince(startedAt) > 50 {
+            restart()
+        }
+    }
+}

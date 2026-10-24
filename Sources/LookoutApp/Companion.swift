@@ -36,6 +36,9 @@ final class Companion {
     /// Developer tools are full of scam words (code, docs, chats about Lookout itself) and aren't where our users get scammed.
     static let ignoredApps: Set<String> = ["Terminal", "iTerm2", "Xcode", "Code", "Visual Studio Code", "Cursor", "Warp", "Ghostty", "Claude"]
     private var lastConfirmedFingerprint: Int?
+    private var stableFingerprint: Int?
+    private var stableSince = Date()
+    private var lastSweepAt = Date.distantPast
     private var confirmInFlight = false
     private var pausedApprovalFor: Int?
     private var knownRemoteApps: Set<pid_t> = []
@@ -50,6 +53,7 @@ final class Companion {
         overlay.onTap = { AppDelegate.shared?.askTyped() }
         registerTalkShortcut()
         watchAppSwitches()
+        startWakeWord()
         demoBrowser.onClose = { [weak self] in self?.stopEverything() }
         startGuardian()
         startRemoteShield()
@@ -194,6 +198,7 @@ final class Companion {
 
     func beginListening() {
         guard !listening else { return }
+        wake.stop()   // one microphone user at a time
         // Talking over Lookout interrupts it.
         stopEverything()
         guard Listener.canUseMicrophone else {
@@ -221,6 +226,37 @@ final class Companion {
                 listening = false
                 overlay.say("Sorry, the microphone didn't start.")
                 Log.info("listener start failed: \(error)")
+            }
+        }
+    }
+
+    // MARK: "Hey Lookout"
+
+    let wake = WakeListener()
+
+    /// Keeps the wake-word listener running only while it can't hear Lookout itself or clash with push-to-talk.
+    func startWakeWord() {
+        wake.onWake = { [weak self] in
+            guard let self else { return }
+            self.stopEverything()
+            self.overlay.isPinned = false
+            self.overlay.setMood(.listening)
+            self.overlay.say("I'm listening…")
+        }
+        wake.onPartialQuestion = { [weak self] q in
+            if !q.isEmpty { self?.overlay.say(q, title: "You said") }
+        }
+        wake.onQuestion = { [weak self] q in
+            Log.info("wake word question: \(q.prefix(120))")
+            self?.ask(q)
+        }
+        Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 500_000_000)
+                guard let self else { return }
+                let shouldRun = WakeListener.enabled && !self.listening && (!self.busy || self.guideWaiting) && !self.speech.isSpeaking
+                if shouldRun && !self.wake.isRunning { self.wake.start() }
+                if !shouldRun && self.wake.isRunning { self.wake.stop() }
             }
         }
     }
@@ -589,24 +625,37 @@ final class Companion {
         // once, together with Claude's answer as evidence.
         var result = pipeline.evaluate(snap.context, commitPlaybook: false)
         let fp = snap.context.fingerprint
+        if fp != stableFingerprint { stableFingerprint = fp; stableSince = Date() }
         let willConfirm = !cleared && result.action > .quiet && result.shouldConfirmWithModel && claude.isConfigured && fp != lastConfirmedFingerprint && !confirmInFlight
-        if !willConfirm { result = pipeline.commit(snap.context) }
+        // Deep check: Claude also reads screens the on-device rules found nothing on (friendly romance and
+        // crypto chats have no trigger words). On the 154-screen benchmark Claude alone caught 79/79 scams
+        // with 0/75 false alarms. Text only, once per settled screen, at most every 8 s.
+        let willSweep = !willConfirm && !cleared && DeepCheck.enabled && claude.isConfigured && !confirmInFlight
+            && snap.context.text.count >= 80 && fp != lastConfirmedFingerprint
+            && Date().timeIntervalSince(stableSince) >= 2 && Date().timeIntervalSince(lastSweepAt) >= 8
+        if !willConfirm && !willSweep { result = pipeline.commit(snap.context) }
         if result.probability > 0.05 { Log.info("guardian: \(result.summary)") }
-        guard result.action > .quiet || willConfirm else { return }
+        guard result.action > .quiet || willConfirm || willSweep else { return }
         if cleared && result.rules.isEmpty { return }
 
         var verdict: ScamVerdict?
         var full = snap
-        if willConfirm {
+        if willConfirm || willSweep {
             confirmInFlight = true
             lastConfirmedFingerprint = fp
-            overlay.setMood(.thinking)
-            full = await snapshot(includeImage: true)
+            if willSweep { lastSweepAt = Date() } else { overlay.setMood(.thinking) }
+            if willConfirm { full = await snapshot(includeImage: true) }
             do {
                 let v = try await claude.confirmScam(screen: full.context, image: full.image, heuristicSummary: result.summary)
                 verdict = v
                 result = pipeline.applyModelVerdict(v, ctx: full.context)
-                Log.info("claude verdict: scam=\(v.isScam) conf=\(v.confidence) type=\(v.scamType) why=\(v.explanation.prefix(160)) → \(result.summary)")
+                // Claude read the screen and says scam: warn, even if the rules and the playbook are still quiet.
+                if v.isScam, result.action < .interrupt {
+                    result.decision.action = .interrupt
+                    result.decision.reason += "; raised by Claude deep check"
+                    if !v.explanation.isEmpty { result.explanation = v.explanation; result.advice = v.whatToDo }
+                }
+                Log.info("claude verdict\(willSweep ? " (deep check)" : ""): scam=\(v.isScam) conf=\(v.confidence) type=\(v.scamType) why=\(v.explanation.prefix(160)) → \(result.summary)")
                 // Claude has looked at the actual screen: its "not a scam" is final unless a hard rule fired.
                 // (Not gated on confidence: the schema's "0 to 1" comes back as either certainty or scam odds.)
                 if !v.isScam, result.rules.isEmpty {
@@ -997,6 +1046,14 @@ enum DebugShot {
             try? data.write(to: f)
             Log.info("debug shot: \(f.path)")
         }
+    }
+}
+
+/// Claude reads every settled screen, not only the ones the on-device rules flag. On by default.
+enum DeepCheck {
+    static var enabled: Bool {
+        get { UserDefaults.standard.object(forKey: "deepCheck") as? Bool ?? true }
+        set { UserDefaults.standard.set(newValue, forKey: "deepCheck") }
     }
 }
 

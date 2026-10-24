@@ -43,6 +43,8 @@ final class SettingsModel: ObservableObject {
     @Published var guardian = true
     @Published var visible = true
     @Published var autoGuide = GuideMode.automatic
+    @Published var wakeWord = WakeListener.enabled
+    @Published var deepCheck = DeepCheck.enabled
     @Published var elderName = LookoutConfig.elderName
     @Published var familyName = LookoutConfig.familyName
 
@@ -98,6 +100,19 @@ final class SettingsModel: ObservableObject {
         shortcut = s
         TalkShortcut.current = s
         shortcutTaken = !companion.registerTalkShortcut()
+    }
+
+    func setDeepCheck(_ on: Bool) {
+        deepCheck = on
+        DeepCheck.enabled = on
+    }
+
+    func setWakeWord(_ on: Bool) {
+        wakeWord = on
+        WakeListener.enabled = on
+        if on, !(Listener.micAuthorized && Listener.speechAuthorized) {
+            Task { _ = await Listener.requestPermissions() }
+        }
     }
 
     func setAutoGuide(_ on: Bool) {
@@ -521,6 +536,15 @@ struct TalkingPane: View {
             }
         }
         VStack(alignment: .leading, spacing: 8) {
+            CardTitle(text: "Hands-free")
+            ToggleRow(icon: "waveform.badge.mic", tint: .pink, title: "Say “Hey Lookout”",
+                      detail: model.wakeWord ? "Lookout listens for its name. Your voice stays on this Mac until you say it."
+                                             : "Off. Hold the keys above to talk instead.",
+                      isOn: Binding(get: { model.wakeWord }, set: { model.setWakeWord($0) }))
+                .padding(.vertical, 6)
+                .glassCard()
+        }
+        VStack(alignment: .leading, spacing: 8) {
             CardTitle(text: "Step by step")
             ToggleRow(icon: "figure.walk", tint: .orange, title: "Walk me through it automatically",
                       detail: model.autoGuide ? "After you click, Lookout looks again and gives the next step on its own."
@@ -577,6 +601,12 @@ struct SafetyPane: View {
             ToggleRow(icon: "shield.lefthalf.filled", tint: .green, title: "Watch for scams",
                       detail: "Lookout gently stops you if something looks like a scam.",
                       isOn: Binding(get: { model.guardian }, set: { model.setGuardian($0) }))
+                .padding(.vertical, 6)
+                .glassCard()
+            ToggleRow(icon: "sparkle.magnifyingglass", tint: .indigo, title: "Deep check with Claude",
+                      detail: model.deepCheck ? "Claude also reads new screens to catch scams with no warning signs, like a friendly stranger asking for money. Screen text is sent to Claude."
+                                              : "Off. Only screens with warning signs are checked with Claude.",
+                      isOn: Binding(get: { model.deepCheck }, set: { model.setDeepCheck($0) }))
                 .padding(.vertical, 6)
                 .glassCard()
         }
