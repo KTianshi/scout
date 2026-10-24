@@ -25,7 +25,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if openSettingsOnLaunch { companion.settings.show() }
         if openAskOnLaunch { askTyped() }
         if let q = askOnLaunch {
-            Task { try? await Task.sleep(nanoseconds: 6_000_000_000); companion.ask(q) }
+            Task {
+                try? await Task.sleep(nanoseconds: 6_000_000_000)
+                // Scripted runs ask about the demo page when there is one, so bring it to the front first.
+                if openDemoOnLaunch != nil { companion.demoBrowser.show(); NSApp.activate(ignoringOtherApps: true) }
+                try? await Task.sleep(nanoseconds: 500_000_000)
+                companion.ask(q)
+            }
         }
     }
 

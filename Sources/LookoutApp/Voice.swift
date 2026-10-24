@@ -72,6 +72,10 @@ final class CartesiaSpeech: NSObject, SpeechOutput, AVAudioPlayerDelegate {
             return
         }
         Log.info(String(format: "say (cartesia, %.0f ms): ", Date().timeIntervalSince(started) * 1000) + clean)
+        // Replacing a clip that's still playing: release its caller, or that await never returns
+        // (an interrupt waiting on its warning would hang the guardian loop for good).
+        player?.stop()
+        waiter?.resume(); waiter = nil
         player = p
         p.delegate = self
         p.enableRate = true
@@ -114,7 +118,7 @@ final class CartesiaSpeech: NSObject, SpeechOutput, AVAudioPlayerDelegate {
             "There. It's gone. You did great.",
             "Good choice. Nothing was sent.",
             "Want some help? I'm right here.",
-            "Okay.", "Nice.", "Got it.", "Perfect.",
+            "Okay.", "Nice.", "Got it.", "Perfect.", "Perfect. You're all set.",
             "This looks like a scam. Let's stop here.",
         ]
         if LookoutConfig.familyEnabled {
@@ -289,6 +293,8 @@ final class HotKeys {
     private var press: [UInt32: () -> Void] = [:]
     private var release: [UInt32: () -> Void] = [:]
     private var installed = false
+    /// Hot keys currently held down (press seen, release not yet).
+    private var held: Set<UInt32> = []
 
     static let talkID: UInt32 = 1
     static let escapeID: UInt32 = 2
@@ -307,8 +313,8 @@ final class HotKeys {
             let kind = GetEventKind(event)
             let id = hk.id
             DispatchQueue.main.async {
-                if kind == UInt32(kEventHotKeyPressed) { HotKeys.shared.press[id]?() }
-                else if kind == UInt32(kEventHotKeyReleased) { HotKeys.shared.release[id]?() }
+                if kind == UInt32(kEventHotKeyPressed) { HotKeys.shared.held.insert(id); HotKeys.shared.press[id]?() }
+                else if kind == UInt32(kEventHotKeyReleased) { HotKeys.shared.held.remove(id); HotKeys.shared.release[id]?() }
             }
             return noErr
         }, 2, &types, nil, nil)
@@ -334,6 +340,7 @@ final class HotKeys {
     }
 
     func isRegistered(_ id: UInt32) -> Bool { refs[id] != nil }
+    func isHeld(_ id: UInt32) -> Bool { held.contains(id) }
 }
 
 // MARK: - Speech recognition

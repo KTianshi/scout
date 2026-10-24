@@ -146,11 +146,24 @@ final class Companion {
         busy = false
     }
 
+    /// End the current help/explain request without touching the overlay (the caller takes it over).
+    func cancelRequest() {
+        generation += 1
+        activeTask?.cancel()
+        activeTask = nil
+        guideWaiting = false
+    }
+
     /// Run a help / explain request, replacing any request already in progress.
     func runRequest(_ work: @escaping @MainActor () async -> Void) {
         stopEverything()
         requestApp = NSWorkspace.shared.frontmostApplication?.processIdentifier
-        activeTask = Task { await work() }
+        let gen = generation
+        activeTask = Task { [weak self] in
+            await work()
+            // Finished: later app switches must not "stop" a request that's long over (and wipe an alert).
+            if let self, self.generation == gen { self.activeTask = nil }
+        }
     }
 
     /// The app the person was in when they asked. Switching to another app means they've moved on.
@@ -216,6 +229,11 @@ final class Companion {
                 guard await Listener.requestPermissions() else {
                     overlay.say("I need permission to use the microphone. I've opened the setup window.")
                     setup.show(); return
+                }
+                // They let go of the keys while the permission dialog was up: don't start a mic nobody is holding.
+                guard HotKeys.shared.isHeld(HotKeys.talkID) else {
+                    overlay.say("Thanks! Now hold \(TalkShortcut.current.spoken) and ask me.")
+                    return
                 }
             }
             do {
@@ -315,14 +333,16 @@ final class Companion {
 
     /// Short, cached acknowledgments said the moment they finish a step (prewarmed in standardLines).
     static let acks = ["Okay.", "Nice.", "Got it.", "Perfect."]
+    static let allSet = "Perfect. You're all set."
 
     /// The guide's turn in `turns`, so its prompt shows the other turns as history.
     private var currentTurn: Int?
 
     /// Follow-along help: look, give one step, wait for the person to do it, look again.
     func help(question: String) async {
+        let owner = generation
         busy = true
-        defer { busy = false }
+        defer { if generation == owner { busy = false } }
         speech.stop()
         card.hide()
         overlay.setMood(.thinking)
@@ -361,7 +381,7 @@ final class Companion {
                 for try await delta in claude.stream(system: Prompts.guide(imageWidth: w, imageHeight: h),
                                                      text: guideUserText(question: question, snap: snap, given: given, action: lastAction),
                                                      image: snap.image, maxTokens: 600, effort: stepNo == 1 ? "medium" : "low") {
-                    if Task.isCancelled || generation != gen { speaker.cancel(); interrupter?.stop(); return }
+                    if Task.isCancelled || generation != gen { speaker.cancel(); interrupter?.stop(); watcher?.stop(); return }
                     if spokenUpTo == 0, interrupter?.sawClick == true { superseded = true; break }
                     reply += delta
                     if tFirst == nil { tFirst = Date().timeIntervalSince(t0) }
@@ -383,7 +403,7 @@ final class Companion {
                     }
                 }
             } catch {
-                speaker.cancel(); watcher?.stop()
+                speaker.cancel(); watcher?.stop(); interrupter?.stop()
                 if Task.isCancelled || generation != gen { return }
                 Log.info("help failed: \(error.localizedDescription)")
                 overlay.setMood(.idle)
@@ -416,7 +436,24 @@ final class Companion {
             let w8 = watcher ?? ActionWatcher()
             await speaker.finish()
             if Task.isCancelled || generation != gen { w8.stop(); return }
-            if done { w8.stop(); break }
+            if done {
+                // The last step still needs doing ("click Send"): wait for it, then close like a person would.
+                if pointed, GuideMode.automatic {
+                    overlay.setMood(.idle)
+                    guideWaiting = true
+                    let finished = await w8.wait(timeout: 60)
+                    if Task.isCancelled || generation != gen { return }
+                    if finished != nil {
+                        overlay.release()
+                        overlay.setMood(.happy)
+                        overlay.say(Self.allSet, title: nil)
+                        await speech.speak(Self.allSet)
+                    }
+                } else {
+                    w8.stop()
+                }
+                break
+            }
             if !GuideMode.automatic {
                 // Clicky-style: one fresh answer per question. The pointer stays until they act on it;
                 // "next" (or any follow-up) looks again with the whole conversation in mind.
@@ -611,8 +648,9 @@ final class Companion {
     // MARK: Explain this letter
 
     func explainScreen(question: String = "What does this letter mean?") async {
+        let owner = generation
         busy = true
-        defer { busy = false }
+        defer { if generation == owner { busy = false } }
         speech.stop()
         overlay.setMood(.thinking)
         overlay.say("Let me read it…", title: "Explaining")
@@ -811,6 +849,7 @@ final class Companion {
     }
 
     func interrupt(_ r: ScamPipeline.Result, verdict: ScamVerdict?, snap: Snapshot) async {
+        cancelRequest()   // a warning takes over from any help answer in progress
         busy = true
         defer { busy = false }
         speech.stop()
@@ -898,6 +937,7 @@ final class Companion {
         let fp = snap.context.url?.hashValue ?? snap.context.fingerprint
         guard pausedApprovalFor != fp else { return }
         pausedApprovalFor = fp
+        cancelRequest()
         speech.stop()
         card.hide()
         overlay.setMood(.alarmed)
@@ -1145,8 +1185,8 @@ enum DeepCheck {
     }
 }
 
-/// How help moves between steps. Default: one answer per question, like Clicky (never stale).
-/// Automatic: Lookout watches for the click and gives the next step on its own.
+/// How help moves between steps. Default (automatic): Lookout watches for the click and gives the next step
+/// on its own, like someone watching over your shoulder. Off: one answer per question, like Clicky.
 enum GuideMode {
     static var automatic: Bool {
         get { UserDefaults.standard.object(forKey: "autoGuide") as? Bool ?? true }
@@ -1296,6 +1336,7 @@ final class SentenceQueue {
                 continue
             }
             while speech.isSpeaking && !Task.isCancelled && isCurrent() { try? await Task.sleep(nanoseconds: 40_000_000) }
+            guard !Task.isCancelled, isCurrent(), !items.isEmpty else { continue }   // cancelled while waiting
             await speech.speak(items.removeFirst())
         }
     }

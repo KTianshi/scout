@@ -35,7 +35,7 @@ Without a key, Lookout still runs the on-device scam detector and hard rules, an
 ## Using it
 
 - **Ask:** hold the talk keys (⌃⌥ Space by default), talk, let go. Or the Ask box: menu 👁 ▸ *Ask Lookout…* (⌘L), or click the buddy when it rests in a corner. Optional: turn on *Say "Hey Lookout"* for hands-free (on-device until the wake word).
-- **Next step:** ask "what next?" Each answer is one fresh step. *Walk me through it automatically* (Settings ▸ Talking) makes Lookout watch for the click and continue on its own.
+- **Next step:** ask "what next?" By default Lookout watches for your click and gives the next step on its own, like someone watching over your shoulder; turn off *Walk me through it automatically* (Settings ▸ Talking) for one step per question.
 - **Stop:** Esc, hold the talk keys to talk over it, or switch apps.
 - **Explain:** say "What does this letter mean?", or menu ▸ *Explain what's on screen*.
 - **Dictation:** say "type …" with a text box focused (needs Accessibility).
