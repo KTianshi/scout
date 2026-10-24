@@ -39,6 +39,12 @@ struct Snapshot {
         func dist(_ e: UIElementInfo) -> CGFloat {
             e.frame.insetBy(dx: -6, dy: -6).contains(p) ? 0 : hypot(center(e).x - p.x, center(e).y - p.y)
         }
+        // Claude copied a control's center from the list: that's the control it means, whatever it's called.
+        // (Screen points; the list's pixel centers map back to within a couple of points.)
+        if let e = controls.filter({ hypot(center($0).x - p.x, center($0).y - p.y) <= 3 })
+            .min(by: { hypot(center($0).x - p.x, center($0).y - p.y) < hypot(center($1).x - p.x, center($1).y - p.y) }) {
+            return (center(e), e)
+        }
         if let label, label.count >= 3 {
             let words = label.lowercased().split(separator: " ").filter { $0.count >= 4 }
             let named = controls.filter { e in
@@ -47,11 +53,12 @@ struct Snapshot {
             }
             if let e = named.filter({ dist($0) <= radius * 3 }).min(by: { dist($0) < dist($1) }) { return (center(e), e) }
         }
+        // The model named something we couldn't match: its own point is better than any nearby control.
+        // Geometry alone picks wrong ones: the nearest ("Recipients" became "Subject"), or one hidden under a
+        // window (Gmail's Compose button sits beneath the compose window, and won over the To field).
+        if label != nil { return (p, nil) }
         let area = { (e: UIElementInfo) in e.frame.width * e.frame.height }
         if let e = controls.filter({ dist($0) == 0 }).min(by: { area($0) < area($1) }) { return (center(e), e) }
-        // The model named something we couldn't find (Gmail's "Recipients" line has no accessible name).
-        // Its own point beats the nearest control with a different name, which is how "Recipients" became "Subject".
-        if label != nil { return (p, nil) }
         if let e = controls.filter({ dist($0) <= radius }).min(by: { dist($0) < dist($1) }) { return (center(e), e) }
         return (p, nil)
     }

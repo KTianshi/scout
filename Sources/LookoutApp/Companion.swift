@@ -273,17 +273,43 @@ final class Companion {
         var given: [String] = []
         var lastAction: ActionWatcher.Action?
         for stepNo in 1...8 {
+            let t0 = Date()
             let snap = await snapshot(includeImage: true)
             if Task.isCancelled || generation != gen { return }
+            let tSnap = Date().timeIntervalSince(t0)
             let w = snap.image?.width ?? 0, h = snap.image?.height ?? 0
-            var reply = ""
+            // Stream: fly as soon as the point arrives, speak each sentence as it completes.
+            let speaker = SentenceQueue(speech: speech) { [weak self] in self?.generation == gen }
+            var watcher: ActionWatcher?
+            var reply = "", spokenUpTo = 0, pointed = false
+            var tFirst: TimeInterval?
+            let title = "Step \(stepNo)"
             do {
                 for try await delta in claude.stream(system: Prompts.guide(imageWidth: w, imageHeight: h),
                                                      text: guideUserText(question: question, snap: snap, given: given, action: lastAction),
                                                      image: snap.image, maxTokens: 600, effort: stepNo == 1 ? "medium" : "low") {
+                    if Task.isCancelled || generation != gen { speaker.cancel(); return }
                     reply += delta
+                    if tFirst == nil { tFirst = Date().timeIntervalSince(t0) }
+                    let body = reply.replacingOccurrences(of: "[DONE]", with: "", options: .caseInsensitive)
+                    if !pointed, let p = PointTags.steps(in: body).compactMap(\.point).first {
+                        pointed = true
+                        point(at: p, snap: snap)
+                    }
+                    let visible = PointTags.strip(PointTags.stripTrailingPartialTag(body))
+                    guard !visible.isEmpty else { continue }
+                    if watcher == nil { watcher = ActionWatcher() }   // people often click as soon as they see where to go
+                    overlay.setMood(.speaking)
+                    overlay.say(visible, title: title)
+                    let chars = Array(visible)
+                    if spokenUpTo < chars.count, let end = Companion.sentenceEnd(in: visible, from: visible.index(visible.startIndex, offsetBy: spokenUpTo)) {
+                        let n = visible.distance(from: visible.startIndex, to: end)
+                        speaker.add(String(chars[spokenUpTo..<n]))
+                        spokenUpTo = n
+                    }
                 }
             } catch {
+                speaker.cancel(); watcher?.stop()
                 if Task.isCancelled || generation != gen { return }
                 Log.info("help failed: \(error.localizedDescription)")
                 overlay.setMood(.idle)
@@ -292,26 +318,27 @@ final class Companion {
                 await speech.speak(msg)
                 return
             }
-            if Task.isCancelled || generation != gen { return }
+            if Task.isCancelled || generation != gen { speaker.cancel(); watcher?.stop(); return }
             let done = reply.range(of: "[DONE]", options: .caseInsensitive) != nil
             let body = reply.replacingOccurrences(of: "[DONE]", with: "", options: .caseInsensitive)
             let text = PointTags.strip(body)
-            let point = PointTags.steps(in: body).compactMap(\.point).first
-            guard !text.isEmpty else { break }
-            Log.info("guide step \(stepNo) done=\(done): \(text.prefix(300))")
+            guard !text.isEmpty else { watcher?.stop(); break }
+            let chars = Array(text)
+            if spokenUpTo < chars.count { speaker.add(String(chars[spokenUpTo...])) }
+            if !pointed { overlay.release() }
+            // A one-shot answer ("What is Slack?") gets no "Step 1" title.
+            if done && stepNo == 1 && !pointed { overlay.say(text, title: nil) } else { overlay.say(text, title: title) }
+            Log.info(String(format: "guide step %d done=%@ (look %.1fs, first word %.1fs, full %.1fs): ", stepNo, done ? "true" : "false",
+                            tSnap, tFirst ?? 0, Date().timeIntervalSince(t0)) + text.prefix(300))
             updateTurn(turn, step: text, finished: done)
             given.append(text)
-            // Watch from before speaking: people often click as soon as they see where to go.
-            let watcher = ActionWatcher()
-            defer { watcher.stop() }
-            // A one-shot answer ("What is Slack?") gets no "Step 1" title.
-            let isAnswer = done && stepNo == 1 && point == nil
-            await showStep(text, title: isAnswer ? nil : "Step \(stepNo)", point: point, snap: snap)
-            if generation != gen { return }
-            if done { break }
+            let w8 = watcher ?? ActionWatcher()
+            await speaker.finish()
+            if Task.isCancelled || generation != gen { w8.stop(); return }
+            if done { w8.stop(); break }
             overlay.setMood(.idle)
             guideWaiting = true
-            let action = await watcher.wait(timeout: 60)
+            let action = await w8.wait(timeout: 60)
             guideWaiting = false
             if Task.isCancelled || generation != gen { return }
             guard let action else {
@@ -330,23 +357,15 @@ final class Companion {
         overlay.reset()
     }
 
-    /// Fly to the target (if any), show the bubble, speak.
-    func showStep(_ text: String, title: String?, point: PointTags.Point?, snap: Snapshot) async {
-        if let p = point {
-            let screenPt = snap.screenPoint(forImagePoint: CGPoint(x: p.x, y: p.y))
-            let (snapped, el) = snap.snap(screenPt, label: p.label)
-            // No matching control: ring a small spot instead of nothing.
-            let hl = el.map { overlayRect(fromScreenTopLeft: $0.frame) }
-                ?? overlayRect(fromScreenTopLeft: CGRect(x: snapped.x - 20, y: snapped.y - 20, width: 40, height: 40))
-            overlay.fly(to: overlayPoint(fromScreenTopLeft: snapped), highlight: hl)
-            Log.info("point: img(\(Int(p.x)),\(Int(p.y))) → screen(\(Int(snapped.x)),\(Int(snapped.y))) label=\(p.label ?? "-") snapped=\(el?.label.prefix(30) ?? "no")")
-        } else {
-            overlay.release()
-        }
-        overlay.setMood(.speaking)
-        overlay.say(text, title: title)
-        DebugShot.take("help-step")
-        await speech.speak(text)
+    /// Fly to what the model pointed at and ring it.
+    func point(at p: PointTags.Point, snap: Snapshot) {
+        let screenPt = snap.screenPoint(forImagePoint: CGPoint(x: p.x, y: p.y))
+        let (snapped, el) = snap.snap(screenPt, label: p.label)
+        // No matching control: ring the spot itself.
+        let hl = el.map { overlayRect(fromScreenTopLeft: $0.frame) }
+            ?? overlayRect(fromScreenTopLeft: CGRect(x: snapped.x - 22, y: snapped.y - 16, width: 44, height: 32))
+        overlay.fly(to: overlayPoint(fromScreenTopLeft: snapped), highlight: hl)
+        Log.info("point: img(\(Int(p.x)),\(Int(p.y))) → screen(\(Int(snapped.x)),\(Int(snapped.y))) label=\(p.label ?? "-") snapped=\(el?.label.prefix(30) ?? "no")")
     }
 
     /// True while the guide waits for the person to do a step (switching apps then is part of the task).
@@ -1015,12 +1034,59 @@ final class ActionWatcher {
     func wait(timeout: TimeInterval) async -> Action? {
         let start = Date()
         while !Task.isCancelled && Date().timeIntervalSince(start) < timeout {
-            if let k = lastKey, Date().timeIntervalSince(k) > 2.0 { break }
-            if let c = lastClick, lastKey.map({ $0 < c.at }) ?? true, Date().timeIntervalSince(c.at) > 0.8 { break }
+            if let k = lastKey, Date().timeIntervalSince(k) > 1.6 { break }
+            if let c = lastClick, lastKey.map({ $0 < c.at }) ?? true, Date().timeIntervalSince(c.at) > 0.5 { break }
             try? await Task.sleep(nanoseconds: 120_000_000)
         }
         stop()
         guard !Task.isCancelled, lastClick != nil || lastKey != nil else { return nil }
         return Action(click: lastClick?.point, typed: keys)
+    }
+}
+
+/// Speaks sentences in order as they arrive from a stream, fetching each clip as soon as it's queued.
+@MainActor
+final class SentenceQueue {
+    private let speech: SpeechOutput
+    private var items: [String] = []
+    private var task: Task<Void, Never>?
+    private var closed = false
+    private var wake: CheckedContinuation<Void, Never>?
+    /// False once the request was stopped (Esc, a new question): drop whatever is left.
+    private let isCurrent: () -> Bool
+
+    init(speech: SpeechOutput, isCurrent: @escaping () -> Bool) { self.speech = speech; self.isCurrent = isCurrent }
+
+    func add(_ sentence: String) {
+        let s = sentence.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !s.isEmpty else { return }
+        items.append(s)
+        speech.prepare(s)
+        if task == nil { task = Task { await self.run() } }
+        wake?.resume(); wake = nil
+    }
+
+    func finish() async {
+        closed = true
+        wake?.resume(); wake = nil
+        await task?.value
+    }
+
+    func cancel() {
+        closed = true
+        items.removeAll()
+        wake?.resume(); wake = nil
+        task?.cancel()
+    }
+
+    private func run() async {
+        while !Task.isCancelled && isCurrent() {
+            if items.isEmpty {
+                if closed { return }
+                await withCheckedContinuation { wake = $0 }
+                continue
+            }
+            await speech.speak(items.removeFirst())
+        }
     }
 }

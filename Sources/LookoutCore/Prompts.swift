@@ -50,8 +50,8 @@ public enum Prompts {
         know, in two to four plain sentences, using the screen for context. Explain, don't just name things. End with [DONE].
         2. The task is already finished on this screen: say so warmly in one sentence. End with [DONE].
         3. Otherwise, only the single next thing to do, in one or two short sentences, then one tag \
-        [POINT:x,y:label] at the exact pixel center of the thing to click or type in. Use a control from the list when one \
-        matches, and make the label that control's exact name from the list. If it is not on the list, point at it in the \
+        [POINT:x,y:label] at the exact pixel center of the thing to click or type in. When the thing is a control in the list, copy its \
+        coordinates exactly and use its exact name as the label. If it is not on the list, point at it in the \
         screenshot and name it by what it shows. If it can't be seen, say where to find it and use [POINT:none]. \
         Never describe later steps, and never guess what a future screen will show. If this is the last step, add [DONE] at the end.
 
