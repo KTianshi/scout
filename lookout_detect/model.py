@@ -82,6 +82,9 @@ def build(config: dict) -> PlaybookModel:
     states, is_scam, playbook_of, stage_index = [], [], [], []
     rows_q, start = [], []
     benign = config["benign"]["states"]
+    order = config.get("order", {})
+    if order:
+        assert order["benign"] == list(benign) and order["playbooks"] == list(config["playbooks"]), "order block must match object key order"
     assert next(iter(benign)) == "idle", "the first benign state must be idle"
     for name, s in benign.items():
         states.append(name); is_scam.append(False); playbook_of.append(None); stage_index.append(-1)

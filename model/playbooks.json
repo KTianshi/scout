@@ -21,6 +21,12 @@
     "why": "Time between observations matters: a scam stage drifts back to idle with probability 1 - exp(-dt / tau). 30 min for scams (a remote-access launch 40 s after a fake pop-up is linked; three days later it is not), 15 min for benign activities."
   },
 
+  "order": {
+    "why": "State order shared by the Python and Swift engines (JSON object key order is not portable).",
+    "benign": ["idle", "remote_help", "gift_shopping", "banking", "reading_about_scams"],
+    "playbooks": ["tech_support", "refund", "grandparent", "government"]
+  },
+
   "benign": {
     "states": {
       "idle": {
