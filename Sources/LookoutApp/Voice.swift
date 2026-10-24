@@ -389,7 +389,9 @@ final class Listener {
         req.shouldReportPartialResults = true
         req.taskHint = .dictation
         req.addsPunctuation = true
-        if recognizer?.supportsOnDeviceRecognition == true { req.requiresOnDeviceRecognition = true }
+        // Push-to-talk uses Apple's server recognizer: noticeably better with names and brands ("Calendly" came back
+        // as "Cally" on-device). The always-listening wake word stays on-device.
+        req.requiresOnDeviceRecognition = false
         request = req
         let input = engine.inputNode
         let format = input.outputFormat(forBus: 0)
@@ -452,10 +454,11 @@ final class WakeListener {
     var onPartialQuestion: ((String) -> Void)?
     var onQuestion: ((String) -> Void)?
     private(set) var isRunning = false
+    private var loggedRefusal = false
+    private var loggedStart = false
 
     private let engine = AVAudioEngine()
     private let recognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
-    private var request: SFSpeechAudioBufferRecognitionRequest?
     private var task: SFSpeechRecognitionTask?
     private var watchdog: Task<Void, Never>?
     private var startedAt = Date()
@@ -469,32 +472,28 @@ final class WakeListener {
     var canRun: Bool { recognizer?.supportsOnDeviceRecognition == true && Listener.micAuthorized && Listener.speechAuthorized }
 
     func start() {
-        guard !isRunning, canRun, let recognizer else { return }
-        let req = SFSpeechAudioBufferRecognitionRequest()
-        req.requiresOnDeviceRecognition = true
-        req.shouldReportPartialResults = true
-        req.taskHint = .dictation
-        req.contextualStrings = ["Hey Lookout", "Lookout"] + Listener.commonNames
-        request = req
+        guard !isRunning else { return }
+        guard canRun, recognizer != nil else {
+            if !loggedRefusal {
+                loggedRefusal = true
+                Log.info("wake word: can't run (on-device=\(recognizer?.supportsOnDeviceRecognition ?? false) mic=\(Listener.micAuthorized) speech=\(Listener.speechAuthorized))")
+            }
+            return
+        }
+        // The microphone runs continuously; only the recognition request is swapped (the on-device recognizer
+        // gives up after a few seconds of silence, and restarting the whole engine dropped the wake phrase).
         let input = engine.inputNode
         input.removeTap(onBus: 0)
-        input.installTap(onBus: 0, bufferSize: 1024, format: input.outputFormat(forBus: 0)) { [weak req] buffer, _ in req?.append(buffer) }
+        let box = feed
+        input.installTap(onBus: 0, bufferSize: 1024, format: input.outputFormat(forBus: 0)) { buffer, _ in
+            box.append(buffer)
+        }
         engine.prepare()
         do { try engine.start() } catch { Log.info("wake word: mic didn't start: \(error)"); input.removeTap(onBus: 0); return }
         isRunning = true
-        startedAt = Date()
-        transcript = ""
-        woke = nil
-        task = recognizer.recognitionTask(with: req) { [weak self] result, error in
-            let text = result?.bestTranscription.formattedString
-            let ended = (result?.isFinal ?? false) || error != nil
-            Task { @MainActor in
-                guard let self, self.isRunning else { return }
-                if let text, text != self.transcript { self.transcript = text; self.lastChange = Date(); self.heard(text) }
-                if ended { self.restart() }
-            }
-        }
-        // Delivers the question after a pause, and restarts the recognizer before Apple's ~1 minute limit.
+        if !loggedStart { loggedStart = true; Log.info("wake word: listening on-device") }
+        beginRecognition()
+        // Delivers the question after a pause, and refreshes the recognizer before Apple's ~1 minute limit.
         watchdog = Task { [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 250_000_000)
@@ -504,20 +503,55 @@ final class WakeListener {
         }
     }
 
+    /// The request the microphone tap feeds (swapped without stopping the engine). Locked: the tap runs on the audio thread.
+    final class RequestBox: @unchecked Sendable {
+        private let lock = NSLock()
+        private var req: SFSpeechAudioBufferRecognitionRequest?
+        func append(_ b: AVAudioPCMBuffer) { lock.lock(); req?.append(b); lock.unlock() }
+        func swap(_ new: SFSpeechAudioBufferRecognitionRequest?) { lock.lock(); req?.endAudio(); req = new; lock.unlock() }
+        func isCurrent(_ id: ObjectIdentifier) -> Bool { lock.lock(); defer { lock.unlock() }; return req.map(ObjectIdentifier.init) == id }
+    }
+    private let feed = RequestBox()
+
+    private func beginRecognition() {
+        guard let recognizer else { return }
+        task?.cancel()
+        let req = SFSpeechAudioBufferRecognitionRequest()
+        req.requiresOnDeviceRecognition = true
+        req.shouldReportPartialResults = true
+        req.taskHint = .dictation
+        req.contextualStrings = ["Hey Lookout", "Lookout"] + Listener.commonNames
+        feed.swap(req)
+        startedAt = Date()
+        transcript = ""
+        woke = nil
+        let me = ObjectIdentifier(req)
+        task = recognizer.recognitionTask(with: req) { [weak self] result, error in
+            let text = result?.bestTranscription.formattedString
+            let ended = (result?.isFinal ?? false) || error != nil
+            Task { @MainActor in
+                guard let self, self.isRunning, self.feed.isCurrent(me) else { return }
+                if let text, text != self.transcript { self.transcript = text; self.lastChange = Date(); self.heard(text) }
+                // Ended on silence or the time limit: start a fresh request (a question in progress is kept by tick()).
+                if ended, self.woke == nil { self.beginRecognition() }
+            }
+        }
+    }
+
     func stop() {
         guard isRunning else { return }
         isRunning = false
         watchdog?.cancel(); watchdog = nil
         task?.cancel(); task = nil
-        request?.endAudio(); request = nil
+        feed.swap(nil)
         engine.stop()
         engine.inputNode.removeTap(onBus: 0)
         woke = nil
     }
 
     private func restart() {
-        stop()
-        start()
+        guard isRunning else { return }
+        beginRecognition()
     }
 
     private func heard(_ text: String) {

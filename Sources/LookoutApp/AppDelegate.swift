@@ -21,7 +21,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         buildMainMenu()
         if let icon = AppIconView.image() { NSApp.applicationIconImage = icon }
         companion.start()
-        if let demo = openDemoOnLaunch { companion.openDemo(demo) }
+        if let demo = openDemoOnLaunch { companion.openDemo(demo); NSApp.activate(ignoringOtherApps: true) }
         if openSettingsOnLaunch { companion.settings.show() }
         if openAskOnLaunch { askTyped() }
         if let q = askOnLaunch {

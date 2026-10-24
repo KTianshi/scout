@@ -196,6 +196,7 @@ final class Overlay {
         w.contentView = host
         w.orderFrontRegardless()
         window = w
+        watchSpaces()
         state.position = followsCursor ? cursorTarget() : home
         // The drag handle only exists in docked mode; next to the cursor it would swallow clicks.
         if !followsCursor { handle = BuddyHandle(overlay: self) }
@@ -208,6 +209,17 @@ final class Overlay {
                 if self.followsCursor { self.followCursor() }
                 self.handle?.sync()
                 self.fadeBubbleUnderCursor()
+            }
+        }
+    }
+
+    /// Swiping to another desktop or a full-screen app: make sure the buddy is there too, and log whether it is.
+    func watchSpaces() {
+        NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.activeSpaceDidChangeNotification, object: nil, queue: .main) { [weak self] _ in
+            Task { @MainActor in
+                guard let self, let w = self.window else { return }
+                w.orderFrontRegardless()
+                Log.info("space changed: overlay on this space=\(w.isOnActiveSpace) front=\(NSWorkspace.shared.frontmostApplication?.localizedName ?? "-")")
             }
         }
     }
