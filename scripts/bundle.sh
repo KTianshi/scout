@@ -42,12 +42,14 @@ PLIST
 xattr -cr "$APP"
 IDENTITY="${LOOKOUT_SIGN_IDENTITY:-Lookout Dev}"
 if security find-identity -v -p codesigning 2>/dev/null | grep -q "\"$IDENTITY\""; then
-  codesign --force --deep --options runtime --sign "$IDENTITY" "$APP"
-  echo "Signed with stable identity '$IDENTITY'."
+  sign() { codesign --force --deep --options runtime --sign "$IDENTITY" "$APP"; }
+  echo "Signing with stable identity '$IDENTITY'."
 else
-  codesign --force --deep --sign - "$APP"
-  echo "Signed ad-hoc (no '$IDENTITY' identity). Permissions must be re-granted after each rebuild."
+  sign() { codesign --force --deep --sign - "$APP"; }
+  echo "Signing ad-hoc (no '$IDENTITY' identity). Permissions must be re-granted after each rebuild."
   echo "Run scripts/make-signing-identity.sh once to fix that."
 fi
+# macOS sometimes re-adds Finder metadata between xattr and codesign; retry a few times.
+for i in 1 2 3; do xattr -cr "$APP"; if sign 2>/dev/null; then break; fi; sleep 1; done
 codesign --verify --verbose=1 "$APP" 2>&1 | tail -1
 echo "Built $APP"

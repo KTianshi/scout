@@ -16,3 +16,14 @@
 - Claude confirmation threshold lowered to p ≥ 0.10 so heuristic near-misses still get a vision check.
 - Demo scenario pages carry `<meta name="lookout-*">` tags and `data-lookout-threat/target/sensitive` attributes so fixture mode can read label, URL, app and sensitive fields.
 - Family server: zero-dependency Node; SMS only if all Twilio vars are set AND `LOOKOUT_SMS_ENABLED=1`, otherwise logged as `[sms:mock]`.
+- Demo browser (WKWebView inside Lookout) is the primary demo surface: DOM text + exact element rects, no TCC; the guardian treats it as "the screen" whenever it is open.
+- Did not create a keychain signing identity automatically (it changes keychain trust settings); wrote scripts/make-signing-identity.sh for the human to run; bundle.sh falls back to ad-hoc.
+- ⌥Space push-to-talk via Carbon RegisterEventHotKey (press + release, no Accessibility/Input Monitoring needed) instead of a CGEvent tap.
+- Mic/speech are only touched when the bundle declares usage strings, so the unbundled debug binary can't crash on TCC.
+- Remote-control apps are terminated only after the user taps "End the session"; LOOKOUT_TERMINATE_ONLY_DEMO=1 restricts termination to com.lookout.demo.* for testing.
+- Pause-before-pay triggers when a sensitive field (card, gift card, SSN, bank, password) is visible and P(scam) ≥ 0.3, or the policy chooses block.
+- Alerts are rate-limited to one per page (URL or app+window) per 90 s; screen fingerprints ignore digits so animated counters don't retrigger Claude.
+- Address-specific evidence (lookalike domain, punycode, suspicious TLD) is page-local and not remembered across pages.
+- Confident model "safe" (≥ 0.85) caps the action at nudge unless a hard rule fires.
+- Debug screenshots capture only Lookout's own windows (an early version captured the full screen; that file was deleted immediately).
+- Family alert titles use a friendly scam-type table rather than raw model enum values.

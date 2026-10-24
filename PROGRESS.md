@@ -13,7 +13,7 @@ Status as of the overnight build. Each milestone ends with a passing build (`scr
 | 6 | Pause before you pay + family approval | ✅ | Menu ▸ Demo ▸ Scam: fake bank login; approve/deny in the family app |
 | 7 | Family web app (live feed, approvals, weekly summary, mobile) | ✅ | `node family/server.js` → http://127.0.0.1:4545 |
 | 8 | Explain this letter; “seems stuck” nudge; dictation (“type …”) | ✅ (stuck nudge + dictation need Accessibility; untested live) | Menu ▸ Explain what's on screen |
-| 9 | Polish, onboarding, DEMO.md, README | see below | |
+| 9 | Polish: warm buddy animations, onboarding, DEMO.md, README.md, MORNING.md | ✅ | `LOOKOUT_ONBOARD=1 open build/Lookout.app` |
 
 ## What is stubbed / not verified
 - Live (non-demo) screen reading needs Screen Recording + Accessibility, which only a human can grant. The demo browser path needs neither.
