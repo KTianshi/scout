@@ -14,8 +14,10 @@ public struct ActionPolicy: Sendable {
             self.falseAlarm = falseAlarm
             self.miss = miss
         }
+        /// Thresholds these imply (no stakes): nudge at p ≈ 0.33, interrupt at p ≈ 0.58. Real-world testing
+        /// showed the earlier costs (nudge ≈ 0.09, interrupt ≈ 0.29) reacted to too many ordinary screens.
         public static let `default` = Costs(
-            falseAlarm: [.quiet: 0, .nudge: 3, .interrupt: 25, .blockAndAlert: 60],
+            falseAlarm: [.quiet: 0, .nudge: 15, .interrupt: 90, .blockAndAlert: 150],
             miss: [.quiet: 100, .nudge: 70, .interrupt: 15, .blockAndAlert: 3]
         )
     }

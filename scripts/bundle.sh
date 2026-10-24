@@ -15,6 +15,7 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/Lookout"
 rsync -a --exclude ".DS_Store" "$ROOT/demo" "$APP/Contents/Resources/"
+mkdir -p "$APP/Contents/Resources/model" && cp "$ROOT/model/playbooks.json" "$APP/Contents/Resources/model/"
 # App icon, drawn by the app itself (AppIconView).
 ICONSET="$(mktemp -d)/AppIcon.iconset"
 mkdir -p "$ICONSET"

@@ -10,3 +10,6 @@ node_modules/
 family/data/
 *.xcodeproj/xcuserdata/
 .swiftpm/
+.venv/
+__pycache__/
+.pytest_cache/

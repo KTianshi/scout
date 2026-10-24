@@ -140,6 +140,12 @@ import Testing
         #expect(pay < plain)
     }
 
+    @Test func thresholdsAreConservative() {
+        let nudge = p.threshold(for: .nudge)!, interrupt = p.threshold(for: .interrupt)!
+        #expect(nudge > 0.25 && nudge < 0.4)
+        #expect(interrupt > 0.5 && interrupt < 0.65)
+    }
+
     @Test func hardRuleFloor() {
         #expect(p.decide(probability: 0.01, context: .init(hardRuleMinimum: .interrupt)).action == .interrupt)
     }

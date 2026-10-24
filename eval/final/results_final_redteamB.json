@@ -1,0 +1,185 @@
+{
+ "threshold": 0.5,
+ "files": [
+  "eval/sessions_redteam_B.jsonl"
+ ],
+ "n_sessions": 120,
+ "redteamB": {
+  "rule": {
+   "recall": 1.0,
+   "false_alarm_rate": 0.75,
+   "false_alarms_per_hour": 2.3890363602691522,
+   "caught_before_payment": 0.9574468085106383,
+   "median_detect_step": 1.0,
+   "n_scam": 48,
+   "n_benign": 72,
+   "by_kind": {
+    "banking": 0.9166666666666666,
+    "family_money": 1.0,
+    "gift_shopping": 1.0,
+    "government": 1.0,
+    "grandparent": 1.0,
+    "legit_notices": 0.0,
+    "reading_about_scams": 0.8333333333333334,
+    "refund": 1.0,
+    "remote_help": 0.75,
+    "tech_support": 1.0
+   }
+  },
+  "no_history": {
+   "recall": 0.6458333333333334,
+   "false_alarm_rate": 0.013888888888888888,
+   "false_alarms_per_hour": 0.027779492561269215,
+   "caught_before_payment": 0.6382978723404256,
+   "median_detect_step": 1,
+   "n_scam": 48,
+   "n_benign": 72,
+   "by_kind": {
+    "banking": 0.0,
+    "family_money": 0.0,
+    "gift_shopping": 0.0,
+    "government": 0.8333333333333334,
+    "grandparent": 0.0,
+    "legit_notices": 0.0,
+    "reading_about_scams": 0.08333333333333333,
+    "refund": 0.8333333333333334,
+    "remote_help": 0.0,
+    "tech_support": 0.9166666666666666
+   }
+  },
+  "shipped": {
+   "recall": 0.9583333333333334,
+   "false_alarm_rate": 0.125,
+   "false_alarms_per_hour": 0.27779492561269215,
+   "caught_before_payment": 0.9574468085106383,
+   "median_detect_step": 1.0,
+   "n_scam": 48,
+   "n_benign": 72,
+   "by_kind": {
+    "banking": 0.0,
+    "family_money": 0.0,
+    "gift_shopping": 0.08333333333333333,
+    "government": 1.0,
+    "grandparent": 0.8333333333333334,
+    "legit_notices": 0.0,
+    "reading_about_scams": 0.0,
+    "refund": 1.0,
+    "remote_help": 0.6666666666666666,
+    "tech_support": 1.0
+   }
+  },
+  "playbook": {
+   "recall": 0.9791666666666666,
+   "false_alarm_rate": 0.027777777777777776,
+   "false_alarms_per_hour": 0.08333847768380764,
+   "caught_before_payment": 0.8936170212765957,
+   "median_detect_step": 1,
+   "n_scam": 48,
+   "n_benign": 72,
+   "by_kind": {
+    "banking": 0.0,
+    "family_money": 0.0,
+    "gift_shopping": 0.0,
+    "government": 1.0,
+    "grandparent": 0.9166666666666666,
+    "legit_notices": 0.0,
+    "reading_about_scams": 0.16666666666666666,
+    "refund": 1.0,
+    "remote_help": 0.0,
+    "tech_support": 1.0
+   }
+  },
+  "playbook_rules": {
+   "recall": 1.0,
+   "false_alarm_rate": 0.1527777777777778,
+   "false_alarms_per_hour": 0.3611334032964998,
+   "caught_before_payment": 0.9574468085106383,
+   "median_detect_step": 1.0,
+   "n_scam": 48,
+   "n_benign": 72,
+   "by_kind": {
+    "banking": 0.0,
+    "family_money": 0.0,
+    "gift_shopping": 0.6666666666666666,
+    "government": 1.0,
+    "grandparent": 1.0,
+    "legit_notices": 0.0,
+    "reading_about_scams": 0.25,
+    "refund": 1.0,
+    "remote_help": 0.0,
+    "tech_support": 1.0
+   }
+  },
+  "combined": {
+   "recall": 1.0,
+   "false_alarm_rate": 0.1527777777777778,
+   "false_alarms_per_hour": 0.3611334032964998,
+   "caught_before_payment": 0.9787234042553191,
+   "median_detect_step": 1.0,
+   "n_scam": 48,
+   "n_benign": 72,
+   "by_kind": {
+    "banking": 0.0,
+    "family_money": 0.0,
+    "gift_shopping": 0.08333333333333333,
+    "government": 1.0,
+    "grandparent": 1.0,
+    "legit_notices": 0.0,
+    "reading_about_scams": 0.16666666666666666,
+    "refund": 1.0,
+    "remote_help": 0.6666666666666666,
+    "tech_support": 1.0
+   }
+  },
+  "hybrid": {
+   "recall": 1.0,
+   "false_alarm_rate": 0.041666666666666664,
+   "false_alarms_per_hour": 0.11111797024507686,
+   "caught_before_payment": 0.9361702127659575,
+   "median_detect_step": 1.0,
+   "n_scam": 48,
+   "n_benign": 72,
+   "by_kind": {
+    "banking": 0.0,
+    "family_money": 0.0,
+    "gift_shopping": 0.08333333333333333,
+    "government": 1.0,
+    "grandparent": 1.0,
+    "legit_notices": 0.0,
+    "reading_about_scams": 0.16666666666666666,
+    "refund": 1.0,
+    "remote_help": 0.0,
+    "tech_support": 1.0
+   }
+  },
+  "hybrid_any_reaction": {
+   "recall": 1.0,
+   "false_alarm_rate": 0.05555555555555555,
+   "false_alarms_per_hour": 0.11111797024507686,
+   "caught_before_payment": 0.9787234042553191,
+   "median_detect_step": 1.0,
+   "n_scam": 48,
+   "n_benign": 72,
+   "by_kind": {
+    "banking": 0.0,
+    "family_money": 0.0,
+    "gift_shopping": 0.08333333333333333,
+    "government": 1.0,
+    "grandparent": 1.0,
+    "legit_notices": 0.0,
+    "reading_about_scams": 0.25,
+    "refund": 1.0,
+    "remote_help": 0.0,
+    "tech_support": 1.0
+   }
+  }
+ },
+ "redteamB_auc": {
+  "no_history": 0.9830729166666667,
+  "shipped": 0.9913194444444444,
+  "playbook": 0.9985532407407407,
+  "playbook_rules": 0.9305555555555556,
+  "combined": 1.0,
+  "hybrid": 0.9791666666666666
+ }
+}

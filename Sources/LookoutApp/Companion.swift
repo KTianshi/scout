@@ -46,6 +46,7 @@ final class Companion {
     // MARK: Start
 
     func start() {
+        Companion.pipelineForTitle = pipeline
         overlay.show()
         overlay.onTap = { AppDelegate.shared?.askTyped() }
         registerTalkShortcut()
@@ -173,8 +174,12 @@ final class Companion {
 
     func snapshot(includeImage: Bool) async -> Snapshot {
         let running = NSWorkspace.shared.runningApplications.compactMap { $0.localizedName }
-        if demoInFront, let s = await demoBrowser.snapshot(runningApps: running, includeImage: includeImage, mapToScreen: true) {
-            return s
+        if demoInFront {
+            // Demo mode never falls back to the live screen: if the page can't be read this instant, skip the pass.
+            if let s = await demoBrowser.snapshot(runningApps: running, includeImage: includeImage, mapToScreen: true) { return s }
+            var empty = Snapshot(context: ScreenContext(text: "", runningApps: running))
+            empty.isFixture = true
+            return empty
         }
         return await observer.snapshot(includeImage: includeImage)
     }
@@ -518,14 +523,18 @@ final class Companion {
         let page = Self.pageKey(snap.context)
         if let t = clearedPages[page], Date().timeIntervalSince(t) < 600 { return }
         stuck.observe(fingerprint: snap.context.fingerprint, window: (snap.context.appName ?? "") + (snap.context.windowTitle ?? ""))
-        var result = pipeline.evaluate(snap.context)
-        if result.probability > 0.05 { Log.info("guardian: \(result.summary)") }
-        guard result.action > .quiet else { return }
-
+        // Preview first: if Claude is about to check this screen, the playbook observation is committed
+        // once, together with Claude's answer as evidence.
+        var result = pipeline.evaluate(snap.context, commitPlaybook: false)
         let fp = snap.context.fingerprint
+        let willConfirm = result.action > .quiet && result.shouldConfirmWithModel && claude.isConfigured && fp != lastConfirmedFingerprint && !confirmInFlight
+        if !willConfirm { result = pipeline.commit(snap.context) }
+        if result.probability > 0.05 { Log.info("guardian: \(result.summary)") }
+        guard result.action > .quiet || willConfirm else { return }
+
         var verdict: ScamVerdict?
         var full = snap
-        if result.shouldConfirmWithModel, claude.isConfigured, fp != lastConfirmedFingerprint, !confirmInFlight {
+        if willConfirm {
             confirmInFlight = true
             lastConfirmedFingerprint = fp
             overlay.setMood(.thinking)
@@ -534,6 +543,7 @@ final class Companion {
                 let v = try await claude.confirmScam(screen: full.context, image: full.image, heuristicSummary: result.summary)
                 verdict = v
                 result = pipeline.applyModelVerdict(v, ctx: full.context)
+                Log.info("claude verdict: scam=\(v.isScam) conf=\(v.confidence) type=\(v.scamType) why=\(v.explanation.prefix(160)) → \(result.summary)")
                 if !v.isScam, v.confidence >= 0.85, result.rules.isEmpty {
                     clearedPages[page] = Date()
                     Log.info("guardian: page cleared by model for 10 min")
@@ -541,9 +551,9 @@ final class Companion {
                     if !busy { overlay.setMood(.idle) }
                     return
                 }
-                Log.info("claude verdict: scam=\(v.isScam) conf=\(v.confidence) type=\(v.scamType) why=\(v.explanation.prefix(160)) → \(result.summary)")
             } catch {
                 Log.info("claude confirm failed, using heuristics: \(error.localizedDescription)")
+                result = pipeline.commit(full.context)
             }
             confirmInFlight = false
             if !busy { overlay.setMood(.idle) }
@@ -623,13 +633,31 @@ final class Companion {
             let thumb = snap.image.flatMap { ImageUtil.thumbnailDataURL($0.data) }
             await family.send(.init(type: "scam_alert",
                                     title: Companion.alertTitle(verdict: verdict, rule: r.rules.first),
-                                    explanation: verdict?.familySummary.isEmpty == false ? verdict!.familySummary : r.explanation,
+                                    explanation: [verdict?.familySummary.isEmpty == false ? verdict!.familySummary : r.explanation, r.stageLine, Companion.evidenceLine(pipeline)].compactMap { $0 }.joined(separator: " "),
                                     risk: r.probability, url: snap.context.url, app: snap.context.appName, screenshot: thumb,
                                     action: "Lookout interrupted and explained the warning signs"))
         }
         DebugShot.take("interrupt")
         await speech.speak(spoken)
     }
+
+    /// "Why: AnyDesk launched +3.1 · refund invoice +4.2" from the playbook evidence ledger.
+    static func evidenceLine(_ p: ScamPipeline) -> String? {
+        guard let pb = p.playbook else { return nil }
+        let top = pb.topEvidence(3).filter { $0.logBF > 0.5 && $0.item != "nothing else on screen" }
+        guard !top.isEmpty else { return nil }
+        let names: [String: String] = [
+            "REMOTE_ACCESS_STARTED": "remote-control app", "PHONE_NUMBER_IN_POPUP": "phone number in a pop-up", "INFECTED_CLAIM": "fake virus warning",
+            "REFUND_OVERPAYMENT": "surprise refund/invoice", "BANK_SITE_OPENED": "bank site opened", "PAYMENT_DEMAND": "payment demand",
+            "GIFT_CARD_PAGE": "gift cards", "WIRE_OR_CRYPTO_PAGE": "wire/crypto", "SECRECY_REQUEST": "asked to keep it secret",
+            "FAMILY_EMERGENCY_STORY": "family emergency story", "LEGAL_THREAT": "legal threat", "GOV_IMPERSONATION": "posing as government",
+            "LOOKALIKE_DOMAIN": "fake web address", "BRAND_IMPERSONATION": "posing as a brand", "URGENT_LANGUAGE": "pressure to hurry",
+            "CLAUDE_FLAG": "AI check agreed", "SENSITIVE_FIELD_ON_UNKNOWN_SITE": "asks for private info", "SCREEN_SHARE_ACTIVE": "screen sharing",
+        ]
+        return "Why: " + top.map { String(format: "%@ +%.1f", names[$0.item] ?? $0.item, $0.logBF) }.joined(separator: " · ")
+    }
+
+    nonisolated(unsafe) static var pipelineForTitle: ScamPipeline?
 
     static func alertTitle(verdict: ScamVerdict?, rule: HardRule?) -> String {
         let names: [String: String] = [
@@ -643,6 +671,7 @@ final class Companion {
         ]
         if let v = verdict, v.isScam, let n = names[v.scamType] { return "Stopped: \(n)" }
         if let r = rule, let n = names[r.id] { return "Stopped: \(n)" }
+        if let pb = pipelineForTitle?.playbook?.state(), pb.pScam >= 0.5, let l = pb.topTypeLabel { return "Stopped: \(l)" }
         return "Possible scam on \(LookoutConfig.elderName)'s screen"
     }
 

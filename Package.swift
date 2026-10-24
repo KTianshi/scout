@@ -7,6 +7,7 @@ let package = Package(
     products: [
         .executable(name: "Lookout", targets: ["LookoutApp"]),
         .executable(name: "lookout-bench", targets: ["LookoutBench"]),
+        .executable(name: "lookout-signals", targets: ["LookoutSignals"]),
         .library(name: "LookoutCore", targets: ["LookoutCore"]),
     ],
     targets: [
@@ -24,6 +25,7 @@ let package = Package(
             ]
         ),
         .executableTarget(name: "LookoutBench", dependencies: ["LookoutCore"]),
+        .executableTarget(name: "LookoutSignals", dependencies: ["LookoutCore"]),
         .testTarget(name: "LookoutCoreTests", dependencies: ["LookoutCore"]),
     ],
     swiftLanguageVersions: [.v5]
