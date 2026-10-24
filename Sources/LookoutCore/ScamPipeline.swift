@@ -16,8 +16,47 @@ public final class ScamPipeline: @unchecked Sendable {
         /// Playbook HMM state after this screen (nil if the model file was not found).
         public var playbook: PlaybookState?
 
-        /// What the policy acts on: the larger of the evidence-memory risk and the playbook HMM risk.
-        public var probability: Double { max(assessment.probability, playbook?.pScam ?? 0) }
+        /// What the policy acts on. The playbook HMM's risk, plus the evidence-memory detector's risk (which
+        /// covers scam types without a playbook: crypto, phishing, prizes...) unless the HMM recognises a
+        /// benign look-alike activity (family remote help, gift shopping, banking, paying people, reading
+        /// about scams). Hard rules still set a minimum action in the policy.
+        public var probability: Double { Self.combine(risk: assessment.probability, evidence: assessment.activeEvidence, playbook: playbook) }
+
+        /// Evidence that benign look-alike activities also produce. Anything else (a fake web address,
+        /// secrecy, a crypto ATM, a legal threat...) is never explained away by a look-alike.
+        public static let lookalikeExplainable: Set<SignalKind> = [
+            .remoteAccessAppRunning, .remoteAccessInstruction, .p2pPayment, .wirePayment, .credentialRequest, .urgency, .phoneCallToAction,
+            .techBrand, .giftCardPayment, .sensitiveEntryOnRiskyPage, .familyEmergency,
+        ]
+
+        /// True when the playbook HMM recognises a benign look-alike and every piece of the evidence-memory
+        /// detector's evidence is something that look-alike also produces.
+        public static func lookalikeVeto(evidence: [Signal], playbook pb: PlaybookState?) -> Bool {
+            guard let pb, pb.lookalikeP >= 0.5 else { return false }
+            return evidence.filter { $0.weight > 0.3 && $0.kind != .modelVerdict }.allSatisfy { lookalikeExplainable.contains($0.kind) }
+        }
+
+        /// Evidence no benign look-alike activity produces. The evidence-memory detector may only escalate
+        /// beyond the playbook HMM when it is confident AND has at least one of these (or Claude agrees).
+        public static let neverBenign: Set<SignalKind> = [
+            .lookalikeDomain, .punycodeDomain, .infectedClaim, .doNotClose, .secrecy, .guaranteedReturns, .cryptoPayment,
+            .prizeFee, .medicareNumberRequest, .smallFeeDelivery, .govDomainMismatch, .comboInfectedPhone, .romanceMoney,
+            .comboRemoteRefund, .utilityShutoff,
+        ]
+
+        /// The playbook HMM decides. The older evidence-memory detector covers scam types without a playbook
+        /// (crypto, phishing, prizes...), so it may raise the risk, but only when it is confident (≥ 0.9),
+        /// corroborated (a never-benign signal ≥ 1.0, or Claude flagged the screen), and the HMM does not
+        /// recognise a benign look-alike. Measured on held-out sessions: see eval/.
+        public static func combine(risk: Double, evidence: [Signal], playbook pb: PlaybookState?) -> Double {
+            guard let pb else { return risk }
+            if lookalikeVeto(evidence: evidence, playbook: pb) { return pb.pScam }
+            let neverBenignSeen = evidence.contains { neverBenign.contains($0.kind) && $0.weight >= 1.0 }
+            let claudeFlagged = evidence.contains { $0.kind == .modelVerdict && $0.weight >= 3.0 }
+            // Two independent sources (heuristics + Claude) need less; one corroborating signal needs more.
+            if (claudeFlagged && risk >= 0.6) || (neverBenignSeen && risk >= 0.9) { return max(risk, pb.pScam) }
+            return pb.pScam
+        }
         public var action: Action { decision.action }
         public var spoken: String { [explanation, advice].filter { !$0.isEmpty }.joined(separator: " ") }
 
@@ -109,9 +148,14 @@ public final class ScamPipeline: @unchecked Sendable {
         let rules = HardRules.evaluate(ruleInput, text: ctx.text)
         let remote = a.activeEvidence.contains { $0.kind == .remoteAccessAppRunning }
         let paymentVisible = !ctx.sensitiveFields.isEmpty
-        let floor = rules.map(\.minimum).max()
+        // When the playbook engine recognises a benign look-alike (e.g. a grandchild's AnyDesk session while
+        // the bank site is open), hard-rule floors stand down too; the evaluation measures this trade-off.
+        // Hard rules explain; they no longer force an interrupt when the playbook engine is available (on
+        // held-out sessions they fired on gift shopping and articles about scams). Without the playbook
+        // model, they keep their old role as a minimum action.
+        let floor = pb == nil ? rules.map(\.minimum).max() : nil
         let ctxP = ActionPolicy.Context(paymentEntryVisible: paymentVisible, remoteAccessActive: remote, hardRuleMinimum: floor)
-        let p = max(a.probability, pb?.pScam ?? 0)
+        let p = Result.combine(risk: a.probability, evidence: a.activeEvidence, playbook: pb)
         let d = policy.decide(probability: p, context: ctxP)
         var (explanation, advice, target) = Self.explain(rules: rules, evidence: a.activeEvidence)
         if explanation.isEmpty, let pb, pb.pScam >= 0.5, let label = pb.topTypeLabel {
@@ -120,7 +164,8 @@ public final class ScamPipeline: @unchecked Sendable {
             advice = "Let's stop here and check with your family before doing anything else."
         }
         let targetEvidence = a.activeEvidence.first { $0.target == target && $0.target != .none }?.evidence
-        let confirm = p >= LookoutConfig.confirmThreshold || !rules.isEmpty
+        // Asking Claude is cheap and its answer is only evidence, so either detector can request a check.
+        let confirm = max(p, a.probability) >= LookoutConfig.confirmThreshold || !rules.isEmpty
         return Result(assessment: a, rules: rules, decision: d, explanation: explanation, advice: advice, target: target, targetEvidence: targetEvidence, shouldConfirmWithModel: confirm, playbook: pb)
     }
 

@@ -66,7 +66,10 @@ public enum PlaybookEvents {
         if has(.giftCardPayment) || ctx.sensitiveFields.contains("gift-card") { out.insert(.GIFT_CARD_PAGE) }
         if has(.wirePayment) || has(.p2pPayment) || has(.cryptoPayment, 0.4) { out.insert(.WIRE_OR_CRYPTO_PAGE) }
         if has(.secrecy) { out.insert(.SECRECY_REQUEST) }
-        if has(.familyEmergency) { out.insert(.FAMILY_EMERGENCY_STORY) }
+        // The story often comes without a family word ("I was in a car accident, the police arrested me"):
+        // two or more emergency cues in one message count too.
+        let lower = ctx.text.lowercased()
+        if has(.familyEmergency) || ScamSignals.hits(lower, ScamSignals.emergencyWords).count >= 2 { out.insert(.FAMILY_EMERGENCY_STORY) }
         if has(.legalThreat) { out.insert(.LEGAL_THREAT) }
         if (has(.govImpersonation) && !(host?.hasSuffix(".gov") ?? false)) || has(.govDomainMismatch) { out.insert(.GOV_IMPERSONATION) }
         return out

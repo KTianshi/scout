@@ -6,7 +6,8 @@ States: benign states first (idle + look-alike activities), then every stage of 
   scam stage i    → [stay, advance one, skip one, abandon→idle] from the playbook's transition rows
 Time: before each observation, scam stages drift to idle with prob 1 - exp(-dt/tau_scam), benign
 activities with 1 - exp(-dt/tau_benign).
-Emissions: each event is an independent Bernoulli with P(event present | state) = q[state, event].
+Emissions: each event is an independent Bernoulli with P(event present | state) = q[state, event], and every
+non-idle state is "distracted" with probability d (emits like idle): b_s(x) = (1-d) b_stage(x) + d b_idle(x).
 """
 
 from __future__ import annotations
@@ -36,6 +37,7 @@ class PlaybookModel:
     Q: np.ndarray                # [n, E] P(event present | state)
     tau_scam: float
     tau_benign: float
+    distraction: float = 0.0
     idle: int = 0
 
     @property
@@ -164,6 +166,7 @@ def build(config: dict) -> PlaybookModel:
         config=config, states=states, is_scam=np.asarray(is_scam), playbook_of=playbook_of, stage_index=stage_index,
         playbooks=playbooks, start=start, A=A, Q=Q,
         tau_scam=float(t.get("scam_return_tau_s", 1800)), tau_benign=float(t.get("benign_return_tau_s", 900)),
+        distraction=float(config.get("distraction", 0.0)),
     )
 
 

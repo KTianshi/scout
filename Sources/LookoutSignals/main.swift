@@ -12,6 +12,8 @@ let useEngine = CommandLine.arguments.contains("--engine")
 var engine: PlaybookEngine?
 // The current shipped detector (evidence memory + hard rules + policy), without the playbook HMM, as a baseline.
 let riskOnly = ScamPipeline(playbook: nil)
+// The full shipped pipeline (playbook HMM + evidence memory + hard rules + policy), exactly as the app runs it.
+let shipped = ScamPipeline()
 if useEngine {
     guard let url = PlaybookModel.locate(), let m = try? PlaybookModel.load(url: url) else {
         FileHandle.standardError.write("model/playbooks.json not found\n".data(using: .utf8)!); exit(2)
@@ -41,9 +43,15 @@ while let line = readLine(strippingNewline: true) {
         out["top_type"] = s.topType ?? NSNull()
         out["stage"] = s.currentStage ?? NSNull()
         out["ledger"] = s.ledger.map { ["item": $0.item, "log_bf": $0.logBF] }
+        out["lookalike"] = s.lookalike ?? NSNull()
+        out["lookalike_p"] = s.lookalikeP
         let r = riskOnly.evaluate(ctx, at: Date(timeIntervalSince1970: t))
         out["risk_p"] = r.assessment.probability
         out["risk_action"] = r.action.name
+        out["rules"] = r.rules.map(\.id)
+        let full = shipped.evaluate(ctx, at: Date(timeIntervalSince1970: t))
+        out["shipped_p"] = full.probability
+        out["shipped_action"] = full.action.name
     }
     let data = try! JSONSerialization.data(withJSONObject: out, options: [.sortedKeys])
     print(String(decoding: data, as: UTF8.self))

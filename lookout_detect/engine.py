@@ -63,6 +63,8 @@ class EngineState:
     next_hint: str | None
     next_event: str | None                       # the event the next stage most characteristically produces
     log_likelihood: float                        # log P(x_1..t) under the whole model
+    lookalike: str | None = None                 # most likely benign look-alike activity (not idle), if any
+    lookalike_p: float = 0.0                     # posterior mass on benign look-alike activities
     ledger: list[LedgerEntry] = field(default_factory=list)   # entries added by this observation
 
     def to_json(self) -> dict:
@@ -115,6 +117,15 @@ class Engine:
             logA = np.log(self.model.transition(dt))
         return logsumexp(self.log_alpha[:, None] + logA, axis=0)
 
+    def _mix(self, own: np.ndarray, idle_part: float) -> np.ndarray:
+        """log((1-d) exp(own_s) + d exp(idle_part)) for non-idle states; idle keeps its own emission."""
+        d = self.model.distraction
+        if d <= 0:
+            return own
+        out = np.logaddexp(np.log1p(-d) + own, np.log(d) + idle_part)
+        out[self.model.idle] = own[self.model.idle]
+        return out
+
     def emission_terms(self, obs: Observation) -> list[tuple[str, np.ndarray]]:
         """Per-item log-likelihood vectors over states, in ledger order. Their sum is log b(x)."""
         present = [e for e in EVENTS if e in obs.events]
@@ -138,9 +149,15 @@ class Engine:
         if self.log_alpha is not None:
             entries.append(LedgerEntry(self.step, obs.t, "time passes", L - L_prev, "model"))
 
+        # Emission = mixture of the state's own distribution and idle's ("distracted" screens). Track both
+        # partial products so every ledger entry is an exact chain-rule step of the mixture likelihood.
+        own = np.zeros(self.model.n)
+        idle_part = 0.0
         cum = log_pred.copy()
         for name, term in self.emission_terms(obs):
-            cum = cum + term
+            own = own + term
+            idle_part = idle_part + term[self.model.idle]
+            cum = log_pred + self._mix(own, idle_part)
             L_new = self._odds(cum)
             entries.append(LedgerEntry(self.step, obs.t, name, L_new - L, obs.source))
             L = L_new
@@ -181,7 +198,11 @@ class Engine:
                 hint = m.hint(k)
                 lift = self.logQ[k] - self.logQ[m.idle]
                 nev = EVENTS[int(np.argmax(lift))].value
+        act = [i for i in range(m.n) if not m.is_scam[i] and i != m.idle]
+        look_p = float(post[act].sum())
+        look = m.states[act[int(np.argmax(post[act]))]] if act and look_p > 0 else None
         return EngineState(
+            lookalike=look, lookalike_p=look_p,
             step=self.step, t=self.t_last or 0.0, p_scam=p_scam, log_odds=self.log_odds, by_type=by_type,
             top_type=top, top_type_label=m.label(top) if top else None, stage_posterior=stage_post,
             current_stage=cur, next_stage=nxt, next_hint=hint, next_event=nev,

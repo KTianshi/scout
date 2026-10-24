@@ -15,6 +15,7 @@ public final class PlaybookModel: @unchecked Sendable {
     public let Q: [[Double]]
     public let tauScam: Double
     public let tauBenign: Double
+    public let distraction: Double
     public let idle = 0
     public var n: Int { states.count }
 
@@ -119,6 +120,7 @@ public final class PlaybookModel: @unchecked Sendable {
         self.start = start; self.A = A; self.Q = Q
         self.tauScam = (timing["scam_return_tau_s"] as? NSNumber)?.doubleValue ?? 1800
         self.tauBenign = (timing["benign_return_tau_s"] as? NSNumber)?.doubleValue ?? 900
+        self.distraction = (cfg["distraction"] as? NSNumber)?.doubleValue ?? 0
     }
 
     public func transition(dt: Double) -> [[Double]] {
@@ -156,6 +158,9 @@ public struct PlaybookState: Sendable {
     public var nextHint: String?
     public var logLikelihood: Double
     public var ledger: [PlaybookLedgerEntry]
+    /// Most likely benign look-alike activity (remote_help, gift_shopping, ...) and the posterior mass on all of them.
+    public var lookalike: String?
+    public var lookalikeP: Double
 
     public var summary: String {
         let top = topType.map { "\($0)@\(currentStage ?? "?")" } ?? "-"
@@ -242,8 +247,21 @@ public final class PlaybookEngine: @unchecked Sendable {
             let k = all.firstIndex(of: e)!
             items.append((e.rawValue, (0..<model.n).map { logQ[$0][k] }))
         }
+        // Mixture emission (see model.py): track own and idle partial products for an exact ledger.
+        var own = Array(repeating: 0.0, count: model.n)
+        var idlePart = 0.0
+        let d = model.distraction
         for (name, term) in items {
-            for s in 0..<model.n { cum[s] += term[s] }
+            for s in 0..<model.n { own[s] += term[s] }
+            idlePart += term[model.idle]
+            for s in 0..<model.n {
+                if d <= 0 || s == model.idle { cum[s] = pred[s] + own[s] }
+                else {
+                    let a = log1p(-d) + own[s], b = log(d) + idlePart
+                    let m = max(a, b)
+                    cum[s] = pred[s] + m + log(exp(a - m) + exp(b - m))
+                }
+            }
             let Ln = odds(cum)
             entries.append(.init(step: step, t: obs.t, item: name, logBF: Ln - L, source: obs.source))
             L = Ln
@@ -283,6 +301,9 @@ public final class PlaybookEngine: @unchecked Sendable {
         var byType: [String: Double] = [:]
         for pb in model.playbooks { byType[pb] = model.stages(of: pb).reduce(0) { $0 + post[$1] } }
         let pScam = (0..<model.n).filter { model.isScam[$0] }.reduce(0) { $0 + post[$1] }
+        let act = (0..<model.n).filter { !model.isScam[$0] && $0 != model.idle }
+        let lookP = act.reduce(0) { $0 + post[$1] }
+        let look = act.max { post[$0] < post[$1] }.flatMap { lookP > 0 ? model.states[$0] : nil }
         // Deterministic tie-break: playbook order.
         let top = model.playbooks.max { (byType[$0] ?? 0) < (byType[$1] ?? 0) }
         var stagePost: [String: Double] = [:], cur: String?, nxt: String?, hint: String?
@@ -305,7 +326,8 @@ public final class PlaybookEngine: @unchecked Sendable {
         }
         return PlaybookState(step: step, pScam: pScam, logOdds: logOdds, byType: byType, topType: top,
                              topTypeLabel: top.flatMap { model.labels[$0] }, stagePosterior: stagePost,
-                             currentStage: cur, nextStage: nxt, nextHint: hint, logLikelihood: logLikelihood, ledger: entries)
+                             currentStage: cur, nextStage: nxt, nextHint: hint, logLikelihood: logLikelihood, ledger: entries,
+                             lookalike: look, lookalikeP: lookP)
     }
 
     /// Largest evidence entries so far, for explanations.

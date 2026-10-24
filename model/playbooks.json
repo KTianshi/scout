@@ -11,6 +11,8 @@
   "model_reported_events": ["CLAUDE_FLAG"],
   "model_reported_note": "Model-reported flags only count (present OR absent) on observations where the model actually ran. P(CLAUDE_FLAG | scam stage) ~0.9 and P(CLAUDE_FLAG | benign) = 0.045 come from the bench: Claude confirmation had 100% precision on 154 fixtures and ~90% recall when consulted; 0.045 (not ~0) caps one model report at log(0.9/0.045) = +3.0 nats so the model can never decide alone.",
 
+  "distraction": 0.3,
+  "distraction_why": "During any activity (a scam in progress, a family remote session) some screens are simply not about it: the person checks the weather, or the extractor misses a cue. Each non-idle state emits like idle with this probability: b_s(x) = (1 - d) * b_stage(x) + d * b_idle(x). Without it, one quiet screen collapses a real scam.",
   "probability_floor": 0.0001,
   "default_benign_rate": 0.002,
   "default_scam_rate": 0.01,
@@ -23,7 +25,7 @@
 
   "order": {
     "why": "State order shared by the Python and Swift engines (JSON object key order is not portable).",
-    "benign": ["idle", "remote_help", "gift_shopping", "banking", "reading_about_scams"],
+    "benign": ["idle", "remote_help", "gift_shopping", "banking", "paying_people", "reading_about_scams"],
     "playbooks": ["tech_support", "refund", "grandparent", "government"]
   },
 
@@ -54,6 +56,11 @@
         "why": "Normal online banking: checking a statement or paying a bill on the real bank site.",
         "start": 0.015, "enter": 0.008, "stay": 0.8,
         "emit": { "BANK_SITE_OPENED": 0.92, "URGENT_LANGUAGE": 0.04, "WIRE_OR_CRYPTO_PAGE": 0.03, "CLAUDE_FLAG": 0.045 }
+      },
+      "paying_people": {
+        "why": "Sending money to people you know: a grandchild asks for $20 on Venmo, splitting a bill on Zelle. Money requests and payment apps without secrecy, threats or a stranger's story.",
+        "start": 0.005, "enter": 0.003, "stay": 0.7,
+        "emit": { "PAYMENT_DEMAND": 0.5, "WIRE_OR_CRYPTO_PAGE": 0.6, "FAMILY_EMERGENCY_STORY": 0.05, "URGENT_LANGUAGE": 0.05, "CLAUDE_FLAG": 0.045 }
       },
       "reading_about_scams": {
         "why": "News articles, AARP alerts and bank 'fraud tips' are full of scam vocabulary but nobody is asking for anything. The extractor already drops advice sentences and damps article-like screens, so only ~5-15% of such screens leak a given flag; this state absorbs those leaks.",
