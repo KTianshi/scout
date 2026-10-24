@@ -63,6 +63,7 @@ final class FamilyClient: @unchecked Sendable {
 
     @discardableResult
     func send(_ e: Event) async -> Bool {
+        guard LookoutConfig.familyEnabled else { return false }
         var b: [String: Any] = ["type": e.type, "title": e.title, "explanation": e.explanation]
         if let v = e.risk { b["risk"] = v }
         if let v = e.url { b["url"] = v }
