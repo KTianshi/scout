@@ -42,6 +42,7 @@ final class SettingsModel: ObservableObject {
     @Published var shortcutTaken = false
     @Published var guardian = true
     @Published var visible = true
+    @Published var autoGuide = GuideMode.automatic
     @Published var elderName = LookoutConfig.elderName
     @Published var familyName = LookoutConfig.familyName
 
@@ -97,6 +98,11 @@ final class SettingsModel: ObservableObject {
         shortcut = s
         TalkShortcut.current = s
         shortcutTaken = !companion.registerTalkShortcut()
+    }
+
+    func setAutoGuide(_ on: Bool) {
+        autoGuide = on
+        GuideMode.automatic = on
     }
 
     func setVisible(_ on: Bool) {
@@ -513,6 +519,15 @@ struct TalkingPane: View {
                     .font(.system(size: 14, weight: .medium)).foregroundStyle(.orange)
                     .padding(.leading, 6)
             }
+        }
+        VStack(alignment: .leading, spacing: 8) {
+            CardTitle(text: "Step by step")
+            ToggleRow(icon: "figure.walk", tint: .orange, title: "Walk me through it automatically",
+                      detail: model.autoGuide ? "After you click, Lookout looks again and gives the next step on its own."
+                                              : "Lookout gives one step at a time. Say “next” when you're ready for more.",
+                      isOn: Binding(get: { model.autoGuide }, set: { model.setAutoGuide($0) }))
+                .padding(.vertical, 6)
+                .glassCard()
         }
         HStack(alignment: .top, spacing: 14) {
             Image(systemName: "lightbulb.fill")

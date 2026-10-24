@@ -336,6 +336,18 @@ final class Companion {
             await speaker.finish()
             if Task.isCancelled || generation != gen { w8.stop(); return }
             if done { w8.stop(); break }
+            if !GuideMode.automatic {
+                // Clicky-style: one fresh answer per question. The pointer stays until they act on it;
+                // "next" (or any follow-up) looks again with the whole conversation in mind.
+                overlay.state.hint = "Hold \(TalkShortcut.current.symbol) and say “next” when you're ready"
+                overlay.setMood(.idle)
+                guideWaiting = true
+                _ = await w8.wait(timeout: 25)
+                guideWaiting = false
+                if Task.isCancelled || generation != gen { return }
+                overlay.reset()
+                return
+            }
             overlay.setMood(.idle)
             guideWaiting = true
             let action = await w8.wait(timeout: 60)
@@ -569,16 +581,19 @@ final class Companion {
         guard !snap.context.text.isEmpty || !snap.context.runningApps.isEmpty else { return }
         if let app = snap.context.appName, Self.ignoredApps.contains(app) { return }
         let page = Self.pageKey(snap.context)
-        if let t = clearedPages[page], Date().timeIntervalSince(t) < 600 { return }
+        // A page Claude called safe stays quiet for 10 minutes, but its screens still feed the playbook
+        // engine so the session history stays complete; only a hard rule can interrupt it.
+        let cleared = clearedPages[page].map { Date().timeIntervalSince($0) < 600 } ?? false
         stuck.observe(fingerprint: snap.context.fingerprint, window: (snap.context.appName ?? "") + (snap.context.windowTitle ?? ""))
         // Preview first: if Claude is about to check this screen, the playbook observation is committed
         // once, together with Claude's answer as evidence.
         var result = pipeline.evaluate(snap.context, commitPlaybook: false)
         let fp = snap.context.fingerprint
-        let willConfirm = result.action > .quiet && result.shouldConfirmWithModel && claude.isConfigured && fp != lastConfirmedFingerprint && !confirmInFlight
+        let willConfirm = !cleared && result.action > .quiet && result.shouldConfirmWithModel && claude.isConfigured && fp != lastConfirmedFingerprint && !confirmInFlight
         if !willConfirm { result = pipeline.commit(snap.context) }
         if result.probability > 0.05 { Log.info("guardian: \(result.summary)") }
         guard result.action > .quiet || willConfirm else { return }
+        if cleared && result.rules.isEmpty { return }
 
         var verdict: ScamVerdict?
         var full = snap
@@ -982,6 +997,15 @@ enum DebugShot {
             try? data.write(to: f)
             Log.info("debug shot: \(f.path)")
         }
+    }
+}
+
+/// How help moves between steps. Default: one answer per question, like Clicky (never stale).
+/// Automatic: Lookout watches for the click and gives the next step on its own.
+enum GuideMode {
+    static var automatic: Bool {
+        get { UserDefaults.standard.bool(forKey: "autoGuide") }
+        set { UserDefaults.standard.set(newValue, forKey: "autoGuide") }
     }
 }
 

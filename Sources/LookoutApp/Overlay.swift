@@ -85,6 +85,8 @@ final class BuddyState: ObservableObject {
     @Published var mood: BuddyMood = .idle
     @Published var bubble: String? = nil
     @Published var bubbleTitle: String? = nil
+    /// A small hint under the bubble text (e.g. how to ask for the next step). Cleared with the bubble.
+    @Published var hint: String? = nil
     /// Where the bubble sits. Fixed when it appears so it doesn't chase the cursor; moves only when the buddy flies.
     @Published var bubbleAnchor: CGPoint = .zero
     @Published var pointing: Bool = false
@@ -279,6 +281,7 @@ final class Overlay {
 
     func say(_ text: String?, title: String? = nil) {
         if text != nil, state.bubble == nil { state.bubbleAnchor = state.position }
+        if text == nil || text != state.bubble { state.hint = nil }
         withAnimation(.easeOut(duration: 0.25)) {
             state.bubble = text
             state.bubbleTitle = title
@@ -324,7 +327,7 @@ struct BuddyOverlayView: View {
                         .scaleEffect(state.pointing || state.mood == .alarmed ? 0.8 : 0.6)
                         .position(state.position)
                     if let text = state.bubble {
-                        SpeechBubble(title: state.bubbleTitle, text: text, alarmed: state.mood == .alarmed, talking: state.mood == .speaking)
+                        SpeechBubble(title: state.bubbleTitle, text: text, alarmed: state.mood == .alarmed, talking: state.mood == .speaking, hint: state.hint)
                             .frame(maxWidth: 380)
                             .fixedSize(horizontal: false, vertical: true)
                             .position(state.bubblePosition(in: geo.size))
@@ -567,6 +570,7 @@ struct SpeechBubble: View {
     var text: String
     var alarmed: Bool
     var talking = false
+    var hint: String? = nil
 
     var accent: Color { alarmed ? Color(red: 0.90, green: 0.45, blue: 0.08) : Color(red: 0.16, green: 0.47, blue: 0.90) }
 
@@ -595,6 +599,11 @@ struct SpeechBubble: View {
                 }
                 .foregroundStyle(Color(white: 0.5))
                 .padding(.top, 2)
+            } else if let hint {
+                Text(hint)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(Color(white: 0.5))
+                    .padding(.top, 2)
             }
         }
         .padding(.horizontal, 18)
