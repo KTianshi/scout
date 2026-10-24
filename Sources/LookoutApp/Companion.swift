@@ -184,6 +184,7 @@ final class Companion {
             empty.isFixture = true
             return empty
         }
+        observer.displayID = overlay.displayID
         return await observer.snapshot(includeImage: includeImage)
     }
 

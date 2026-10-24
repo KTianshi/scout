@@ -123,9 +123,14 @@ final class BuddyState: ObservableObject {
             CGPoint(x: min(max(c.x, w / 2 + 16), size.width - w / 2 - 16), y: min(max(c.y, h / 2 + 16), size.height - h / 2 - 16))
         }
         func rect(_ c: CGPoint) -> CGRect { CGRect(x: c.x - w / 2, y: c.y - h / 2, width: w, height: h) }
-        for c in candidates.map(clamped) where !rect(c).intersects(avoid) { return c }
+        // Keep the side it first appeared on while the text streams in; only move if it would cover the target.
+        let key = "\(Int(p.x)),\(Int(p.y))"
+        if let (k, i) = lockedSide, k == key, !rect(clamped(candidates[i])).intersects(avoid) { return clamped(candidates[i]) }
+        for (i, c) in candidates.map(clamped).enumerated() where !rect(c).intersects(avoid) { lockedSide = (key, i); return c }
         return clamped(candidates[0])
     }
+    /// Which placement the bubble took for the current anchor (plain var: set during layout, never published).
+    private var lockedSide: (String, Int)?
 
     /// The bubble's rough on-screen rect (same size estimate as the placement).
     func bubbleRect(in size: CGSize) -> CGRect {
@@ -199,11 +204,29 @@ final class Overlay {
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 33_000_000)
                 guard let self else { return }
+                self.followPointerToItsScreen()
                 if self.followsCursor { self.followCursor() }
                 self.handle?.sync()
                 self.fadeBubbleUnderCursor()
             }
         }
+    }
+
+    /// The display Lookout is on, for screenshots (it lives on the screen with the pointer).
+    var displayID: CGDirectDisplayID? {
+        screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID
+    }
+
+    /// Multiple monitors: when the pointer moves to another screen (and Lookout isn't busy pointing or
+    /// talking), the overlay moves there with it, like Clicky.
+    private func followPointerToItsScreen() {
+        guard !isPinned, state.bubble == nil, let w = window else { return }
+        let mouse = NSEvent.mouseLocation
+        guard !screen.frame.contains(mouse), let next = NSScreen.screens.first(where: { $0.frame.contains(mouse) }) else { return }
+        screen = next
+        w.setFrame(next.frame, display: true)
+        w.contentView?.frame = NSRect(origin: .zero, size: next.frame.size)
+        state.position = followsCursor ? cursorTarget() : home
     }
 
     private func fadeBubbleUnderCursor() {

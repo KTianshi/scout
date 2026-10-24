@@ -92,6 +92,9 @@ enum Permissions {
 @MainActor
 final class ScreenObserver {
     /// Live snapshot of the main display + frontmost window. Missing permissions degrade gracefully.
+    /// The display to capture (where Lookout is); nil means the main display.
+    var displayID: CGDirectDisplayID?
+
     func snapshot(includeImage: Bool) async -> Snapshot {
         let front = NSWorkspace.shared.frontmostApplication
         let running = NSWorkspace.shared.runningApplications.compactMap { $0.localizedName }
@@ -120,7 +123,8 @@ final class ScreenObserver {
     func captureMainDisplay() async -> (ClaudeClient.Image, CGAffineTransform)? {
         do {
             let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
-            guard let display = content.displays.first(where: { $0.displayID == CGMainDisplayID() }) ?? content.displays.first else { return nil }
+            let wanted = displayID ?? CGMainDisplayID()
+            guard let display = content.displays.first(where: { $0.displayID == wanted }) ?? content.displays.first else { return nil }
             let mine = content.applications.filter { $0.processID == getpid() }
             let filter = SCContentFilter(display: display, excludingApplications: mine, exceptingWindows: [])
             let cfg = SCStreamConfiguration()
