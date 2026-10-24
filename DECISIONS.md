@@ -27,3 +27,12 @@
 - Confident model "safe" (≥ 0.85) caps the action at nudge unless a hard rule fires.
 - Debug screenshots capture only Lookout's own windows (an early version captured the full screen; that file was deleted immediately).
 - Family alert titles use a friendly scam-type table rather than raw model enum values.
+- Playbook engine: one combined HMM (benign + look-alike states + scam stage branches) instead of one HMM per scam type, so P(scam) means "a scam is in progress now" and the risk can return to safe.
+- Observations are sets of flags with independent Bernoulli emissions; non-idle states emit like idle with probability 0.3 ("distraction").
+- Time-dependent drift back to idle (tau 30 min scams, 15 min benign) instead of fixed ticks.
+- Python reference + Swift port reading one JSON, kept in sync by 1e-9 parity vectors; no FastAPI sidecar.
+- Evaluation sessions are hand-scripted and Claude-written, never sampled from the HMM; all screens go through the Swift extractor.
+- After user feedback ("activates on too many things"): policy thresholds raised (nudge ~0.33, interrupt ~0.58); the playbook HMM decides; the old detector escalates only when confident and corroborated; hard rules explain but don't force interrupts.
+- Red-team set A was used once for model selection; set B was generated afterwards as the clean held-out test.
+- Learned (Baum-Welch) parameters are not the default: gains on held-out data are within noise, and hand-set parameters stay explainable.
+- Demo mode never falls back to live screen capture.

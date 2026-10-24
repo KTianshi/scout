@@ -9,6 +9,8 @@ Built for a CalHacks demo. Every user-facing word aims to be calm, short and pla
 
 ## Quick start
 
+You don't need Xcode: the Command Line Tools are enough (`xcode-select --install` if `swift --version` fails).
+
 ```bash
 # 1. Build + test (scripts/swiftw wraps `swift` to work around this Mac's Command Line Tools; see below)
 scripts/swiftw build
@@ -76,6 +78,10 @@ bench/          154 labeled fixtures (dev/test split) + results
 3. If P(scam) ≥ 0.10 or a hard rule fires, **Claude confirms** with a screenshot (`claude-sonnet-5-5`, structured JSON verdict, plain-language explanation, pixel point of the threat).
 4. `ActionPolicy` picks the cheapest action given the costs, with higher stakes when payment fields are visible or a remote-control app is running. A confident "safe" from Claude caps the reaction at a nudge unless a hard rule fires.
 5. **Interrupt:** the buddy turns amber, flies to the threat, says what is wrong and what to do, shows a big "Close it for me / I'm OK" card, and posts a family alert with a thumbnail. **Block:** a full-screen calm pause plus a family approval request; Approve/Deny on the phone unblocks it.
+
+### Scam playbook engine (see `DETECTION.md`)
+
+Scams are modelled as sequences of stages (pop-up → call → remote access → bank → payment) in one hidden Markov model with benign look-alike states (family remote help, gift shopping, banking, paying people, reading about scams). `model/playbooks.json` holds every parameter with a one-line justification; the Python reference (`lookout_detect/`) and the Swift engine (`LookoutCore/Playbook/`) read it and agree to 1e-9. Claude's findings enter only as evidence. On 680 held-out sessions it alarms on 1.1% of benign sessions vs 10.3% for the previous detector, at 96.7% recall.
 
 ### Benchmark (see `bench/RESULTS.md`)
 
