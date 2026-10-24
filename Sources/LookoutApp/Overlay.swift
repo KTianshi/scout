@@ -104,6 +104,12 @@ final class Overlay {
         }
     }
 
+    /// Glide somewhere and stay, without pointing.
+    func moveTo(_ p: CGPoint) {
+        isPinned = true
+        withAnimation(.spring(response: 0.9, dampingFraction: 0.8)) { state.position = p; state.pointing = false }
+    }
+
     func say(_ text: String?, title: String? = nil) {
         withAnimation(.easeOut(duration: 0.25)) {
             state.bubble = text

@@ -46,6 +46,12 @@ final class Companion {
     }
 
     func greet() async {
+        let firstRun = !UserDefaults.standard.bool(forKey: "onboarded") || ProcessInfo.processInfo.environment["LOOKOUT_ONBOARD"] == "1"
+        if firstRun && !demoBrowser.window.isVisible {
+            UserDefaults.standard.set(true, forKey: "onboarded")
+            await onboard()
+            return
+        }
         overlay.setMood(.happy)
         let missing = (!Permissions.screenRecording || !Permissions.accessibility) && !demoBrowser.window.isVisible
         let hello = missing
@@ -56,6 +62,31 @@ final class Companion {
         await speech.speak(hello)
         try? await Task.sleep(nanoseconds: 1_500_000_000)
         if !busy { overlay.reset() }
+    }
+
+    /// First launch: a short, warm introduction, then permissions.
+    func onboard() async {
+        busy = true
+        defer { busy = false }
+        let screen = overlay.screen.frame
+        overlay.moveTo(CGPoint(x: screen.width / 2 - 200, y: screen.height / 2 - 120))
+        let lines: [(String?, String)] = [
+            ("Hello!", "Hi, I'm Lookout. I'll stay here in the corner of your screen."),
+            ("I can help", "If you get stuck, hold the Option and Space keys and just ask me. I'll point to the right spot."),
+            ("I watch out for you", "If something looks like a scam, I'll stop you gently and explain. And I'll let \(LookoutConfig.familyName) know."),
+            ("One last thing", "I need your OK to see the screen. I'll open a window that shows you how."),
+        ]
+        for (title, text) in lines {
+            overlay.setMood(.speaking)
+            overlay.say(text, title: title)
+            DebugShot.take("onboard-\(title ?? "")")
+            await speech.speak(text)
+            try? await Task.sleep(nanoseconds: 500_000_000)
+        }
+        overlay.setMood(.happy)
+        if !Permissions.screenRecording || !Permissions.accessibility || !Listener.micAuthorized { setup.show() }
+        try? await Task.sleep(nanoseconds: 1_200_000_000)
+        overlay.reset()
     }
 
     // MARK: Snapshots
@@ -445,13 +476,28 @@ final class Companion {
         Task {
             let thumb = snap.image.flatMap { ImageUtil.thumbnailDataURL($0.data) }
             await family.send(.init(type: "scam_alert",
-                                    title: verdict?.familySummary.isEmpty == false ? "Scam stopped: \(verdict!.scamType.replacingOccurrences(of: "_", with: " "))" : "Possible scam on \(LookoutConfig.elderName)'s screen",
+                                    title: Companion.alertTitle(verdict: verdict, rule: r.rules.first),
                                     explanation: verdict?.familySummary.isEmpty == false ? verdict!.familySummary : r.explanation,
                                     risk: r.probability, url: snap.context.url, app: snap.context.appName, screenshot: thumb,
                                     action: "Lookout interrupted and explained the warning signs"))
         }
         DebugShot.take("interrupt")
         await speech.speak(spoken)
+    }
+
+    static func alertTitle(verdict: ScamVerdict?, rule: HardRule?) -> String {
+        let names: [String: String] = [
+            "tech_support": "Fake tech-support pop-up", "government": "Fake government demand", "family_emergency": "Fake family emergency",
+            "phishing": "Fake sign-in page", "refund_remote_access": "Refund + remote-access scam", "crypto_investment": "Crypto investment scam",
+            "romance": "Romance money request", "prize": "Fake prize", "delivery_fee": "Fake delivery fee", "utility": "Fake utility shut-off",
+            "charity": "Fake charity appeal", "invoice": "Fake invoice", "medicare": "Medicare scam",
+            "tech-support-phone": "Fake tech-support pop-up", "gift-card-payment": "Gift card payment demand", "secrecy-money": "Secret money request",
+            "remote-access-stranger": "Remote-access scam", "remote-access-with-money": "Remote access during payment", "crypto-atm": "Crypto ATM scam",
+            "lookalike-login": "Fake sign-in page", "government-threat": "Fake government threat",
+        ]
+        if let v = verdict, v.isScam, let n = names[v.scamType] { return "Stopped: \(n)" }
+        if let r = rule, let n = names[r.id] { return "Stopped: \(n)" }
+        return "Possible scam on \(LookoutConfig.elderName)'s screen"
     }
 
     func closeThreat() {
