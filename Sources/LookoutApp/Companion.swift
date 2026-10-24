@@ -802,6 +802,13 @@ final class Companion {
         await act(on: result, verdict: verdict, snap: full)
     }
 
+    /// Browsers where ⌘W closes just the scam tab. (Chrome's id is com.google.Chrome: the old case-sensitive
+    /// check for "chrome" never matched it, so real Chrome only ever got "Got it".)
+    static func isBrowser(_ app: NSRunningApplication?) -> Bool {
+        guard let id = app?.bundleIdentifier?.lowercased() else { return false }
+        return ["safari", "chrome", "firefox", "edge", "brave", "thebrowser", "opera", "vivaldi", "chromium"].contains { id.contains($0) }
+    }
+
     /// The page's URL, or app + window title outside a browser.
     static func pageKey(_ c: ScreenContext) -> String {
         c.url ?? "\(c.appName ?? "")|\(c.windowTitle ?? "")"
@@ -858,7 +865,7 @@ final class Companion {
         if let (p, rect) = threatPoint(r, verdict: verdict, snap: snap) { overlay.fly(to: p, highlight: rect) }
         let spoken = r.spoken.isEmpty ? "This looks like a scam. Let's stop here." : r.spoken
         overlay.say(spoken, title: "Wait — this looks like a scam")
-        let canClose = demoInFront || NSWorkspace.shared.frontmostApplication?.bundleIdentifier?.contains("Safari") == true || NSWorkspace.shared.frontmostApplication?.bundleIdentifier?.contains("chrome") == true
+        let canClose = demoInFront || Self.isBrowser(NSWorkspace.shared.frontmostApplication)
         // Only offer to close in a browser: ⌘W anywhere else closes whatever window is in front.
         let buttons: [ActionCard.Button] = canClose ? [
             .init(title: "Close it for me", primary: true) { [weak self] in Log.info("user: close it"); self?.closeThreat() },
