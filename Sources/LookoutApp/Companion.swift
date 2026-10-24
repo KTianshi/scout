@@ -215,6 +215,8 @@ final class Companion {
                 overlay.say("I'm listening…")
                 listener.onPartial = { [weak self] t in self?.overlay.say(t, title: "You said") }
                 listener.onLevel = { [weak self] l in self?.overlay.state.listeningLevel = l }
+                listener.hints = NSWorkspace.shared.runningApplications
+                    .filter { $0.activationPolicy == .regular }.compactMap(\.localizedName)
                 try listener.start()
             } catch {
                 listening = false
@@ -250,6 +252,9 @@ final class Companion {
 
     // MARK: Help mode
 
+    /// The guide's turn in `turns`, so its prompt shows the other turns as history.
+    private var currentTurn: Int?
+
     /// Follow-along help: look, give one step, wait for the person to do it, look again.
     func help(question: String) async {
         busy = true
@@ -263,7 +268,11 @@ final class Companion {
             return
         }
         let gen = generation
+        let turn = beginTurn(question, app: NSWorkspace.shared.frontmostApplication?.localizedName)
+        currentTurn = turn
+        defer { if currentTurn == turn { currentTurn = nil } }
         var given: [String] = []
+        var lastAction: ActionWatcher.Action?
         for stepNo in 1...8 {
             let snap = await snapshot(includeImage: true)
             if Task.isCancelled || generation != gen { return }
@@ -271,8 +280,8 @@ final class Companion {
             var reply = ""
             do {
                 for try await delta in claude.stream(system: Prompts.guide(imageWidth: w, imageHeight: h),
-                                                     text: guideUserText(question: question, snap: snap, given: given),
-                                                     image: snap.image, maxTokens: 600, effort: "medium") {
+                                                     text: guideUserText(question: question, snap: snap, given: given, action: lastAction),
+                                                     image: snap.image, maxTokens: 600, effort: stepNo == 1 ? "medium" : "low") {
                     reply += delta
                 }
             } catch {
@@ -291,26 +300,29 @@ final class Companion {
             let point = PointTags.steps(in: body).compactMap(\.point).first
             guard !text.isEmpty else { break }
             Log.info("guide step \(stepNo) done=\(done): \(text.prefix(300))")
+            updateTurn(turn, step: text, finished: done)
+            given.append(text)
+            // Watch from before speaking: people often click as soon as they see where to go.
+            let watcher = ActionWatcher()
+            defer { watcher.stop() }
             // A one-shot answer ("What is Slack?") gets no "Step 1" title.
             let isAnswer = done && stepNo == 1 && point == nil
             await showStep(text, title: isAnswer ? nil : "Step \(stepNo)", point: point, snap: snap)
             if generation != gen { return }
-            given.append(text)
             if done { break }
-            // Wait for them to do it, then look again.
             overlay.setMood(.idle)
             guideWaiting = true
-            let acted = await waitForAction(timeout: 60)
+            let action = await watcher.wait(timeout: 60)
             guideWaiting = false
             if Task.isCancelled || generation != gen { return }
-            if !acted {
+            guard let action else {
                 let msg = "Take your time. Ask me again whenever you're ready."
                 overlay.release(); overlay.say(msg); await speech.speak(msg)
                 break
             }
+            lastAction = action
             overlay.setMood(.thinking)
         }
-        remember(question: question, answer: given.joined(separator: " "))
         let summary = given.joined(separator: " ")
         Task { await family.send(.init(type: "help", title: "Helped with: \(question.prefix(80))", explanation: String(summary.prefix(300)), app: nil)) }
         overlay.setMood(.happy)
@@ -341,49 +353,66 @@ final class Companion {
     /// True while the guide waits for the person to do a step (switching apps then is part of the task).
     private(set) var guideWaiting = false
 
-    /// Wait until the person clicks, or finishes typing (no key for 2 s), or the timeout passes.
-    func waitForAction(timeout: TimeInterval) async -> Bool {
-        final class Seen: @unchecked Sendable { var click: Date?; var key: Date? }
-        let seen = Seen()
-        let m = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseUp, .keyDown]) { e in
-            if e.type == .keyDown { seen.key = Date() } else { seen.click = Date() }
-        }
-        defer { if let m { NSEvent.removeMonitor(m) } }
-        let start = Date()
-        while !Task.isCancelled && Date().timeIntervalSince(start) < timeout {
-            try? await Task.sleep(nanoseconds: 150_000_000)
-            if let k = seen.key, Date().timeIntervalSince(k) > 2.0 { break }
-            if let c = seen.click, seen.key == nil || seen.key! < c, Date().timeIntervalSince(c) > 1.0 { break }
-        }
-        return (seen.click != nil || seen.key != nil) && !Task.isCancelled
-    }
-
-    func guideUserText(question: String, snap: Snapshot, given: [String]) -> String {
+    func guideUserText(question: String, snap: Snapshot, given: [String], action: ActionWatcher.Action?) -> String {
         var s = helpUserText(question: question, snap: snap)
         if !given.isEmpty {
-            s += "\nSteps you already gave for this question (the person has acted since the last one):\n"
+            s += "\nSteps you already gave for this question:\n"
             for (i, g) in given.enumerated() { s += "\(i + 1). \(g)\n" }
+            if let action { s += "Since your last step, they \(action.describe(in: snap)).\n" }
             s += "Give the next step for the screen as it is now.\n"
         }
         return s
     }
 
-    /// Recent questions and answers, so follow-ups like "ok, then what?" make sense.
-    private var recentTurns: [(question: String, answer: String, at: Date)] = []
+    /// What Lookout and the person have done together recently. Updated as each step is given (not when a
+    /// guide finishes), so a guide cut short by "what now?" is still remembered and can be continued.
+    struct Turn {
+        var question: String
+        var app: String?
+        var steps: [String] = []
+        var actions: [String] = []
+        var finished = false
+        var at = Date()
+    }
+    private var turns: [Turn] = []
+
+    func beginTurn(_ question: String, app: String?) -> Int {
+        turns.append(Turn(question: question, app: app))
+        if turns.count > 6 { turns.removeFirst(turns.count - 6) }
+        return turns.count - 1
+    }
+
+    func updateTurn(_ i: Int, step: String? = nil, action: String? = nil, finished: Bool = false) {
+        guard turns.indices.contains(i) else { return }
+        if let step { turns[i].steps.append(step) }
+        if let action { turns[i].actions.append(action) }
+        if finished { turns[i].finished = true }
+        turns[i].at = Date()
+    }
 
     func remember(question: String, answer: String) {
-        recentTurns.append((question, String(answer.prefix(600)), Date()))
-        recentTurns = Array(recentTurns.suffix(3))
+        let i = beginTurn(question, app: nil)
+        updateTurn(i, step: String(answer.prefix(600)), finished: true)
+    }
+
+    /// Earlier turns (not the current one), newest last, from the last 20 minutes.
+    func historyText(excluding current: Int?) -> String {
+        let recent = turns.enumerated().filter { $0.offset != current && Date().timeIntervalSince($0.element.at) < 1200 }.map(\.element)
+        guard !recent.isEmpty else { return "" }
+        var s = "Earlier in this conversation (oldest first; the screen may have changed since):\n"
+        for t in recent {
+            s += "- They asked: \"\(t.question)\"" + (t.app.map { " (in \($0))" } ?? "") + "\n"
+            for (k, step) in t.steps.enumerated() {
+                s += "  You said: \(step)\n"
+                if k < t.actions.count { s += "  Then they: \(t.actions[k])\n" }
+            }
+            if !t.finished { s += "  (Not finished. If their new question is short or vague, like \"what now?\" or \"I did it\", they are continuing this task.)\n" }
+        }
+        return s + "\n"
     }
 
     func helpUserText(question: String, snap: Snapshot) -> String {
-        var s = ""
-        let recent = recentTurns.filter { Date().timeIntervalSince($0.at) < 600 }
-        if !recent.isEmpty {
-            s += "Earlier in this conversation (the screen may have changed since):\n"
-            for t in recent { s += "Q: \(t.question)\nA: \(t.answer)\n" }
-            s += "\n"
-        }
+        var s = historyText(excluding: currentTurn)
         s += "Question: \(question)\n"
         if let a = snap.context.appName { s += "Front app: \(a)\n" }
         if let t = snap.context.windowTitle { s += "Window: \(t)\n" }
@@ -456,6 +485,7 @@ final class Companion {
             if Task.isCancelled { return }
             let rest = String(buffer[spokenUpTo...]).trimmingCharacters(in: .whitespacesAndNewlines)
             if !rest.isEmpty { overlay.say(rest); await speech.speak(rest) }
+            remember(question: question, answer: buffer)
             await family.send(.init(type: "help", title: "Explained a letter", explanation: String(buffer.prefix(400)), app: snap.context.appName))
         } catch {
             if Task.isCancelled { return }
@@ -931,5 +961,64 @@ enum DebugShot {
             try? data.write(to: f)
             Log.info("debug shot: \(f.path)")
         }
+    }
+}
+
+/// Watches what the person does after a help step: where they click, whether they type.
+@MainActor
+final class ActionWatcher {
+    struct Action {
+        var click: CGPoint?   // top-left global screen coordinates
+        var typed: Int = 0
+
+        /// "clicked "Google Calendar" (at 812,40 in this screenshot)" / "typed some text"
+        func describe(in snap: Snapshot) -> String {
+            var parts: [String] = []
+            if let c = click {
+                let img = c.applying(snap.imageToScreen.inverted())
+                let el = snap.elements.filter { $0.frame.insetBy(dx: -4, dy: -4).contains(c) }.min { $0.frame.width * $0.frame.height < $1.frame.width * $1.frame.height }
+                let on = el.map { " on \"\($0.label.prefix(60))\"" } ?? ""
+                parts.append("clicked\(on) (at \(Int(img.x)),\(Int(img.y)) in this screenshot)")
+            }
+            if typed > 0 { parts.append("typed some text (\(typed) keys)") }
+            return parts.isEmpty ? "did something" : parts.joined(separator: " and ")
+        }
+    }
+
+    private var monitor: Any?
+    private var lastClick: (at: Date, point: CGPoint)?
+    private var lastKey: Date?
+    private var keys = 0
+
+    init() {
+        monitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseUp, .keyDown]) { [weak self] e in
+            let isKey = e.type == .keyDown
+            let loc = NSEvent.mouseLocation
+            Task { @MainActor in self?.record(isKey: isKey, appKitPoint: loc) }
+        }
+    }
+
+    private func record(isKey: Bool, appKitPoint: CGPoint) {
+        if isKey { lastKey = Date(); keys += 1; return }
+        let primaryHeight = NSScreen.screens.first?.frame.height ?? 0
+        lastClick = (Date(), CGPoint(x: appKitPoint.x, y: primaryHeight - appKitPoint.y))
+    }
+
+    func stop() {
+        if let m = monitor { NSEvent.removeMonitor(m) }
+        monitor = nil
+    }
+
+    /// Returns once they've clicked (and the screen had a moment to update) or finished typing (2 s pause).
+    func wait(timeout: TimeInterval) async -> Action? {
+        let start = Date()
+        while !Task.isCancelled && Date().timeIntervalSince(start) < timeout {
+            if let k = lastKey, Date().timeIntervalSince(k) > 2.0 { break }
+            if let c = lastClick, lastKey.map({ $0 < c.at }) ?? true, Date().timeIntervalSince(c.at) > 0.8 { break }
+            try? await Task.sleep(nanoseconds: 120_000_000)
+        }
+        stop()
+        guard !Task.isCancelled, lastClick != nil || lastKey != nil else { return nil }
+        return Action(click: lastClick?.point, typed: keys)
     }
 }

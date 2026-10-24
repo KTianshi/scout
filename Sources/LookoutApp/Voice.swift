@@ -366,9 +366,17 @@ final class Listener {
     static var speechAuthorized: Bool { SFSpeechRecognizer.authorizationStatus() == .authorized }
     static var micAuthorized: Bool { AVCaptureDevice.authorizationStatus(for: .audio) == .authorized }
 
+    /// Words the recognizer should expect: running app names plus everyday services it tends to mishear
+    /// ("Calendly" came back as "Cally").
+    var hints: [String] = []
+    static let commonNames = ["Calendly", "Gmail", "Google Calendar", "Google Docs", "Google Drive", "Zoom", "FaceTime", "WhatsApp",
+                              "Facebook", "Instagram", "YouTube", "Netflix", "Spotify", "Amazon", "PayPal", "Venmo", "Zelle", "iCloud",
+                              "Safari", "Chrome", "Slack", "Outlook", "Medicare", "Lookout", "PDF", "Wi-Fi", "Bluetooth", "AirDrop"]
+
     func start() throws {
         latest = ""
         let req = SFSpeechAudioBufferRecognitionRequest()
+        req.contextualStrings = Array(Set(Self.commonNames + hints)).prefix(100).map { $0 }
         req.shouldReportPartialResults = true
         req.taskHint = .dictation
         req.addsPunctuation = true
