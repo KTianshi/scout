@@ -81,6 +81,14 @@ def build(config: dict) -> PlaybookModel:
     benign_default = float(config.get("default_benign_rate", 0.002))
     scam_default = float(config.get("default_scam_rate", 0.01))
 
+    ev_defaults = {k: v for k, v in config.get("event_defaults", {}).items() if k in events}
+
+    def base_row(kind: str, default: float) -> np.ndarray:
+        q = np.full(E, default)
+        for e, d in ev_defaults.items():
+            q[events.index(e)] = d[kind]
+        return q
+
     states, is_scam, playbook_of, stage_index = [], [], [], []
     rows_q, start = [], []
     benign = config["benign"]["states"]
@@ -90,7 +98,7 @@ def build(config: dict) -> PlaybookModel:
     assert next(iter(benign)) == "idle", "the first benign state must be idle"
     for name, s in benign.items():
         states.append(name); is_scam.append(False); playbook_of.append(None); stage_index.append(-1)
-        q = np.full(E, benign_default)
+        q = base_row("benign", benign_default)
         for e, v in s["emit"].items():
             q[events.index(e)] = v
         rows_q.append(q)
@@ -101,7 +109,7 @@ def build(config: dict) -> PlaybookModel:
         spec = config["playbooks"][pb]
         for i, st in enumerate(spec["stages"]):
             states.append(f"{pb}:{st['name']}"); is_scam.append(True); playbook_of.append(pb); stage_index.append(i)
-            q = np.full(E, scam_default)
+            q = base_row("scam", scam_default)
             for e, v in st["emit"].items():
                 q[events.index(e)] = v
             rows_q.append(q)

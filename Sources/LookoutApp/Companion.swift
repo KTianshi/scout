@@ -392,35 +392,50 @@ final class Companion {
         if snap.isFixture && snap.context.text.isEmpty { return }
         guard !snap.context.text.isEmpty || !snap.context.runningApps.isEmpty else { return }
         stuck.observe(fingerprint: snap.context.fingerprint, window: (snap.context.appName ?? "") + (snap.context.windowTitle ?? ""))
-        // Preview first: if Claude is about to check this screen, the playbook observation is committed
-        // once, together with Claude's answer as evidence.
+        // Preview first: if this screen is suspicious enough for outside checks (Claude, and CRS on the
+        // sender), the playbook observation is committed once, together with their answers as evidence.
         var result = pipeline.evaluate(snap.context, commitPlaybook: false)
         let fp = snap.context.fingerprint
-        let willConfirm = result.action > .quiet && result.shouldConfirmWithModel && claude.isConfigured && fp != lastConfirmedFingerprint && !confirmInFlight
-        if !willConfirm { result = pipeline.commit(snap.context) }
+        let senderEmail = SenderCheck.extractSender(snap.context)
+        let willCheck = result.shouldConfirmWithModel && fp != lastConfirmedFingerprint && !confirmInFlight
+            && (claude.isConfigured || senderEmail != nil)
+        if !willCheck { result = pipeline.commit(snap.context) }
         if result.probability > 0.05 { Log.info("guardian: \(result.summary)") }
-        guard result.action > .quiet || willConfirm else { return }
+        guard result.action > .quiet || willCheck else { return }
 
         var verdict: ScamVerdict?
         var full = snap
-        if willConfirm {
+        if willCheck {
             confirmInFlight = true
             lastConfirmedFingerprint = fp
             overlay.setMood(.thinking)
-            full = await snapshot(includeImage: true)
-            do {
-                let v = try await claude.confirmScam(screen: full.context, image: full.image, heuristicSummary: result.summary)
-                verdict = v
-                result = pipeline.applyModelVerdict(v, ctx: full.context)
-                Log.info("claude verdict: scam=\(v.isScam) conf=\(v.confidence) type=\(v.scamType) why=\(v.explanation.prefix(160)) → \(result.summary)")
-            } catch {
-                Log.info("claude confirm failed, using heuristics: \(error.localizedDescription)")
-                result = pipeline.commit(full.context)
-            }
+            full = await snapshot(includeImage: claude.isConfigured)
+            let summary = result.summary
+            let ctx = full.context, image = full.image
+            // Claude and CRS run in parallel; either can fail without blocking the other.
+            async let claudeAnswer: ScamVerdict? = claude.isConfigured
+                ? (try? await claude.confirmScam(screen: ctx, image: image, heuristicSummary: summary)) : nil
+            async let crsAnswer: SenderCheck? = senderEmail != nil ? await checkSenderCached(senderEmail!) : nil
+            verdict = await claudeAnswer
+            let sender = await crsAnswer
+            result = pipeline.applyChecks(verdict: verdict, sender: sender, ctx: full.context)
+            if let v = verdict { Log.info("claude verdict: scam=\(v.isScam) conf=\(v.confidence) type=\(v.scamType) why=\(v.explanation.prefix(160))") }
+            if let c = sender { Log.info("crs sender check: \(c.verdict.rawValue) score=\(c.score.map(String.init) ?? "-") firstSeen=\(c.firstSeen ?? "-") source=\(c.source)") }
+            Log.info("after checks: \(result.summary)")
             confirmInFlight = false
             if !busy { overlay.setMood(.idle) }
         }
         await act(on: result, verdict: verdict, snap: full)
+    }
+
+    private var senderChecks: [String: SenderCheck] = [:]
+
+    /// One CRS lookup per sender address per session (the family server also caches for a day).
+    func checkSenderCached(_ email: String) async -> SenderCheck? {
+        if let c = senderChecks[email] { return c }
+        guard let c = await family.checkSender(email) else { return nil }
+        senderChecks[email] = c
+        return c
     }
 
     func act(on r: ScamPipeline.Result, verdict: ScamVerdict?, snap: Snapshot) async {
@@ -506,7 +521,7 @@ final class Companion {
             "GIFT_CARD_PAGE": "gift cards", "WIRE_OR_CRYPTO_PAGE": "wire/crypto", "SECRECY_REQUEST": "asked to keep it secret",
             "FAMILY_EMERGENCY_STORY": "family emergency story", "LEGAL_THREAT": "legal threat", "GOV_IMPERSONATION": "posing as government",
             "LOOKALIKE_DOMAIN": "fake web address", "BRAND_IMPERSONATION": "posing as a brand", "URGENT_LANGUAGE": "pressure to hurry",
-            "CLAUDE_FLAG": "AI check agreed", "SENSITIVE_FIELD_ON_UNKNOWN_SITE": "asks for private info", "SCREEN_SHARE_ACTIVE": "screen sharing",
+            "CLAUDE_FLAG": "AI check agreed", "CRS_SENDER_HIGH_RISK": "sender flagged by CRS", "SENSITIVE_FIELD_ON_UNKNOWN_SITE": "asks for private info", "SCREEN_SHARE_ACTIVE": "screen sharing",
         ]
         return "Why: " + top.map { String(format: "%@ +%.1f", names[$0.item] ?? $0.item, $0.logBF) }.joined(separator: " · ")
     }
@@ -570,11 +585,12 @@ final class Companion {
             Log.info("pay pause: user continued")
         })
         DebugShot.take("paypause")
-        let spoken = "Let's pause for a moment. \(reason) I'm asking \(LookoutConfig.familyName) to take a look."
+        let crsLine = r.senderCheck?.isHighRisk == true ? (r.senderCheck?.sentence ?? "") + " " : ""
+        let spoken = "Let's pause for a moment. \(reason) \(crsLine)I'm asking \(LookoutConfig.familyName) to take a look."
         Task { await speech.speak(spoken) }
         let thumb = snap.image.flatMap { ImageUtil.thumbnailDataURL($0.data) }
         let amount = Self.firstAmount(in: snap.context.text)
-        let id = await family.requestApproval(title: "\(LookoutConfig.elderName) is about to enter \(what)", explanation: r.explanation.isEmpty ? reason : r.explanation, amount: amount, payee: snap.context.url.flatMap { Domains.host(of: $0) }, method: field == "gift-card" ? "gift card" : field, risk: r.probability, screenshot: thumb)
+        let id = await family.requestApproval(title: "\(LookoutConfig.elderName) is about to enter \(what)", explanation: [r.explanation.isEmpty ? reason : r.explanation, r.senderCheck?.isHighRisk == true ? "CRS: the sender's address (\(r.senderCheck!.email)) scores \(r.senderCheck!.score ?? 100)/100 risk\(r.senderCheck!.newToday ? " and first appeared today" : "")." : nil, Companion.evidenceLine(pipeline)].compactMap { $0 }.joined(separator: " "), amount: amount, payee: snap.context.url.flatMap { Domains.host(of: $0) }, method: field == "gift-card" ? "gift card" : field, risk: r.probability, screenshot: thumb)
         guard let id else { payPause.model.status = .offline; return }
         // Poll until a family member decides.
         while payPause.isShowing {

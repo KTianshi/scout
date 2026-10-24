@@ -46,13 +46,18 @@ final class FixtureRunner {
         line("heuristics: \(result.summary)")
         let claude = ClaudeClient()
         var verdict: ScamVerdict?
+        var sender: SenderCheck?
+        if let email = SenderCheck.extractSender(snap.context) {
+            sender = useModel ? await FamilyClient().checkSender(email) : nil
+            line("sender: \(email) → CRS \(sender.map { "\($0.verdict.rawValue) score=\($0.score.map(String.init) ?? "-") firstSeen=\($0.firstSeen ?? "-") (\($0.source))" } ?? "not checked (family server not running or --no-model)")")
+        }
         if useModel && result.shouldConfirmWithModel {
             if claude.isConfigured {
                 let t0 = Date()
                 do {
                     let v = try await claude.confirmScam(screen: snap.context, image: snap.image, heuristicSummary: result.summary)
                     verdict = v
-                    result = pipeline.applyModelVerdict(v, ctx: snap.context)
+                    result = pipeline.applyModelVerdict(v, ctx: snap.context, sender: sender)
                     line(String(format: "claude (%.1fs): scam=%@ conf=%.2f type=%@ point=%@", Date().timeIntervalSince(t0), v.isScam ? "yes" : "no", v.confidence, v.scamType, v.point.map { "\(Int($0.x)),\(Int($0.y)) \($0.label ?? "")" } ?? "none"))
                     line("after claude: \(result.summary)")
                 } catch {

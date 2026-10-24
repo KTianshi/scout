@@ -85,6 +85,24 @@ final class FamilyClient: @unchecked Sendable {
         return id
     }
 
+    /// CRS Fraud Finder check of a suspicious message's sender, via the family server (which holds the CRS keys).
+    func checkSender(_ email: String) async -> SenderCheck? {
+        var r = URLRequest(url: base.appendingPathComponent("api/crs/check-sender"))
+        r.httpMethod = "POST"
+        r.timeoutInterval = 15
+        r.setValue("application/json", forHTTPHeaderField: "content-type")
+        r.httpBody = try? JSONSerialization.data(withJSONObject: ["email": email])
+        do {
+            let (d, resp) = try await URLSession.shared.data(for: r)
+            guard (resp as? HTTPURLResponse)?.statusCode == 200,
+                  let o = try JSONSerialization.jsonObject(with: d) as? [String: Any] else { return nil }
+            return SenderCheck.from(json: o)
+        } catch {
+            Log.info("crs sender check unavailable: \(error.localizedDescription)")
+            return nil
+        }
+    }
+
     enum ApprovalStatus: String { case pending, approved, denied, unknown }
 
     func approvalStatus(_ id: String) async -> (ApprovalStatus, String?) {

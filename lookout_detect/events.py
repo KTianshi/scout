@@ -30,12 +30,13 @@ class Event(str, Enum):
     LEGAL_THREAT = "LEGAL_THREAT"
     GOV_IMPERSONATION = "GOV_IMPERSONATION"
     CLAUDE_FLAG = "CLAUDE_FLAG"
+    CRS_SENDER_HIGH_RISK = "CRS_SENDER_HIGH_RISK"
 
 
 NEUTRAL_ACTIVITY = frozenset()  # an observation with no flags
 
 # Flags reported by a model (Claude). They only count, present or absent, when the model actually ran.
-MODEL_REPORTED = frozenset({Event.CLAUDE_FLAG})
+MODEL_REPORTED = frozenset({Event.CLAUDE_FLAG, Event.CRS_SENDER_HIGH_RISK})
 
 
 @dataclass(frozen=True)
@@ -44,19 +45,25 @@ class Observation:
     events: frozenset = field(default_factory=frozenset)
     model_ran: bool = False                   # True if Claude looked at this screen
     source: str = "screen"                    # where it came from: screen, apps, claude, manual
+    crs_checked: bool = False                 # True if CRS Fraud Finder checked this message's sender
 
     def __post_init__(self):
         object.__setattr__(self, "events", frozenset(Event(e) for e in self.events))
         if Event.CLAUDE_FLAG in self.events:
             object.__setattr__(self, "model_ran", True)
+        if Event.CRS_SENDER_HIGH_RISK in self.events:
+            object.__setattr__(self, "crs_checked", True)
 
     def observed(self) -> list[Event]:
         """Flags whose presence or absence is informative for this observation."""
-        return [e for e in Event if self.model_ran or e not in MODEL_REPORTED]
+        ran = {Event.CLAUDE_FLAG: self.model_ran, Event.CRS_SENDER_HIGH_RISK: self.crs_checked}
+        return [e for e in Event if e not in MODEL_REPORTED or ran[e]]
 
     def to_json(self) -> dict:
-        return {"t": self.t, "events": sorted(e.value for e in self.events), "model_ran": self.model_ran, "source": self.source}
+        return {"t": self.t, "events": sorted(e.value for e in self.events), "model_ran": self.model_ran,
+                "crs_checked": self.crs_checked, "source": self.source}
 
     @staticmethod
     def from_json(d: dict) -> "Observation":
-        return Observation(t=float(d["t"]), events=frozenset(d.get("events", [])), model_ran=bool(d.get("model_ran", False)), source=d.get("source", "screen"))
+        return Observation(t=float(d["t"]), events=frozenset(d.get("events", [])), model_ran=bool(d.get("model_ran", False)),
+                           source=d.get("source", "screen"), crs_checked=bool(d.get("crs_checked", False)))

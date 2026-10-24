@@ -7,9 +7,10 @@ public enum PlaybookEvent: String, CaseIterable, Sendable, Codable {
     case REFUND_OVERPAYMENT, REMOTE_ACCESS_STARTED, SCREEN_SHARE_ACTIVE, BANK_SITE_OPENED
     case SENSITIVE_FIELD_ON_UNKNOWN_SITE, PAYMENT_DEMAND, GIFT_CARD_PAGE, WIRE_OR_CRYPTO_PAGE
     case SECRECY_REQUEST, FAMILY_EMERGENCY_STORY, LEGAL_THREAT, GOV_IMPERSONATION, CLAUDE_FLAG
+    case CRS_SENDER_HIGH_RISK
 
-    /// Flags reported by a model; they only count (present or absent) when the model actually ran.
-    public var isModelReported: Bool { self == .CLAUDE_FLAG }
+    /// Flags reported by an outside check (Claude, CRS); they only count (present or absent) when that check ran.
+    public var isModelReported: Bool { self == .CLAUDE_FLAG || self == .CRS_SENDER_HIGH_RISK }
 }
 
 /// One step for the playbook engine: everything noticed at one moment.
@@ -17,16 +18,26 @@ public struct PlaybookObservation: Sendable, Equatable {
     public var t: TimeInterval
     public var events: Set<PlaybookEvent>
     public var modelRan: Bool
+    public var crsChecked: Bool
     public var source: String
 
-    public init(t: TimeInterval, events: Set<PlaybookEvent> = [], modelRan: Bool = false, source: String = "screen") {
+    public init(t: TimeInterval, events: Set<PlaybookEvent> = [], modelRan: Bool = false, crsChecked: Bool = false, source: String = "screen") {
         self.t = t
         self.events = events
         self.modelRan = modelRan || events.contains(.CLAUDE_FLAG)
+        self.crsChecked = crsChecked || events.contains(.CRS_SENDER_HIGH_RISK)
         self.source = source
     }
 
-    public var observed: [PlaybookEvent] { PlaybookEvent.allCases.filter { modelRan || !$0.isModelReported } }
+    public var observed: [PlaybookEvent] {
+        PlaybookEvent.allCases.filter { e in
+            switch e {
+            case .CLAUDE_FLAG: return modelRan
+            case .CRS_SENDER_HIGH_RISK: return crsChecked
+            default: return true
+            }
+        }
+    }
 }
 
 /// Maps the existing on-device detector (ScamSignals) onto playbook events, so the app and the

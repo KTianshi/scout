@@ -9,6 +9,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const crypto = require('crypto');
+const crs = require('./crs');
 
 const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
@@ -488,6 +489,15 @@ async function handle(req, res) {
     }
 
     if (p === '/api/summary' && m === 'GET') return send(res, 200, summary());
+
+    // CRS Fraud Finder check of a suspicious message's SENDER (scammer-side data only).
+    if (p === '/api/crs/check-sender' && m === 'POST') {
+      const body = await readBody(req);
+      const r = await crs.checkSender(body.email);
+      if (r.error === 'invalid email') return send(res, 400, { ok: false, error: 'email is required' });
+      return send(res, 200, { ok: true, ...r });
+    }
+    if (p === '/api/crs/status' && m === 'GET') return send(res, 200, { configured: crs.configured() });
 
     if (p === '/api/demo/seed' && m === 'POST') {
       seedDemo();

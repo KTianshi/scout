@@ -6,9 +6,14 @@
     "URGENT_LANGUAGE", "PHONE_NUMBER_IN_POPUP", "BRAND_IMPERSONATION", "LOOKALIKE_DOMAIN", "INFECTED_CLAIM",
     "REFUND_OVERPAYMENT", "REMOTE_ACCESS_STARTED", "SCREEN_SHARE_ACTIVE", "BANK_SITE_OPENED",
     "SENSITIVE_FIELD_ON_UNKNOWN_SITE", "PAYMENT_DEMAND", "GIFT_CARD_PAGE", "WIRE_OR_CRYPTO_PAGE",
-    "SECRECY_REQUEST", "FAMILY_EMERGENCY_STORY", "LEGAL_THREAT", "GOV_IMPERSONATION", "CLAUDE_FLAG"
+    "SECRECY_REQUEST", "FAMILY_EMERGENCY_STORY", "LEGAL_THREAT", "GOV_IMPERSONATION", "CLAUDE_FLAG",
+    "CRS_SENDER_HIGH_RISK"
   ],
-  "model_reported_events": ["CLAUDE_FLAG"],
+  "model_reported_events": ["CLAUDE_FLAG", "CRS_SENDER_HIGH_RISK"],
+  "event_defaults": {
+    "CRS_SENDER_HIGH_RISK": { "benign": 0.04, "scam": 0.8 },
+    "why": "Per-event defaults applied to every benign / scam state before stage-specific values. CRS_SENDER_HIGH_RISK: CRS Fraud Finder (AtData) risk on the sender's email address; only observed when the check ran. Sandbox calibration: real company senders (auto-confirm@amazon.com) score 0/100 and first appeared years ago; scam senders (notice@irs-gov-payments.co, billing@norton-renewals.info) score 100/100 and first appeared the same day. Some scammers use free mail, which scores low, hence 0.8 not ~1; new small businesses sometimes score high, hence 0.04. Caps one CRS result at log(0.8/0.04) = +3.0 nats, like Claude."
+  },
   "model_reported_note": "Model-reported flags only count (present OR absent) on observations where the model actually ran. P(CLAUDE_FLAG | scam stage) ~0.9 and P(CLAUDE_FLAG | benign) = 0.045 come from the bench: Claude confirmation had 100% precision on 154 fixtures and ~90% recall when consulted; 0.045 (not ~0) caps one model report at log(0.9/0.045) = +3.0 nats so the model can never decide alone.",
 
   "distraction": 0.3,

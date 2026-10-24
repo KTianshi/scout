@@ -40,6 +40,7 @@
        "URGENT_LANGUAGE"
       ],
       "model_ran": false,
+      "crs_checked": false,
       "source": "screen"
      },
      "p_scam": 0.9999970202770647,
@@ -111,6 +112,7 @@
       "t": 40,
       "events": [],
       "model_ran": false,
+      "crs_checked": false,
       "source": "screen"
      },
      "p_scam": 0.8116207998730166,
@@ -168,6 +170,7 @@
        "REMOTE_ACCESS_STARTED"
       ],
       "model_ran": false,
+      "crs_checked": false,
       "source": "apps"
      },
      "p_scam": 0.9965505894980438,
@@ -230,6 +233,7 @@
        "REMOTE_ACCESS_STARTED"
       ],
       "model_ran": false,
+      "crs_checked": false,
       "source": "screen"
      },
      "p_scam": 0.9996157798940652,
@@ -298,6 +302,7 @@
        "REMOTE_ACCESS_STARTED"
       ],
       "model_ran": true,
+      "crs_checked": false,
       "source": "screen"
      },
      "p_scam": 0.999999987291565,
@@ -399,6 +404,7 @@
       "t": 0,
       "events": [],
       "model_ran": false,
+      "crs_checked": false,
       "source": "screen"
      },
      "p_scam": 9.474986286959111e-05,
@@ -452,6 +458,7 @@
        "REMOTE_ACCESS_STARTED"
       ],
       "model_ran": false,
+      "crs_checked": false,
       "source": "screen"
      },
      "p_scam": 0.0024887434184133962,
@@ -514,6 +521,7 @@
        "SCREEN_SHARE_ACTIVE"
       ],
       "model_ran": false,
+      "crs_checked": false,
       "source": "screen"
      },
      "p_scam": 0.0013339603375811665,
@@ -577,6 +585,7 @@
       "t": 400,
       "events": [],
       "model_ran": false,
+      "crs_checked": false,
       "source": "screen"
      },
      "p_scam": 0.0005522805833960767,
@@ -634,6 +643,7 @@
        "BANK_SITE_OPENED"
       ],
       "model_ran": false,
+      "crs_checked": false,
       "source": "screen"
      },
      "p_scam": 0.00023308994373432736,
@@ -723,6 +733,7 @@
       "t": 0,
       "events": [],
       "model_ran": false,
+      "crs_checked": false,
       "source": "screen"
      },
      "p_scam": 9.474986286959111e-05,
@@ -776,6 +787,7 @@
        "GIFT_CARD_PAGE"
       ],
       "model_ran": false,
+      "crs_checked": false,
       "source": "screen"
      },
      "p_scam": 9.215971216488771e-05,
@@ -838,6 +850,7 @@
        "URGENT_LANGUAGE"
       ],
       "model_ran": true,
+      "crs_checked": false,
       "source": "screen"
      },
      "p_scam": 1.1302252518878108e-06,
@@ -935,6 +948,7 @@
        "REFUND_OVERPAYMENT"
       ],
       "model_ran": false,
+      "crs_checked": false,
       "source": "screen"
      },
      "p_scam": 0.9768302336491841,
@@ -998,6 +1012,7 @@
       "t": 120,
       "events": [],
       "model_ran": false,
+      "crs_checked": false,
       "source": "screen"
      },
      "p_scam": 0.6345337968983139,
@@ -1055,6 +1070,7 @@
        "REMOTE_ACCESS_STARTED"
       ],
       "model_ran": false,
+      "crs_checked": false,
       "source": "screen"
      },
      "p_scam": 0.9917771369503413,
@@ -1118,6 +1134,7 @@
        "REMOTE_ACCESS_STARTED"
       ],
       "model_ran": false,
+      "crs_checked": false,
       "source": "screen"
      },
      "p_scam": 0.9999966393063624,
@@ -1218,6 +1235,7 @@
        "URGENT_LANGUAGE"
       ],
       "model_ran": false,
+      "crs_checked": false,
       "source": "screen"
      },
      "p_scam": 0.09118076100256932,
@@ -1280,6 +1298,7 @@
        "LEGAL_THREAT"
       ],
       "model_ran": false,
+      "crs_checked": false,
       "source": "screen"
      },
      "p_scam": 0.9056321487633899,
@@ -1345,6 +1364,7 @@
        "SECRECY_REQUEST"
       ],
       "model_ran": false,
+      "crs_checked": false,
       "source": "screen"
      },
      "p_scam": 0.9701568703810192,
@@ -1407,6 +1427,7 @@
        "WIRE_OR_CRYPTO_PAGE"
       ],
       "model_ran": false,
+      "crs_checked": false,
       "source": "screen"
      },
      "p_scam": 0.9989337405173451,
@@ -1467,6 +1488,238 @@
     }
    ]
   },
+  "crs_sender_checks": {
+   "prior_log_odds": -8.334631605817675,
+   "states": [
+    "idle",
+    "remote_help",
+    "gift_shopping",
+    "banking",
+    "paying_people",
+    "reading_about_scams",
+    "tech_support:popup",
+    "tech_support:call",
+    "tech_support:remote",
+    "tech_support:banking",
+    "tech_support:payment",
+    "refund:invoice",
+    "refund:call",
+    "refund:remote",
+    "refund:overpay",
+    "refund:payment",
+    "grandparent:contact",
+    "grandparent:story",
+    "grandparent:secrecy",
+    "grandparent:payment",
+    "government:notice",
+    "government:threat",
+    "government:payment"
+   ],
+   "steps": [
+    {
+     "obs": {
+      "t": 0,
+      "events": [
+       "CRS_SENDER_HIGH_RISK",
+       "GOV_IMPERSONATION",
+       "URGENT_LANGUAGE"
+      ],
+      "model_ran": false,
+      "crs_checked": true,
+      "source": "screen+crs"
+     },
+     "p_scam": 0.5020206843352869,
+     "log_odds": 0.008082781345779111,
+     "log_likelihood": -11.55359530216393,
+     "by_type": {
+      "tech_support": 0.0005841892130365027,
+      "refund": 0.0002402508762182243,
+      "grandparent": 0.004746321239050564,
+      "government": 0.49644992300698154
+     },
+     "top_type": "government",
+     "current_stage": "notice",
+     "next_stage": "threat",
+     "posterior": [
+      0.3441567589590047,
+      0.0005405352729060958,
+      0.002078170980867012,
+      0.00187822047685755,
+      0.0008083442472407871,
+      0.14851728572783746,
+      6.60731885758785e-05,
+      0.0005181160244606242,
+      0.0,
+      0.0,
+      0.0,
+      0.0001740340987651891,
+      6.621677745303518e-05,
+      0.0,
+      0.0,
+      0.0,
+      0.00426072500725303,
+      0.00048559623179753394,
+      0.0,
+      0.0,
+      0.46680989334165324,
+      0.029640029665328332,
+      0.0
+     ],
+     "ledger": [
+      [
+       "nothing else on screen",
+       -0.7693386832410649
+      ],
+      [
+       "URGENT_LANGUAGE",
+       1.5895315118219973
+      ],
+      [
+       "GOV_IMPERSONATION",
+       4.527765950975811
+      ],
+      [
+       "CRS_SENDER_HIGH_RISK",
+       2.9947556076067112
+      ]
+     ]
+    },
+    {
+     "obs": {
+      "t": 45,
+      "events": [
+       "GOV_IMPERSONATION",
+       "LEGAL_THREAT"
+      ],
+      "model_ran": true,
+      "crs_checked": true,
+      "source": "screen"
+     },
+     "p_scam": 0.35734080960937775,
+     "log_odds": -0.5869245780670331,
+     "log_likelihood": -19.0332490511393,
+     "by_type": {
+      "tech_support": 4.0331553465359146e-06,
+      "refund": 1.6539502783751776e-06,
+      "grandparent": 4.6729900806021314e-05,
+      "government": 0.35728839260294687
+     },
+     "top_type": "government",
+     "current_stage": "threat",
+     "next_stage": "payment",
+     "posterior": [
+      0.006369697780861693,
+      4.825110923229533e-06,
+      1.3769469218352288e-05,
+      1.845037724662857e-05,
+      7.670628739986366e-06,
+      0.6362447770236326,
+      2.1206575445485169e-07,
+      2.509148125200425e-06,
+      1.2278624840197573e-06,
+      8.407898286088026e-08,
+      0.0,
+      4.119346404195263e-07,
+      1.0416709166604552e-06,
+      1.8972968457121425e-07,
+      1.0615036723981875e-08,
+      0.0,
+      1.0490927322471605e-05,
+      3.410438374448397e-05,
+      1.9004448292682711e-06,
+      2.3414490979746442e-07,
+      0.007699354695181736,
+      0.34920654057467826,
+      0.00038249733308687057
+     ],
+     "ledger": [
+      [
+       "time passes",
+       -0.20658076797819902
+      ],
+      [
+       "nothing else on screen",
+       -1.146835904846926
+      ],
+      [
+       "LEGAL_THREAT",
+       -0.5504356759216606
+      ],
+      [
+       "GOV_IMPERSONATION",
+       1.3088449893339735
+      ]
+     ]
+    },
+    {
+     "obs": {
+      "t": 300,
+      "events": [
+       "PHONE_NUMBER_IN_POPUP",
+       "REFUND_OVERPAYMENT"
+      ],
+      "model_ran": false,
+      "crs_checked": true,
+      "source": "screen"
+     },
+     "p_scam": 0.1336014857400181,
+     "log_odds": -1.8694835989930318,
+     "log_likelihood": -30.66833740338543,
+     "by_type": {
+      "tech_support": 1.8005658569211946e-05,
+      "refund": 0.00041214434497144337,
+      "grandparent": 1.3571255164976445e-05,
+      "government": 0.13315776448131247
+     },
+     "top_type": "government",
+     "current_stage": "threat",
+     "next_stage": "payment",
+     "posterior": [
+      0.47985810590479844,
+      5.016666117084074e-06,
+      1.1533302212427519e-05,
+      2.0186601624578856e-05,
+      8.25964529813928e-06,
+      0.3864954121399313,
+      2.1154705428190063e-07,
+      1.6958513612410532e-05,
+      6.559479917374661e-07,
+      1.572468644095055e-07,
+      2.2403046372539622e-08,
+      0.0003995158118794122,
+      1.0753843713431782e-05,
+      1.697007929737204e-06,
+      1.7552289637980494e-07,
+      2.158552482392705e-09,
+      2.270440687491005e-06,
+      5.867033780229607e-06,
+      3.963536049577433e-06,
+      1.4702446476783982e-06,
+      0.0023607171253854447,
+      0.08557787093081512,
+      0.0452191764251119
+     ],
+     "ledger": [
+      [
+       "time passes",
+       -0.3315257655918499
+      ],
+      [
+       "nothing else on screen",
+       -1.0656208634429039
+      ],
+      [
+       "PHONE_NUMBER_IN_POPUP",
+       -0.5153120023212094
+      ],
+      [
+       "REFUND_OVERPAYMENT",
+       0.6298996104299643
+      ]
+     ]
+    }
+   ]
+  },
   "government_then_quiet": {
    "prior_log_odds": -8.334631605817675,
    "states": [
@@ -1503,6 +1756,7 @@
        "URGENT_LANGUAGE"
       ],
       "model_ran": false,
+      "crs_checked": false,
       "source": "screen"
      },
      "p_scam": 0.0480315948362024,
@@ -1565,6 +1819,7 @@
        "LEGAL_THREAT"
       ],
       "model_ran": false,
+      "crs_checked": false,
       "source": "screen"
      },
      "p_scam": 0.4553844357139521,
@@ -1631,6 +1886,7 @@
        "PAYMENT_DEMAND"
       ],
       "model_ran": false,
+      "crs_checked": false,
       "source": "screen"
      },
      "p_scam": 0.926148036594269,
@@ -1694,6 +1950,7 @@
       "t": 20000,
       "events": [],
       "model_ran": false,
+      "crs_checked": false,
       "source": "screen"
      },
      "p_scam": 3.3669522880898412e-06,

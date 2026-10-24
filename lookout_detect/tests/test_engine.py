@@ -139,3 +139,22 @@ def test_everyday_day_stays_quiet(model):
         if rng.random() < 0.01: ev.append(E.BANK_SITE_OPENED)
         worst = max(worst, eng.observe(obs(t, *ev)).p_scam)
     assert worst < 0.1
+
+
+def test_crs_sender_flag_only_counts_when_checked(model):
+    base = [E.GOV_IMPERSONATION, E.URGENT_LANGUAGE]
+    unchecked = Engine(model).observe(obs(0, *base)).log_odds
+    clean = Engine(model).observe(Observation(t=0, events=frozenset(base), crs_checked=True)).log_odds   # CRS: sender looks normal
+    flagged = Engine(model).observe(obs(0, *base, E.CRS_SENDER_HIGH_RISK)).log_odds                       # CRS: high-risk sender
+    assert clean < unchecked < flagged
+    assert flagged - unchecked <= 3.0 + 1e-6, "one CRS result is capped at ~+3 nats"
+
+
+def test_crs_flag_pushes_government_notice_over_the_line(model):
+    seq = [obs(0, E.GOV_IMPERSONATION, E.URGENT_LANGUAGE), obs(60, E.LEGAL_THREAT, E.GOV_IMPERSONATION)]
+    without = Engine(model).run(seq)[-1].p_scam
+    eng = Engine(model)
+    eng.observe(obs(0, E.GOV_IMPERSONATION, E.URGENT_LANGUAGE, E.CRS_SENDER_HIGH_RISK))
+    with_crs = eng.observe(obs(60, E.LEGAL_THREAT, E.GOV_IMPERSONATION)).p_scam
+    assert with_crs > without
+    assert any(e.item == "CRS_SENDER_HIGH_RISK" and e.log_bf > 1.0 for e in eng.ledger)

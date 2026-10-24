@@ -17,8 +17,8 @@ from .model import load_model
 OUT = Path(__file__).resolve().parent.parent / "model" / "parity_vectors.json"
 
 
-def o(t, *ev, model_ran=False, source="screen"):
-    return Observation(t=t, events=frozenset(ev), model_ran=model_ran, source=source)
+def o(t, *ev, model_ran=False, source="screen", crs_checked=False):
+    return Observation(t=t, events=frozenset(ev), model_ran=model_ran, source=source, crs_checked=crs_checked)
 
 
 SEQUENCES = {
@@ -33,6 +33,9 @@ SEQUENCES = {
                            o(400, E.BANK_SITE_OPENED, E.REFUND_OVERPAYMENT, E.REMOTE_ACCESS_STARTED)],
     "grandparent": [o(0, E.FAMILY_EMERGENCY_STORY, E.URGENT_LANGUAGE), o(60, E.FAMILY_EMERGENCY_STORY, E.LEGAL_THREAT),
                     o(120, E.SECRECY_REQUEST), o(180, E.PAYMENT_DEMAND, E.WIRE_OR_CRYPTO_PAGE)],
+    "crs_sender_checks": [o(0, E.GOV_IMPERSONATION, E.URGENT_LANGUAGE, E.CRS_SENDER_HIGH_RISK, source="screen+crs"),
+                          o(45, E.LEGAL_THREAT, E.GOV_IMPERSONATION, crs_checked=True, model_ran=True),
+                          o(300, E.REFUND_OVERPAYMENT, E.PHONE_NUMBER_IN_POPUP, crs_checked=True)],
     "government_then_quiet": [o(0, E.GOV_IMPERSONATION, E.URGENT_LANGUAGE), o(30, E.LEGAL_THREAT, E.GOV_IMPERSONATION),
                               o(90, E.PAYMENT_DEMAND, E.GIFT_CARD_PAGE), o(20000)],
 }
