@@ -41,8 +41,14 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 PLIST
 xattr -cr "$APP"
 IDENTITY="${LOOKOUT_SIGN_IDENTITY:-Lookout Dev}"
+# Fall back to an Xcode "Apple Development" certificate if there is one (also stable across rebuilds).
+if ! security find-identity -v -p codesigning 2>/dev/null | grep -q "\"$IDENTITY\""; then
+  DEV="$(security find-identity -v -p codesigning 2>/dev/null | sed -n 's/.*"\(Apple Development:[^"]*\)".*/\1/p' | head -1)"
+  [ -n "$DEV" ] && IDENTITY="$DEV"
+fi
 if security find-identity -v -p codesigning 2>/dev/null | grep -q "\"$IDENTITY\""; then
-  sign() { codesign --force --deep --options runtime --sign "$IDENTITY" "$APP"; }
+  # No hardened runtime: it would block the microphone without extra entitlements, and we don't notarize.
+  sign() { codesign --force --deep --sign "$IDENTITY" "$APP"; }
   echo "Signing with stable identity '$IDENTITY'."
 else
   sign() { codesign --force --deep --sign - "$APP"; }

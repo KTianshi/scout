@@ -60,17 +60,17 @@ struct ActionCardView: View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 10) {
                 Image(systemName: alarmed ? "exclamationmark.shield.fill" : "hand.wave.fill")
-                    .font(.system(size: 28)).foregroundStyle(accent)
-                Text(title).font(.system(size: 24, weight: .bold, design: .rounded)).foregroundStyle(Color(white: 0.08))
+                    .font(.system(size: 22)).foregroundStyle(accent)
+                Text(title).font(.system(size: 20, weight: .bold, design: .rounded)).foregroundStyle(Color(white: 0.08))
             }
-            Text(message).font(.system(size: 20, weight: .medium, design: .rounded)).foregroundStyle(Color(white: 0.15))
+            Text(message).font(.system(size: 16, weight: .medium, design: .rounded)).foregroundStyle(Color(white: 0.15))
                 .fixedSize(horizontal: false, vertical: true)
             HStack(spacing: 12) {
                 ForEach(buttons) { b in
                     SwiftUI.Button(action: b.action) {
-                        Text(b.title).font(.system(size: 20, weight: .semibold, design: .rounded))
-                            .padding(.horizontal, 20).padding(.vertical, 12)
-                            .frame(minWidth: 150)
+                        Text(b.title).font(.system(size: 17, weight: .semibold, design: .rounded))
+                            .padding(.horizontal, 16).padding(.vertical, 10)
+                            .frame(minWidth: 130)
                             .foregroundStyle(b.primary ? .white : Color(white: 0.1))
                             .background(RoundedRectangle(cornerRadius: 14).fill(b.primary ? accent : Color(white: 0.9)))
                     }
@@ -78,8 +78,8 @@ struct ActionCardView: View {
                 }
             }
         }
-        .padding(24)
-        .frame(width: 440, alignment: .leading)
+        .padding(20)
+        .frame(width: 380, alignment: .leading)
         .background(RoundedRectangle(cornerRadius: 24, style: .continuous).fill(.white))
         .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).stroke(accent, lineWidth: 3))
         .padding(6)

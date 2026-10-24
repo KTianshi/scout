@@ -44,9 +44,29 @@ final class Overlay {
     let state = BuddyState()
     private var window: OverlayWindow?
     private var followTimer: Timer?
+    private var handle: BuddyHandle?
     private(set) var screen: NSScreen
-    /// While pointing or talking the buddy stays put; otherwise it trails the cursor.
+    /// While pointing or talking the buddy stays put; otherwise it rests at its home spot.
     var isPinned = false
+    /// Old behaviour (trail the cursor) with LOOKOUT_FOLLOW_CURSOR=1.
+    let followsCursor = ProcessInfo.processInfo.environment["LOOKOUT_FOLLOW_CURSOR"] == "1"
+    /// Where the buddy rests, in overlay coordinates. Drag the buddy to move it; remembered across launches.
+    var home: CGPoint {
+        get {
+            let d = UserDefaults.standard
+            if d.object(forKey: "buddyHomeX") != nil {
+                return clamp(CGPoint(x: d.double(forKey: "buddyHomeX"), y: d.double(forKey: "buddyHomeY")))
+            }
+            let vf = screen.visibleFrame
+            return toOverlay(CGPoint(x: vf.maxX - 70, y: vf.minY + 70))
+        }
+        set {
+            UserDefaults.standard.set(Double(newValue.x), forKey: "buddyHomeX")
+            UserDefaults.standard.set(Double(newValue.y), forKey: "buddyHomeY")
+        }
+    }
+    /// Clicking the buddy (without dragging).
+    var onTap: (() -> Void)?
 
     init() {
         screen = NSScreen.main ?? NSScreen.screens[0]
@@ -59,10 +79,34 @@ final class Overlay {
         w.contentView = host
         w.orderFrontRegardless()
         window = w
-        state.position = toOverlay(NSEvent.mouseLocation).applying(.init(translationX: 40, y: 30))
+        state.position = followsCursor ? toOverlay(NSEvent.mouseLocation).applying(.init(translationX: 40, y: 30)) : home
+        let h = BuddyHandle(overlay: self)
+        handle = h
         followTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30.0, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated { self?.followCursor() }
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                if self.followsCursor { self.followCursor() }
+                self.handle?.sync()
+            }
         }
+    }
+
+    func clamp(_ p: CGPoint) -> CGPoint {
+        CGPoint(x: min(max(p.x, 40), screen.frame.width - 40), y: min(max(p.y, 40), screen.frame.height - 40))
+    }
+
+    /// Overlay point → global AppKit point (bottom-left origin).
+    func toAppKit(_ p: CGPoint) -> CGPoint {
+        CGPoint(x: p.x + screen.frame.minX, y: screen.frame.maxY - p.y)
+    }
+
+    /// Called while the user drags the buddy.
+    func dragged(to p: CGPoint) {
+        state.position = clamp(p)
+    }
+
+    func dragEnded() {
+        home = state.position
     }
 
     /// Global AppKit point (bottom-left origin) → overlay point (top-left origin of `screen`).
@@ -133,6 +177,9 @@ final class Overlay {
         release()
         say(nil)
         setMood(.idle)
+        if !followsCursor {
+            withAnimation(.spring(response: 0.9, dampingFraction: 0.8)) { state.position = home }
+        }
     }
 }
 
@@ -153,7 +200,7 @@ struct BuddyOverlayView: View {
                         .position(state.position)
                     if let text = state.bubble {
                         SpeechBubble(title: state.bubbleTitle, text: text, alarmed: state.mood == .alarmed)
-                            .frame(maxWidth: 460)
+                            .frame(maxWidth: 380)
                             .fixedSize(horizontal: false, vertical: true)
                             .position(bubblePosition(in: geo.size))
                             .transition(.opacity.combined(with: .scale(scale: 0.92)))
@@ -168,7 +215,7 @@ struct BuddyOverlayView: View {
     /// Put the bubble beside the buddy, away from the nearest edges.
     func bubblePosition(in size: CGSize) -> CGPoint {
         let p = state.position
-        let w: CGFloat = 460, h: CGFloat = 200
+        let w: CGFloat = 380, h: CGFloat = 160
         var x = p.x + 60 + w / 2
         if x + w / 2 > size.width - 16 { x = p.x - 60 - w / 2 }
         var y = p.y + h / 2 + 20
@@ -293,28 +340,28 @@ struct SpeechBubble: View {
     var text: String
     var alarmed: Bool
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 6) {
             if let title {
                 Text(title)
-                    .font(.system(size: 20, weight: .heavy, design: .rounded))
+                    .font(.system(size: 15, weight: .heavy, design: .rounded))
                     .foregroundStyle(alarmed ? Color(red: 0.62, green: 0.27, blue: 0.0) : Color(red: 0.1, green: 0.3, blue: 0.6))
             }
             Text(text)
-                .font(.system(size: 26, weight: .semibold, design: .rounded))
+                .font(.system(size: 20, weight: .semibold, design: .rounded))
                 .foregroundStyle(Color(white: 0.06))
-                .lineSpacing(4)
+                .lineSpacing(3)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(.horizontal, 22)
-        .padding(.vertical, 18)
+        .padding(.horizontal, 18)
+        .padding(.vertical, 14)
         .background(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .fill(alarmed ? Color(red: 1.0, green: 0.96, blue: 0.88) : Color.white)
                 .shadow(color: .black.opacity(0.3), radius: 16, y: 6)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .stroke(alarmed ? Color(red: 0.96, green: 0.55, blue: 0.16) : Color(red: 0.22, green: 0.56, blue: 0.93), lineWidth: 4)
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(alarmed ? Color(red: 0.96, green: 0.55, blue: 0.16) : Color(red: 0.22, green: 0.56, blue: 0.93), lineWidth: 2.5)
         )
     }
 }
@@ -331,5 +378,67 @@ struct HighlightRing: View {
             .opacity(on ? 1 : 0.35)
             .animation(.easeInOut(duration: 0.7).repeatForever(autoreverses: true), value: on)
             .onAppear { on = true }
+    }
+}
+
+/// A small invisible window that sits on top of the resting buddy so it can be dragged or clicked
+/// (the overlay itself is click-through). Hidden while the buddy is pointing, so it never blocks a target.
+@MainActor
+final class BuddyHandle {
+    private let panel: NSPanel
+    private unowned let overlay: Overlay
+    private var dragging = false
+    static let size: CGFloat = 72
+
+    init(overlay: Overlay) {
+        self.overlay = overlay
+        panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: Self.size, height: Self.size),
+                        styleMask: [.nonactivatingPanel, .borderless], backing: .buffered, defer: false)
+        panel.isOpaque = false
+        panel.backgroundColor = .clear
+        panel.hasShadow = false
+        panel.level = .screenSaver
+        panel.collectionBehavior = [.canJoinAllSpaces, .stationary, .fullScreenAuxiliary, .ignoresCycle]
+        let v = HandleView(frame: NSRect(x: 0, y: 0, width: Self.size, height: Self.size))
+        v.onDrag = { [weak self] p in self?.dragging = true; self?.overlay.dragged(to: p) }
+        v.onEnd = { [weak self] moved in
+            guard let self else { return }
+            self.dragging = false
+            if moved { self.overlay.dragEnded() } else { self.overlay.onTap?() }
+        }
+        v.toOverlay = { [weak overlay] p in overlay?.toOverlay(p) ?? p }
+        panel.contentView = v
+        sync()
+    }
+
+    func sync() {
+        let active = !overlay.isPinned && overlay.state.visible
+        if !active { if panel.isVisible { panel.orderOut(nil) }; return }
+        if !dragging {
+            let c = overlay.toAppKit(overlay.state.position)
+            panel.setFrameOrigin(NSPoint(x: c.x - Self.size / 2, y: c.y - Self.size / 2))
+        }
+        if !panel.isVisible { panel.orderFrontRegardless() }
+    }
+
+    final class HandleView: NSView {
+        var onDrag: ((CGPoint) -> Void)?
+        var onEnd: ((Bool) -> Void)?
+        var toOverlay: ((CGPoint) -> CGPoint)?
+        private var start: CGPoint?
+        private var moved = false
+
+        override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+        override func resetCursorRects() { addCursorRect(bounds, cursor: .openHand) }
+        override func mouseDown(with e: NSEvent) { start = NSEvent.mouseLocation; moved = false }
+        override func mouseDragged(with e: NSEvent) {
+            let m = NSEvent.mouseLocation
+            if let s = start, hypot(m.x - s.x, m.y - s.y) > 4 { moved = true }
+            guard moved, let p = toOverlay?(m) else { return }
+            NSCursor.closedHand.set()
+            onDrag?(p)
+            window?.setFrameOrigin(NSPoint(x: m.x - BuddyHandle.size / 2, y: m.y - BuddyHandle.size / 2))
+        }
+        override func mouseUp(with e: NSEvent) { onEnd?(moved); start = nil }
     }
 }

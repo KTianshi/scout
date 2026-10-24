@@ -35,6 +35,7 @@ final class Companion {
 
     func start() {
         overlay.show()
+        overlay.onTap = { AppDelegate.shared?.askTyped() }
         hotkey.onPress = { [weak self] in self?.beginListening() }
         hotkey.onRelease = { [weak self] in self?.endListening() }
         hotkey.register()
