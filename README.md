@@ -26,6 +26,7 @@ Put your key in `~/.config/lookout/secrets.env` (or export it):
 
 ```
 ANTHROPIC_API_KEY=sk-ant-...
+CARTESIA_API_KEY=sk_car_...           # Lookout's voice (Sonic). Optional: CARTESIA_VOICE_ID, CARTESIA_SPEED (default 0.9), CARTESIA_EMOTION (default calm)
 ELDER_NAME=Mom
 FAMILY_NAME=Sarah
 ```
@@ -59,7 +60,8 @@ Package.swift
     ScreenObserver ScreenCaptureKit snapshot + Accessibility tree of the frontmost window (text, elements, URL, secure fields)
     DemoBrowser    Lookout's own WebKit window; reads text + exact element rects from the DOM (no permissions needed)
     Companion      help walkthroughs, guardian loop, interrupts, remote-access shield, pause-before-pay, stuck nudge, dictation
-    Voice          SpeechOutput protocol → AVSpeechSynthesizer (best Premium/Enhanced voice); ⌥Space push-to-talk → Apple Speech
+    Voice          SpeechOutput protocol → Cartesia Sonic (CartesiaClient: /tts/bytes, on-disk clip cache, scam lines prewarmed so they play
+                   instantly and offline) with AVSpeechSynthesizer fallback; ⌥Space push-to-talk → Apple Speech
     Panels         clickable action card, full-screen "Let's check with Sarah first" pause, permission setup window
     FamilyClient   events + approval requests to the family server
     FixtureRunner  `Lookout --fixture page.html` runs the whole pipeline headless
@@ -87,6 +89,7 @@ bench/          154 labeled fixtures (dev/test split) + results
 ## Testing without permissions
 
 ```bash
+.build/debug/Lookout --say "Hello" [--prewarm]                                              # voice check (prints which engine spoke)
 .build/debug/Lookout --fixture demo/scenarios/tech-support.html            # signals → risk → Claude → speech → point
 .build/debug/Lookout --fixture demo/scenarios/email-attach.html --ask "How do I attach this PDF?"
 .build/debug/Lookout --fixture screenshot.png --text "screen text…" --apps "AnyDesk,Safari"

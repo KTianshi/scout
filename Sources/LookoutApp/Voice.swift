@@ -2,6 +2,7 @@ import AppKit
 import AVFoundation
 import Speech
 import Carbon.HIToolbox
+import LookoutCore
 
 // MARK: - Speech output
 
@@ -12,6 +13,107 @@ protocol SpeechOutput: AnyObject {
     func speak(_ text: String) async
     func stop()
     var isSpeaking: Bool { get }
+    /// Start generating audio for a line that will be spoken soon (no-op by default).
+    func prepare(_ text: String)
+    /// Human-readable name of the voice engine, for logs and the menu.
+    var engineName: String { get }
+}
+
+extension SpeechOutput {
+    func prepare(_ text: String) {}
+}
+
+/// Cartesia Sonic voice, falling back to the system voice when there is no key or no network.
+@MainActor
+final class CartesiaSpeech: NSObject, SpeechOutput, AVAudioPlayerDelegate {
+    let client: CartesiaClient
+    let fallback: SystemSpeech
+    private var player: AVAudioPlayer?
+    private var waiter: CheckedContinuation<Void, Never>?
+    private var pending: [String: Task<Data?, Never>] = [:]
+    private var generation = 0
+    var muted = ProcessInfo.processInfo.environment["LOOKOUT_MUTE"] == "1"
+
+    init(client: CartesiaClient = CartesiaClient(), fallback: SystemSpeech? = nil) {
+        self.client = client
+        self.fallback = fallback ?? SystemSpeech()
+        super.init()
+    }
+
+    var engineName: String { client.isConfigured ? "Cartesia \(client.model)" : "System voice (no Cartesia key)" }
+    var isSpeaking: Bool { (player?.isPlaying ?? false) || fallback.isSpeaking }
+
+    func prepare(_ text: String) {
+        let clean = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !clean.isEmpty, pending[clean] == nil, client.isConfigured || client.cached(clean) != nil else { return }
+        let c = client
+        pending[clean] = Task.detached { try? await c.wav(clean) }
+    }
+
+    func speak(_ text: String) async {
+        let clean = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !clean.isEmpty else { return }
+        generation += 1
+        let myGen = generation
+        if muted { Log.info("say: \(clean)"); try? await Task.sleep(nanoseconds: UInt64(min(6.0, Double(clean.count) * 0.05) * 1e9)); return }
+        prepare(clean)
+        let started = Date()
+        let audio = await pending[clean]?.value
+        pending[clean] = nil
+        // stop() was called (or a newer line started) while we were generating.
+        guard myGen == generation else { return }
+        guard let audio, let p = try? AVAudioPlayer(data: audio) else {
+            Log.info("say (system fallback): \(clean)")
+            await fallback.speak(clean)
+            return
+        }
+        Log.info(String(format: "say (cartesia, %.0f ms): ", Date().timeIntervalSince(started) * 1000) + clean)
+        player = p
+        p.delegate = self
+        await withCheckedContinuation { (c: CheckedContinuation<Void, Never>) in
+            waiter = c
+            if !p.play() { waiter = nil; c.resume() }
+        }
+    }
+
+    func stop() {
+        generation += 1
+        player?.stop()
+        player = nil
+        waiter?.resume(); waiter = nil
+        fallback.stop()
+    }
+
+    nonisolated func audioPlayerDidFinishPlaying(_ p: AVAudioPlayer, successfully flag: Bool) {
+        Task { @MainActor in
+            guard p === self.player else { return }
+            self.waiter?.resume(); self.waiter = nil
+        }
+    }
+
+    nonisolated func audioPlayerDecodeErrorDidOccur(_ p: AVAudioPlayer, error: Error?) {
+        Task { @MainActor in
+            guard p === self.player else { return }
+            self.waiter?.resume(); self.waiter = nil
+        }
+    }
+
+    /// Lines Lookout says during scams and common moments, generated ahead of time so they play
+    /// instantly and keep working offline.
+    static func standardLines() -> [String] {
+        var lines = HardRules.all.map(\.spoken)
+        let fam = LookoutConfig.familyName
+        lines += [
+            "Hi, I'm Lookout. Hold Option and Space any time to ask me something.",
+            "There. It's gone. You did great.",
+            "Good choice. Nothing was sent.",
+            "\(fam) says it's OK. You can go ahead.",
+            "\(fam) says please don't. This isn't safe. Nothing was sent.",
+            "Want some help? I'm right here.",
+            "This looks like a scam. Let's stop here.",
+        ]
+        return lines
+    }
 }
 
 @MainActor
@@ -48,6 +150,7 @@ final class SystemSpeech: NSObject, SpeechOutput, AVSpeechSynthesizerDelegate {
     }
 
     var isSpeaking: Bool { synth.isSpeaking }
+    var engineName: String { "System voice (\(voice?.name ?? "default"))" }
 
     func speak(_ text: String) async {
         let clean = text.trimmingCharacters(in: .whitespacesAndNewlines)

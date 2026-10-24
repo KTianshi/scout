@@ -5,7 +5,7 @@ import LookoutCore
 @MainActor
 final class Companion {
     let overlay = Overlay()
-    let speech: SpeechOutput = SystemSpeech()
+    let speech: SpeechOutput = CartesiaSpeech()
     let observer = ScreenObserver()
     let claude = ClaudeClient()
     let family = FamilyClient()
@@ -41,7 +41,10 @@ final class Companion {
         startGuardian()
         startRemoteShield()
         stuck.start { [weak self] in self?.offerHelpBecauseStuck() }
-        Log.info("Lookout started. model=\(claude.model) key=\(claude.isConfigured ? "yes" : "no") screen=\(Permissions.screenRecording) ax=\(Permissions.accessibility) mic=\(Listener.canUseMicrophone)")
+        if let c = speech as? CartesiaSpeech, c.client.isConfigured {
+            Task { let n = await c.client.prewarm(CartesiaSpeech.standardLines()); Log.info("cartesia: prewarmed \(n) lines") }
+        }
+        Log.info("Lookout started. voice=\(speech.engineName) model=\(claude.model) key=\(claude.isConfigured ? "yes" : "no") screen=\(Permissions.screenRecording) ax=\(Permissions.accessibility) mic=\(Listener.canUseMicrophone)")
         Task { await greet() }
     }
 
@@ -258,6 +261,7 @@ final class Companion {
 
         @MainActor func enqueue(_ s: PointTags.Step) {
             queue.append(s)
+            companion.speech.prepare(s.text)
             if task == nil { task = Task { @MainActor in await self.run() } }
             waiting?.resume(); waiting = nil
         }

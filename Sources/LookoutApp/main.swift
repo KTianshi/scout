@@ -3,6 +3,7 @@ import LookoutCore
 
 // Lookout
 //   Lookout                          normal menu-bar companion
+//   Lookout --say "text" [--prewarm]  voice check (Cartesia, falls back to the system voice)
 //   Lookout --demo [scenario.html]   companion + demo browser window
 //   Lookout --fixture <file.html|.png> [--text "..."|--text-file f] [--apps "AnyDesk,Safari"]
 //           [--ask "question"] [--no-model] [--json]
@@ -18,7 +19,20 @@ let app = NSApplication.shared
 
 MainActor.assumeIsolated {
 
-if let fixture = opt("--fixture") {
+if let line = opt("--say") {
+    // Voice check: Lookout --say "Hello"   (add --prewarm to cache the standard scam lines)
+    app.setActivationPolicy(.accessory)
+    let voice = CartesiaSpeech()
+    Task { @MainActor in
+        print("voice: \(voice.engineName)")
+        if args.contains("--prewarm") { print("prewarmed \(await voice.client.prewarm(CartesiaSpeech.standardLines())) lines") }
+        let t = Date()
+        await voice.speak(line)
+        print(String(format: "done in %.1f s", Date().timeIntervalSince(t)))
+        exit(0)
+    }
+    app.run()
+} else if let fixture = opt("--fixture") {
     app.setActivationPolicy(.accessory)
     let runner = FixtureRunner(path: fixture, text: opt("--text") ?? opt("--text-file").flatMap { try? String(contentsOfFile: $0, encoding: .utf8) },
                                apps: opt("--apps")?.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) } ?? [],
