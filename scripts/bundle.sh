@@ -15,6 +15,16 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/Lookout"
 rsync -a --exclude ".DS_Store" "$ROOT/demo" "$APP/Contents/Resources/"
+# App icon, drawn by the app itself (AppIconView).
+ICONSET="$(mktemp -d)/AppIcon.iconset"
+mkdir -p "$ICONSET"
+"$BIN" --render-icon "$ICONSET/base.png"
+for s in 16 32 128 256 512; do
+  sips -z $s $s "$ICONSET/base.png" --out "$ICONSET/icon_${s}x${s}.png" >/dev/null
+  sips -z $((s*2)) $((s*2)) "$ICONSET/base.png" --out "$ICONSET/icon_${s}x${s}@2x.png" >/dev/null
+done
+rm "$ICONSET/base.png"
+iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/AppIcon.icns"
 VERSION="0.1.$(git -C "$ROOT" rev-list --count HEAD 2>/dev/null || echo 0)"
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -29,7 +39,8 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>CFBundleShortVersionString</key><string>$VERSION</string>
   <key>CFBundleVersion</key><string>$VERSION</string>
   <key>LSMinimumSystemVersion</key><string>14.0</string>
-  <key>LSUIElement</key><true/>
+  <key>LSUIElement</key><false/>
+  <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>NSHighResolutionCapable</key><true/>
   <key>NSMicrophoneUsageDescription</key><string>Lookout listens while you hold Option and Space, so you can ask for help out loud.</string>
   <key>NSSpeechRecognitionUsageDescription</key><string>Lookout turns your spoken question into text so it can help you.</string>

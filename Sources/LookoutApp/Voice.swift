@@ -33,9 +33,13 @@ final class CartesiaSpeech: NSObject, SpeechOutput, AVAudioPlayerDelegate {
     private var pending: [String: Task<Data?, Never>] = [:]
     private var generation = 0
     var muted = ProcessInfo.processInfo.environment["LOOKOUT_MUTE"] == "1"
+    /// Playback speed from Settings. Cartesia's own speed knob barely changes anything, so we time-stretch here.
+    var rate: Float = VoiceSpeed.current.rate
 
     init(client: CartesiaClient = CartesiaClient(), fallback: SystemSpeech? = nil) {
         self.client = client
+        // The menu's voice pick wins unless CARTESIA_VOICE_ID is set explicitly.
+        if Secrets.shared["CARTESIA_VOICE_ID"] == nil { client.voiceID = LookoutVoice.current.id }
         self.fallback = fallback ?? SystemSpeech()
         super.init()
     }
@@ -70,6 +74,8 @@ final class CartesiaSpeech: NSObject, SpeechOutput, AVAudioPlayerDelegate {
         Log.info(String(format: "say (cartesia, %.0f ms): ", Date().timeIntervalSince(started) * 1000) + clean)
         player = p
         p.delegate = self
+        p.enableRate = true
+        p.rate = rate
         await withCheckedContinuation { (c: CheckedContinuation<Void, Never>) in
             waiter = c
             if !p.play() { waiter = nil; c.resume() }
@@ -182,6 +188,59 @@ final class SystemSpeech: NSObject, SpeechOutput, AVSpeechSynthesizerDelegate {
     nonisolated func speechSynthesizer(_ s: AVSpeechSynthesizer, didCancel u: AVSpeechUtterance) {
         let id = ObjectIdentifier(u)
         Task { @MainActor in self.waiters.removeValue(forKey: id)?.resume() }
+    }
+}
+
+/// Cartesia voices offered in the menu: clear and friendly, picked for older listeners.
+struct LookoutVoice: Equatable {
+    let id: String
+    let name: String
+
+    /// "Katie (clear, friendly)" → "Katie" and "Clear, friendly".
+    var label: String { String(name.prefix { $0 != " " }) }
+    var detail: String {
+        guard let open = name.firstIndex(of: "(") else { return "" }
+        let d = name[name.index(after: open)...].dropLast()
+        return d.prefix(1).uppercased() + d.dropFirst()
+    }
+
+    static let all: [LookoutVoice] = [
+        .init(id: "f786b574-daa5-4673-aa0c-cbe3e8534c02", name: "Katie (clear, friendly)"),
+        .init(id: "db6b0ed5-d5d3-463d-ae85-518a07d3c2b4", name: "Skylar (warm, American)"),
+        .init(id: "9626c31c-bec5-4cca-baa8-f8ba9e84c8bc", name: "Jacqueline (reassuring)"),
+        .init(id: "47c38ca4-5f35-497b-b1a3-415245fb35e1", name: "Daniel (crisp, male)"),
+        .init(id: "0ad65e7f-006c-47cf-bd31-52279d487913", name: "Rupert (caring, older male)"),
+        .init(id: "b24f41fd-00a3-4cd8-992a-a0c9f13f3ef1", name: "Clive (calm, British)"),
+    ]
+
+    static var current: LookoutVoice {
+        get { all.first { $0.id == UserDefaults.standard.string(forKey: "cartesiaVoice") } ?? all[0] }
+        set { UserDefaults.standard.set(newValue.id, forKey: "cartesiaVoice") }
+    }
+}
+
+enum VoiceSpeed: String, CaseIterable {
+    case slower, normal, faster
+
+    var title: String {
+        switch self {
+        case .slower: return "Slower"
+        case .normal: return "Normal"
+        case .faster: return "Faster"
+        }
+    }
+    /// Playback rate (pitch is kept). Clips are already generated a touch slow for older listeners.
+    var rate: Float {
+        switch self {
+        case .slower: return 0.85
+        case .normal: return 1.0
+        case .faster: return 1.2
+        }
+    }
+
+    static var current: VoiceSpeed {
+        get { UserDefaults.standard.string(forKey: "voiceSpeed").flatMap(VoiceSpeed.init) ?? .normal }
+        set { UserDefaults.standard.set(newValue.rawValue, forKey: "voiceSpeed") }
     }
 }
 

@@ -3,10 +3,12 @@ import SwiftUI
 import Combine
 
 /// Transparent, click-through window covering a screen; hosts the buddy and its speech bubble.
+/// A non-activating panel rather than a plain window: with a Dock icon, only panels can float over
+/// other apps' full-screen spaces.
 /// Window setup adapted from OpenClicky's OverlayWindow (MIT); see THIRD_PARTY_NOTICES.md.
-final class OverlayWindow: NSWindow {
+final class OverlayWindow: NSPanel {
     init(screen: NSScreen) {
-        super.init(contentRect: screen.frame, styleMask: .borderless, backing: .buffered, defer: false)
+        super.init(contentRect: screen.frame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         isOpaque = false
         backgroundColor = .clear
         level = .screenSaver
@@ -23,6 +25,57 @@ final class OverlayWindow: NSWindow {
 
 enum BuddyMood: Equatable {
     case idle, listening, thinking, speaking, alarmed, happy
+
+    var color: Color {
+        switch self {
+        case .alarmed: return Color(red: 0.96, green: 0.55, blue: 0.16)
+        case .listening: return Color(red: 0.30, green: 0.62, blue: 0.98)
+        case .thinking: return Color(red: 0.48, green: 0.52, blue: 0.95)
+        case .happy: return Color(red: 0.25, green: 0.74, blue: 0.52)
+        default: return Color(red: 0.22, green: 0.56, blue: 0.93)
+        }
+    }
+}
+
+/// How the buddy looks. Picked from the menu; remembered across launches.
+enum BuddyStyle: String, CaseIterable {
+    case orb, cat, bear, chick, ghost, classic
+
+    var title: String {
+        switch self {
+        case .orb: return "Glowing dot"
+        case .cat: return "Cat 🐱"
+        case .bear: return "Bear 🐻"
+        case .chick: return "Chick 🐥"
+        case .ghost: return "Ghost 👻"
+        case .classic: return "Smiley face"
+        }
+    }
+    /// Short name for the Settings tiles.
+    var name: String {
+        switch self {
+        case .orb: return "Glow"
+        case .cat: return "Cat"
+        case .bear: return "Bear"
+        case .chick: return "Chick"
+        case .ghost: return "Ghost"
+        case .classic: return "Smiley"
+        }
+    }
+    var emoji: String? {
+        switch self {
+        case .cat: return "🐱"
+        case .bear: return "🐻"
+        case .chick: return "🐥"
+        case .ghost: return "👻"
+        default: return nil
+        }
+    }
+
+    static var current: BuddyStyle {
+        get { UserDefaults.standard.string(forKey: "buddyStyle").flatMap(BuddyStyle.init) ?? .orb }
+        set { UserDefaults.standard.set(newValue.rawValue, forKey: "buddyStyle") }
+    }
 }
 
 /// Observable state the overlay renders. All positions are in the overlay's SwiftUI space (top-left origin).
@@ -32,10 +85,51 @@ final class BuddyState: ObservableObject {
     @Published var mood: BuddyMood = .idle
     @Published var bubble: String? = nil
     @Published var bubbleTitle: String? = nil
+    /// Where the bubble sits. Fixed when it appears so it doesn't chase the cursor; moves only when the buddy flies.
+    @Published var bubbleAnchor: CGPoint = .zero
     @Published var pointing: Bool = false
     @Published var highlight: CGRect? = nil
-    @Published var visible: Bool = true
+    /// Off hides the resting buddy; it still appears to warn or answer.
+    @Published var visible: Bool = !UserDefaults.standard.bool(forKey: "buddyHidden") {
+        didSet { UserDefaults.standard.set(!visible, forKey: "buddyHidden") }
+    }
     @Published var listeningLevel: CGFloat = 0
+    @Published var style: BuddyStyle = .current
+    /// The pointer is over the bubble: fade it so whatever is underneath can be seen and clicked.
+    @Published var bubbleFaded = false
+
+    /// Put the bubble beside the buddy, on screen, and never on top of what it's pointing at.
+    func bubblePosition(in size: CGSize) -> CGPoint {
+        let p = bubbleAnchor
+        let w: CGFloat = 380
+        // Rough height: ~30 characters per line at 19 pt, plus title and padding.
+        let chars = CGFloat((bubble ?? "").count)
+        let h: CGFloat = max(70, ceil(chars / 30) * 27 + (bubbleTitle == nil ? 34 : 60))
+        let avoid = (highlight ?? CGRect(x: p.x - 30, y: p.y - 30, width: 60, height: 60)).insetBy(dx: -14, dy: -14)
+        let gap: CGFloat = 36
+        let candidates = [
+            CGPoint(x: p.x + gap + w / 2, y: p.y + h / 2 + 14),   // right, below
+            CGPoint(x: p.x - gap - w / 2, y: p.y + h / 2 + 14),   // left, below
+            CGPoint(x: p.x + gap + w / 2, y: p.y - h / 2 - 30),   // right, above
+            CGPoint(x: p.x - gap - w / 2, y: p.y - h / 2 - 30),   // left, above
+            CGPoint(x: avoid.midX, y: avoid.minY - h / 2 - 12),   // straight above the target
+            CGPoint(x: avoid.midX, y: avoid.maxY + h / 2 + 12),   // straight below the target
+        ]
+        func clamped(_ c: CGPoint) -> CGPoint {
+            CGPoint(x: min(max(c.x, w / 2 + 16), size.width - w / 2 - 16), y: min(max(c.y, h / 2 + 16), size.height - h / 2 - 16))
+        }
+        func rect(_ c: CGPoint) -> CGRect { CGRect(x: c.x - w / 2, y: c.y - h / 2, width: w, height: h) }
+        for c in candidates.map(clamped) where !rect(c).intersects(avoid) { return c }
+        return clamped(candidates[0])
+    }
+
+    /// The bubble's rough on-screen rect (same size estimate as the placement).
+    func bubbleRect(in size: CGSize) -> CGRect {
+        let c = bubblePosition(in: size)
+        let chars = CGFloat((bubble ?? "").count)
+        let h: CGFloat = max(70, ceil(chars / 30) * 27 + (bubbleTitle == nil ? 34 : 60))
+        return CGRect(x: c.x - 190, y: c.y - h / 2, width: 380, height: h)
+    }
 }
 
 /// Owns the overlay window and moves the buddy around.
@@ -43,13 +137,25 @@ final class BuddyState: ObservableObject {
 final class Overlay {
     let state = BuddyState()
     private var window: OverlayWindow?
-    private var followTimer: Timer?
+    private var followTask: Task<Void, Never>?
     private var handle: BuddyHandle?
     private(set) var screen: NSScreen
     /// While pointing or talking the buddy stays put; otherwise it rests at its home spot.
     var isPinned = false
-    /// Trails the cursor like a cursor buddy. LOOKOUT_DOCK=1 parks it in a corner instead (drag to move, click to ask).
-    let followsCursor = ProcessInfo.processInfo.environment["LOOKOUT_DOCK"] != "1"
+    /// Trails the cursor like a cursor buddy, or parks in a corner (drag to move, click to ask).
+    /// Toggled from the menu and remembered; LOOKOUT_DOCK=1 forces the corner.
+    var followsCursor: Bool = ProcessInfo.processInfo.environment["LOOKOUT_DOCK"] != "1" && !UserDefaults.standard.bool(forKey: "buddyDocked") {
+        didSet {
+            UserDefaults.standard.set(!followsCursor, forKey: "buddyDocked")
+            guard window != nil else { return }
+            // The drag handle only exists in docked mode; next to the cursor it would swallow clicks.
+            handle?.close()
+            handle = followsCursor ? nil : BuddyHandle(overlay: self)
+            if !followsCursor, !isPinned {
+                withAnimation(.spring(response: 0.9, dampingFraction: 0.8)) { state.position = home }
+            }
+        }
+    }
     /// Offset of the resting buddy from the cursor tip.
     static let cursorOffset = CGPoint(x: 24, y: 22)
     /// Where the buddy rests, in overlay coordinates. Drag the buddy to move it; remembered across launches.
@@ -84,13 +190,22 @@ final class Overlay {
         state.position = followsCursor ? cursorTarget() : home
         // The drag handle only exists in docked mode; next to the cursor it would swallow clicks.
         if !followsCursor { handle = BuddyHandle(overlay: self) }
-        followTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30.0, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated {
+        // A main-actor loop rather than a Timer + assumeIsolated, which crashed in the executor check.
+        followTask = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 33_000_000)
                 guard let self else { return }
                 if self.followsCursor { self.followCursor() }
                 self.handle?.sync()
+                self.fadeBubbleUnderCursor()
             }
         }
+    }
+
+    private func fadeBubbleUnderCursor() {
+        let over = state.bubble != nil
+            && state.bubbleRect(in: screen.frame.size).insetBy(dx: -16, dy: -16).contains(toOverlay(NSEvent.mouseLocation))
+        if over != state.bubbleFaded { state.bubbleFaded = over }
     }
 
     func clamp(_ p: CGPoint) -> CGPoint {
@@ -150,6 +265,7 @@ final class Overlay {
         )
         withAnimation(.spring(response: 0.75, dampingFraction: 0.72)) {
             state.position = clamped
+            state.bubbleAnchor = clamped
             state.pointing = true
             state.highlight = highlight
         }
@@ -158,10 +274,11 @@ final class Overlay {
     /// Glide somewhere and stay, without pointing.
     func moveTo(_ p: CGPoint) {
         isPinned = true
-        withAnimation(.spring(response: 0.9, dampingFraction: 0.8)) { state.position = p; state.pointing = false }
+        withAnimation(.spring(response: 0.9, dampingFraction: 0.8)) { state.position = p; state.bubbleAnchor = p; state.pointing = false }
     }
 
     func say(_ text: String?, title: String? = nil) {
+        if text != nil, state.bubble == nil { state.bubbleAnchor = state.position }
         withAnimation(.easeOut(duration: 0.25)) {
             state.bubble = text
             state.bubbleTitle = title
@@ -201,16 +318,18 @@ struct BuddyOverlayView: View {
                 if let r = state.highlight {
                     HighlightRing(rect: r, alarmed: state.mood == .alarmed)
                 }
-                if state.visible {
-                    BuddyView(mood: state.mood, pointing: state.pointing, level: state.listeningLevel)
+                if state.visible || state.bubble != nil || state.mood != .idle {
+                    BuddyView(style: state.style, mood: state.mood, pointing: state.pointing, level: state.listeningLevel)
                         .frame(width: 64, height: 64)
                         .scaleEffect(state.pointing || state.mood == .alarmed ? 0.8 : 0.6)
                         .position(state.position)
                     if let text = state.bubble {
-                        SpeechBubble(title: state.bubbleTitle, text: text, alarmed: state.mood == .alarmed)
+                        SpeechBubble(title: state.bubbleTitle, text: text, alarmed: state.mood == .alarmed, talking: state.mood == .speaking)
                             .frame(maxWidth: 380)
                             .fixedSize(horizontal: false, vertical: true)
-                            .position(bubblePosition(in: geo.size))
+                            .position(state.bubblePosition(in: geo.size))
+                            .opacity(state.bubbleFaded ? 0.12 : 1)
+                            .animation(.easeOut(duration: 0.2), value: state.bubbleFaded)
                             .transition(.opacity.combined(with: .scale(scale: 0.92)))
                     }
                 }
@@ -220,23 +339,136 @@ struct BuddyOverlayView: View {
         .allowsHitTesting(false)
     }
 
-    /// Put the bubble beside the buddy, away from the nearest edges.
-    func bubblePosition(in size: CGSize) -> CGPoint {
-        let p = state.position
-        let w: CGFloat = 380, h: CGFloat = 160
-        var x = p.x + 36 + w / 2
-        if x + w / 2 > size.width - 16 { x = p.x - 36 - w / 2 }
-        var y = p.y + h / 2 + 14
-        if y + h / 2 > size.height - 16 { y = p.y - h / 2 - 30 }
-        x = min(max(x, w / 2 + 16), size.width - w / 2 - 16)
-        y = min(max(y, h / 2 + 16), size.height - h / 2 - 16)
-        return CGPoint(x: x, y: y)
+}
+
+struct BuddyView: View {
+    var style: BuddyStyle
+    var mood: BuddyMood
+    var pointing: Bool
+    var level: CGFloat
+
+    var body: some View {
+        switch style {
+        case .orb: OrbBuddy(mood: mood, pointing: pointing, level: level)
+        case .classic: FaceBuddy(mood: mood, pointing: pointing, level: level)
+        default: EmojiBuddy(emoji: style.emoji ?? "🐱", mood: mood, pointing: pointing, level: level)
+        }
     }
 }
 
-/// The companion: a soft round character with eyes. Bobs when idle, leans when pointing,
+/// The default look: a small glowing orb. Breathes when idle, ripples when listening or alarmed,
+/// a spinning highlight while thinking.
+struct OrbBuddy: View {
+    var mood: BuddyMood
+    var pointing: Bool
+    var level: CGFloat
+    @State private var breathe = false
+    @State private var pulse = false
+    @State private var spin = false
+
+    var color: Color {
+        switch mood {
+        case .idle, .speaking: return Color(red: 0.42, green: 0.76, blue: 1.0)
+        default: return mood.color
+        }
+    }
+
+    var body: some View {
+        ZStack {
+            if mood == .alarmed || mood == .listening {
+                Circle()
+                    .stroke(color.opacity(0.6), lineWidth: 2.5)
+                    .frame(width: 30, height: 30)
+                    .scaleEffect(pulse ? 2.0 : 1.0)
+                    .opacity(pulse ? 0 : 0.9)
+                    .animation(.easeOut(duration: 1.2).repeatForever(autoreverses: false), value: pulse)
+            }
+            Circle()
+                .fill(color)
+                .frame(width: 34, height: 34)
+                .blur(radius: 10)
+                .opacity(mood == .speaking ? 1 : 0.8)
+            Circle()
+                .fill(RadialGradient(colors: [.white, color], center: .init(x: 0.4, y: 0.35), startRadius: 1, endRadius: 16))
+                .frame(width: 28, height: 28)
+                .overlay(Circle().stroke(.white.opacity(0.75), lineWidth: 1))
+                .scaleEffect(mood == .listening ? 1 + level * 0.3 : 1)
+            if mood == .thinking {
+                Circle()
+                    .trim(from: 0, to: 0.28)
+                    .stroke(.white, style: StrokeStyle(lineWidth: 2, lineCap: .round))
+                    .frame(width: 38, height: 38)
+                    .rotationEffect(.degrees(spin ? 360 : 0))
+                    .animation(.linear(duration: 1.0).repeatForever(autoreverses: false), value: spin)
+            }
+            if pointing {
+                PointerTip(color: color).offset(x: -20, y: -20)
+            }
+        }
+        .scaleEffect(breathe ? 1.06 : 0.94)
+        .onAppear {
+            withAnimation(.easeInOut(duration: 1.8).repeatForever(autoreverses: true)) { breathe = true }
+            pulse = true
+            spin = true
+        }
+    }
+}
+
+/// A cute character (emoji) with a soft mood-colored glow behind it.
+struct EmojiBuddy: View {
+    var emoji: String
+    var mood: BuddyMood
+    var pointing: Bool
+    var level: CGFloat
+    @State private var bob = false
+    @State private var pulse = false
+
+    var body: some View {
+        ZStack {
+            if mood == .alarmed || mood == .listening {
+                Circle()
+                    .stroke(mood.color.opacity(0.55), lineWidth: 3)
+                    .frame(width: 48, height: 48)
+                    .scaleEffect(pulse ? 1.6 : 1.0)
+                    .opacity(pulse ? 0 : 0.9)
+                    .animation(.easeOut(duration: 1.1).repeatForever(autoreverses: false), value: pulse)
+            }
+            Circle()
+                .fill(mood.color)
+                .frame(width: 44, height: 44)
+                .blur(radius: 10)
+                .opacity(mood == .idle ? 0.25 : 0.6)
+            Text(emoji)
+                .font(.system(size: 44))
+                .shadow(color: .black.opacity(0.25), radius: 4, y: 2)
+                .scaleEffect(mood == .listening ? 1 + level * 0.2 : 1)
+            if pointing {
+                PointerTip(color: mood.color).offset(x: -30, y: -30)
+            }
+        }
+        .offset(y: bob ? -3 : 2)
+        .rotationEffect(.degrees(pointing ? -8 : 0))
+        .onAppear {
+            withAnimation(.easeInOut(duration: 1.6).repeatForever(autoreverses: true)) { bob = true }
+            pulse = true
+        }
+    }
+}
+
+struct PointerTip: View {
+    var color: Color
+    var body: some View {
+        Triangle()
+            .fill(color)
+            .overlay(Triangle().stroke(.white, lineWidth: 2))
+            .frame(width: 18, height: 16)
+            .rotationEffect(.degrees(-45))
+    }
+}
+
+/// The original look: a soft round character with eyes. Bobs when idle, leans when pointing,
 /// turns warm amber with a pulse when alarmed.
-struct BuddyView: View {
+struct FaceBuddy: View {
     var mood: BuddyMood
     var pointing: Bool
     var level: CGFloat
@@ -244,15 +476,7 @@ struct BuddyView: View {
     @State private var blink = false
     @State private var pulse = false
 
-    var color: Color {
-        switch mood {
-        case .alarmed: return Color(red: 0.96, green: 0.55, blue: 0.16)
-        case .listening: return Color(red: 0.30, green: 0.62, blue: 0.98)
-        case .thinking: return Color(red: 0.48, green: 0.52, blue: 0.95)
-        case .happy: return Color(red: 0.25, green: 0.74, blue: 0.52)
-        default: return Color(red: 0.22, green: 0.56, blue: 0.93)
-        }
-    }
+    var color: Color { mood.color }
 
     var body: some View {
         ZStack {
@@ -279,12 +503,7 @@ struct BuddyView: View {
                 .frame(width: 16, height: 7)
                 .offset(y: 12)
             if pointing {
-                Triangle()
-                    .fill(color)
-                    .overlay(Triangle().stroke(.white, lineWidth: 2))
-                    .frame(width: 18, height: 16)
-                    .rotationEffect(.degrees(-45))
-                    .offset(x: -30, y: -30)
+                PointerTip(color: color).offset(x: -30, y: -30)
             }
         }
         .offset(y: bob ? -4 : 3)
@@ -347,29 +566,47 @@ struct SpeechBubble: View {
     var title: String?
     var text: String
     var alarmed: Bool
+    var talking = false
+
+    var accent: Color { alarmed ? Color(red: 0.90, green: 0.45, blue: 0.08) : Color(red: 0.16, green: 0.47, blue: 0.90) }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             if let title {
-                Text(title)
-                    .font(.system(size: 15, weight: .heavy, design: .rounded))
-                    .foregroundStyle(alarmed ? Color(red: 0.62, green: 0.27, blue: 0.0) : Color(red: 0.1, green: 0.3, blue: 0.6))
+                HStack(spacing: 6) {
+                    Circle().fill(accent).frame(width: 7, height: 7)
+                    Text(title)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(accent)
+                }
             }
             Text(text)
-                .font(.system(size: 20, weight: .semibold, design: .rounded))
-                .foregroundStyle(Color(white: 0.06))
+                .font(.system(size: 19, weight: .medium))
+                .foregroundStyle(Color(white: 0.1))
                 .lineSpacing(3)
                 .fixedSize(horizontal: false, vertical: true)
+            if talking {
+                HStack(spacing: 5) {
+                    Text("esc")
+                        .font(.system(size: 11, weight: .semibold, design: .rounded))
+                        .padding(.horizontal, 5).padding(.vertical, 1)
+                        .background(RoundedRectangle(cornerRadius: 4).stroke(Color(white: 0.6), lineWidth: 1))
+                    Text("to stop").font(.system(size: 12, weight: .medium))
+                }
+                .foregroundStyle(Color(white: 0.5))
+                .padding(.top, 2)
+            }
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 14)
         .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(alarmed ? Color(red: 1.0, green: 0.96, blue: 0.88) : Color.white)
-                .shadow(color: .black.opacity(0.3), radius: 16, y: 6)
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(alarmed ? Color(red: 1.0, green: 0.975, blue: 0.94) : Color.white)
+                .shadow(color: .black.opacity(0.18), radius: 18, y: 8)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(alarmed ? Color(red: 0.96, green: 0.55, blue: 0.16) : Color(red: 0.22, green: 0.56, blue: 0.93), lineWidth: 2.5)
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(alarmed ? accent.opacity(0.35) : Color.black.opacity(0.08), lineWidth: 1)
         )
     }
 }
@@ -419,6 +656,8 @@ final class BuddyHandle {
         panel.contentView = v
         sync()
     }
+
+    func close() { panel.orderOut(nil) }
 
     func sync() {
         let active = !overlay.isPinned && overlay.state.visible

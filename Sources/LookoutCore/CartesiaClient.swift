@@ -33,7 +33,7 @@ public final class CartesiaClient: @unchecked Sendable {
                 // Default is the voice from Cartesia's Cal Hacks starter guide; override with CARTESIA_VOICE_ID.
                 voiceID: String = Secrets.shared["CARTESIA_VOICE_ID"] ?? "a0e99841-438c-4a64-b679-ae501e7d6091",
                 speed: Double = Secrets.shared["CARTESIA_SPEED"].flatMap(Double.init) ?? 0.9,
-                emotion: String? = Secrets.shared["CARTESIA_EMOTION"] ?? "calm",
+                emotion: String? = Secrets.shared["CARTESIA_EMOTION"],
                 cacheDir: URL = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
                     .appendingPathComponent("Lookout/voice", isDirectory: true)) {
         self.apiKey = apiKey

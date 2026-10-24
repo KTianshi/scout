@@ -14,6 +14,7 @@ final class Companion {
     let card = ActionCard()
     let payPause = PayPauseScreen()
     let setup = SetupWindow()
+    lazy var settings = SettingsWindow(companion: self)
     let listener = Listener()
     lazy var demoBrowser = DemoBrowser(visible: true)
 
@@ -30,7 +31,11 @@ final class Companion {
     private var listening = false
     private var lastAlertKey: String?
     private var lastAlertAt = Date.distantPast
-    private var lastNudgeFingerprint: Int?
+    private var lastNudgeAt: [String: Date] = [:]
+    /// Pages Claude confidently called safe, and when. The guardian stays quiet there for a while.
+    private var clearedPages: [String: Date] = [:]
+    /// Developer tools are full of scam words (code, docs, chats about Lookout itself) and aren't where our users get scammed.
+    static let ignoredApps: Set<String> = ["Terminal", "iTerm2", "Xcode", "Code", "Visual Studio Code", "Cursor", "Warp", "Ghostty", "Claude"]
     private var lastConfirmedFingerprint: Int?
     private var confirmInFlight = false
     private var pausedApprovalFor: Int?
@@ -44,6 +49,7 @@ final class Companion {
         overlay.show()
         overlay.onTap = { AppDelegate.shared?.askTyped() }
         registerTalkShortcut()
+        watchAppSwitches()
         demoBrowser.onClose = { [weak self] in self?.stopEverything() }
         startGuardian()
         startRemoteShield()
@@ -81,7 +87,7 @@ final class Companion {
         let screen = overlay.screen.frame
         overlay.moveTo(CGPoint(x: screen.width / 2 - 200, y: screen.height / 2 - 120))
         let lines: [(String?, String)] = [
-            ("Hello!", "Hi, I'm Lookout. I'll stay here in the corner of your screen."),
+            ("Hello!", "Hi, I'm Lookout. I'll stay close by, right next to your pointer."),
             ("I can help", "If you get stuck, hold \(TalkShortcut.current.spoken) and just ask me. I'll point to the right spot."),
             ("I watch out for you", "If something looks like a scam, I'll stop you gently and explain. And I'll let \(LookoutConfig.familyName) know."),
             ("One last thing", "I need your OK to see the screen. I'll open a window that shows you how."),
@@ -135,7 +141,22 @@ final class Companion {
     /// Run a help / explain request, replacing any request already in progress.
     func runRequest(_ work: @escaping @MainActor () async -> Void) {
         stopEverything()
+        requestApp = NSWorkspace.shared.frontmostApplication?.processIdentifier
         activeTask = Task { await work() }
+    }
+
+    /// The app the person was in when they asked. Switching to another app means they've moved on.
+    private var requestApp: pid_t?
+
+    func watchAppSwitches() {
+        NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main) { [weak self] n in
+            let pid = (n.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication)?.processIdentifier
+            Task { @MainActor in
+                guard let self, self.activeTask != nil, !self.guideWaiting, let pid, pid != getpid(), let asked = self.requestApp, pid != asked else { return }
+                Log.info("user switched apps: stopping")
+                self.stopEverything()
+            }
+        }
     }
 
     func ask(_ q: String) { runRequest { [weak self] in await self?.handleUtterance(q) } }
@@ -169,7 +190,8 @@ final class Companion {
 
     func beginListening() {
         guard !listening else { return }
-        speech.stop()
+        // Talking over Lookout interrupts it.
+        stopEverything()
         guard Listener.canUseMicrophone else {
             overlay.say("I can't hear yet. Click the Lookout menu at the top and choose “Ask Lookout…” to type instead.")
             return
@@ -223,6 +245,7 @@ final class Companion {
 
     // MARK: Help mode
 
+    /// Follow-along help: look, give one step, wait for the person to do it, look again.
     func help(question: String) async {
         busy = true
         defer { busy = false }
@@ -230,52 +253,148 @@ final class Companion {
         card.hide()
         overlay.setMood(.thinking)
         overlay.say("Let me look…", title: question)
-        let snap = await snapshot(includeImage: true)
         guard claude.isConfigured else {
-            await offlineHelp(question: question, snap: snap)
+            await offlineHelp(question: question, snap: await snapshot(includeImage: true))
             return
         }
-        let w = snap.image?.width ?? 0, h = snap.image?.height ?? 0
-        let prompt = helpUserText(question: question, snap: snap)
-        let player = StepPlayer(companion: self, snap: snap)
-        var buffer = ""
-        var consumed = 0
-        do {
-            for try await delta in claude.stream(system: Prompts.help(imageWidth: w, imageHeight: h), text: prompt, image: snap.image, maxTokens: 1500, effort: "medium") {
-                buffer += delta
-                // Hand complete steps to the player as they arrive.
-                let steps = PointTags.steps(in: buffer)
-                let complete = buffer.range(of: "[STEP:", options: .backwards).map { _ in max(0, steps.count - 1) } ?? 0
-                while consumed < complete { player.enqueue(steps[consumed]); consumed += 1 }
+        let gen = generation
+        var given: [String] = []
+        for stepNo in 1...8 {
+            let snap = await snapshot(includeImage: true)
+            if Task.isCancelled || generation != gen { return }
+            let w = snap.image?.width ?? 0, h = snap.image?.height ?? 0
+            var reply = ""
+            do {
+                for try await delta in claude.stream(system: Prompts.guide(imageWidth: w, imageHeight: h),
+                                                     text: guideUserText(question: question, snap: snap, given: given),
+                                                     image: snap.image, maxTokens: 600, effort: "medium") {
+                    reply += delta
+                }
+            } catch {
+                if Task.isCancelled || generation != gen { return }
+                Log.info("help failed: \(error.localizedDescription)")
+                overlay.setMood(.idle)
+                let msg = "Sorry, I couldn't reach my helper just now. Please try again in a moment."
+                overlay.say(msg)
+                await speech.speak(msg)
+                return
             }
-            let steps = PointTags.steps(in: buffer)
-            while consumed < steps.count { player.enqueue(steps[consumed]); consumed += 1 }
-            Log.info("help answer: \(PointTags.strip(buffer).prefix(400))")
-            await player.finish()
-            if Task.isCancelled { return }
-            await family.send(.init(type: "help", title: "Helped with: \(question.prefix(80))", explanation: PointTags.strip(buffer).prefix(300).description, app: snap.context.appName))
-        } catch {
-            if Task.isCancelled { return }
-            Log.info("help failed: \(error.localizedDescription)")
+            if Task.isCancelled || generation != gen { return }
+            let done = reply.range(of: "[DONE]", options: .caseInsensitive) != nil
+            let body = reply.replacingOccurrences(of: "[DONE]", with: "", options: .caseInsensitive)
+            let text = PointTags.strip(body)
+            let point = PointTags.steps(in: body).compactMap(\.point).first
+            guard !text.isEmpty else { break }
+            Log.info("guide step \(stepNo) done=\(done): \(text.prefix(300))")
+            // A one-shot answer ("What is Slack?") gets no "Step 1" title.
+            let isAnswer = done && stepNo == 1 && point == nil
+            await showStep(text, title: isAnswer ? nil : "Step \(stepNo)", point: point, snap: snap)
+            if generation != gen { return }
+            given.append(text)
+            if done { break }
+            // Wait for them to do it, then look again.
             overlay.setMood(.idle)
-            let msg = "Sorry, I couldn't reach my helper just now. Please try again in a moment."
-            overlay.say(msg)
-            await speech.speak(msg)
+            guideWaiting = true
+            let acted = await waitForAction(timeout: 60)
+            guideWaiting = false
+            if Task.isCancelled || generation != gen { return }
+            if !acted {
+                let msg = "Take your time. Ask me again whenever you're ready."
+                overlay.release(); overlay.say(msg); await speech.speak(msg)
+                break
+            }
+            overlay.setMood(.thinking)
         }
+        remember(question: question, answer: given.joined(separator: " "))
+        let summary = given.joined(separator: " ")
+        Task { await family.send(.init(type: "help", title: "Helped with: \(question.prefix(80))", explanation: String(summary.prefix(300)), app: nil)) }
+        overlay.setMood(.happy)
         try? await Task.sleep(nanoseconds: 2_500_000_000)
-        if Task.isCancelled { return }
+        if Task.isCancelled || generation != gen { return }
         overlay.reset()
     }
 
+    /// Fly to the target (if any), show the bubble, speak.
+    func showStep(_ text: String, title: String?, point: PointTags.Point?, snap: Snapshot) async {
+        if let p = point {
+            let screenPt = snap.screenPoint(forImagePoint: CGPoint(x: p.x, y: p.y))
+            let (snapped, el) = snap.snap(screenPt, label: p.label)
+            // No matching control: ring a small spot instead of nothing.
+            let hl = el.map { overlayRect(fromScreenTopLeft: $0.frame) }
+                ?? overlayRect(fromScreenTopLeft: CGRect(x: snapped.x - 20, y: snapped.y - 20, width: 40, height: 40))
+            overlay.fly(to: overlayPoint(fromScreenTopLeft: snapped), highlight: hl)
+            Log.info("point: img(\(Int(p.x)),\(Int(p.y))) → screen(\(Int(snapped.x)),\(Int(snapped.y))) label=\(p.label ?? "-") snapped=\(el?.label.prefix(30) ?? "no")")
+        } else {
+            overlay.release()
+        }
+        overlay.setMood(.speaking)
+        overlay.say(text, title: title)
+        DebugShot.take("help-step")
+        await speech.speak(text)
+    }
+
+    /// True while the guide waits for the person to do a step (switching apps then is part of the task).
+    private(set) var guideWaiting = false
+
+    /// Wait until the person clicks, or finishes typing (no key for 2 s), or the timeout passes.
+    func waitForAction(timeout: TimeInterval) async -> Bool {
+        final class Seen: @unchecked Sendable { var click: Date?; var key: Date? }
+        let seen = Seen()
+        let m = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseUp, .keyDown]) { e in
+            if e.type == .keyDown { seen.key = Date() } else { seen.click = Date() }
+        }
+        defer { if let m { NSEvent.removeMonitor(m) } }
+        let start = Date()
+        while !Task.isCancelled && Date().timeIntervalSince(start) < timeout {
+            try? await Task.sleep(nanoseconds: 150_000_000)
+            if let k = seen.key, Date().timeIntervalSince(k) > 2.0 { break }
+            if let c = seen.click, seen.key == nil || seen.key! < c, Date().timeIntervalSince(c) > 1.0 { break }
+        }
+        return (seen.click != nil || seen.key != nil) && !Task.isCancelled
+    }
+
+    func guideUserText(question: String, snap: Snapshot, given: [String]) -> String {
+        var s = helpUserText(question: question, snap: snap)
+        if !given.isEmpty {
+            s += "\nSteps you already gave for this question (the person has acted since the last one):\n"
+            for (i, g) in given.enumerated() { s += "\(i + 1). \(g)\n" }
+            s += "Give the next step for the screen as it is now.\n"
+        }
+        return s
+    }
+
+    /// Recent questions and answers, so follow-ups like "ok, then what?" make sense.
+    private var recentTurns: [(question: String, answer: String, at: Date)] = []
+
+    func remember(question: String, answer: String) {
+        recentTurns.append((question, String(answer.prefix(600)), Date()))
+        recentTurns = Array(recentTurns.suffix(3))
+    }
+
     func helpUserText(question: String, snap: Snapshot) -> String {
-        var s = "Question: \(question)\n"
+        var s = ""
+        let recent = recentTurns.filter { Date().timeIntervalSince($0.at) < 600 }
+        if !recent.isEmpty {
+            s += "Earlier in this conversation (the screen may have changed since):\n"
+            for t in recent { s += "Q: \(t.question)\nA: \(t.answer)\n" }
+            s += "\n"
+        }
+        s += "Question: \(question)\n"
         if let a = snap.context.appName { s += "Front app: \(a)\n" }
         if let t = snap.context.windowTitle { s += "Window: \(t)\n" }
         if let u = snap.context.url { s += "Address: \(u)\n" }
         let inv = snap.imageToScreen.inverted()
-        let els = snap.elements.prefix(120).compactMap { e -> String? in
+        let iw = CGFloat(snap.image?.width ?? Int.max), ih = CGFloat(snap.image?.height ?? Int.max)
+        // Only controls actually visible in the screenshot, real controls (buttons, links, fields) before plain text,
+        // so big apps like Gmail don't fill the list with off-screen rows before reaching Send.
+        let visible = snap.elements.filter { e in
             let c = CGPoint(x: e.frame.midX, y: e.frame.midY).applying(inv)
-            guard c.x >= 0, c.y >= 0, e.label.count < 120 else { return nil }
+            return c.x >= 0 && c.y >= 0 && c.x < iw && c.y < ih && e.label.count < 120
+        }
+        let passive: Set<String> = ["AXStaticText", "AXImage"]
+        let ordered = visible.filter { !passive.contains($0.role) } + visible.filter { passive.contains($0.role) }
+        let els = ordered.prefix(160).map { e -> String in
+            let c = CGPoint(x: e.frame.midX, y: e.frame.midY).applying(inv)
             return "- \(e.role) \"\(e.label.replacingOccurrences(of: "\n", with: " "))\" at \(Int(c.x)),\(Int(c.y))"
         }
         if !els.isEmpty { s += "On-screen controls (center pixel in the screenshot):\n" + els.joined(separator: "\n") + "\n" }
@@ -299,62 +418,6 @@ final class Companion {
         }
         try? await Task.sleep(nanoseconds: 2_000_000_000)
         overlay.reset()
-    }
-
-    /// Plays help steps one at a time: fly, show, speak.
-    final class StepPlayer {
-        unowned let companion: Companion
-        let snap: Snapshot
-        private var queue: [PointTags.Step] = []
-        private var task: Task<Void, Never>?
-        private var waiting: CheckedContinuation<Void, Never>?
-        private var done = false
-
-        let generation: Int
-        @MainActor init(companion: Companion, snap: Snapshot) { self.companion = companion; self.snap = snap; self.generation = companion.generation }
-
-        @MainActor func enqueue(_ s: PointTags.Step) {
-            queue.append(s)
-            companion.speech.prepare(s.text)
-            if task == nil { task = Task { @MainActor in await self.run() } }
-            waiting?.resume(); waiting = nil
-        }
-
-        @MainActor func finish() async {
-            done = true
-            waiting?.resume(); waiting = nil
-            if task == nil { task = Task { @MainActor in await self.run() } }
-            await task?.value
-        }
-
-        @MainActor private func run() async {
-            let c = companion
-            while true {
-                if c.generation != generation { return }
-                if queue.isEmpty {
-                    if done { break }
-                    await withCheckedContinuation { waiting = $0 }
-                    continue
-                }
-                let step = queue.removeFirst()
-                if let p = step.point {
-                    let screenPt = snap.screenPoint(forImagePoint: CGPoint(x: p.x, y: p.y))
-                    let (snapped, el) = snap.snap(screenPt)
-                    let hl = el.map { c.overlayRect(fromScreenTopLeft: $0.frame) }
-                    c.overlay.fly(to: c.overlayPoint(fromScreenTopLeft: snapped), highlight: hl)
-                    Log.info("point step \(step.index): img(\(Int(p.x)),\(Int(p.y))) → screen(\(Int(snapped.x)),\(Int(snapped.y))) label=\(p.label ?? "-") snapped=\(el?.label.prefix(30) ?? "no")")
-                } else {
-                    c.overlay.release()
-                }
-                c.overlay.setMood(.speaking)
-                c.overlay.say(step.text, title: step.index > 0 ? "Step \(step.index)" : nil)
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) { DebugShot.take("help-step\(step.index)") }
-                await c.speech.speak(step.text)
-                if c.generation != generation { return }
-                try? await Task.sleep(nanoseconds: 700_000_000)
-            }
-            c.overlay.setMood(.happy)
-        }
     }
 
     // MARK: Explain this letter
@@ -448,7 +511,12 @@ final class Companion {
         guard !listening, !payPause.isShowing else { return }
         let snap = await snapshot(includeImage: false)
         if snap.isFixture && snap.context.text.isEmpty { return }
+        // The demo launcher lists every scam by name; it isn't one.
+        if snap.isFixture, demoBrowser.web.url?.lastPathComponent == "index.html" { return }
         guard !snap.context.text.isEmpty || !snap.context.runningApps.isEmpty else { return }
+        if let app = snap.context.appName, Self.ignoredApps.contains(app) { return }
+        let page = Self.pageKey(snap.context)
+        if let t = clearedPages[page], Date().timeIntervalSince(t) < 600 { return }
         stuck.observe(fingerprint: snap.context.fingerprint, window: (snap.context.appName ?? "") + (snap.context.windowTitle ?? ""))
         var result = pipeline.evaluate(snap.context)
         if result.probability > 0.05 { Log.info("guardian: \(result.summary)") }
@@ -466,6 +534,13 @@ final class Companion {
                 let v = try await claude.confirmScam(screen: full.context, image: full.image, heuristicSummary: result.summary)
                 verdict = v
                 result = pipeline.applyModelVerdict(v, ctx: full.context)
+                if !v.isScam, v.confidence >= 0.85, result.rules.isEmpty {
+                    clearedPages[page] = Date()
+                    Log.info("guardian: page cleared by model for 10 min")
+                    confirmInFlight = false
+                    if !busy { overlay.setMood(.idle) }
+                    return
+                }
                 Log.info("claude verdict: scam=\(v.isScam) conf=\(v.confidence) type=\(v.scamType) why=\(v.explanation.prefix(160)) → \(result.summary)")
             } catch {
                 Log.info("claude confirm failed, using heuristics: \(error.localizedDescription)")
@@ -476,16 +551,20 @@ final class Companion {
         await act(on: result, verdict: verdict, snap: full)
     }
 
+    /// The page's URL, or app + window title outside a browser.
+    static func pageKey(_ c: ScreenContext) -> String {
+        c.url ?? "\(c.appName ?? "")|\(c.windowTitle ?? "")"
+    }
+
     func act(on r: ScamPipeline.Result, verdict: ScamVerdict?, snap: Snapshot) async {
         // One alert per page (URL, or app + window) per 90 seconds, however the evidence shifts.
-        let key = snap.context.url ?? "\(snap.context.appName ?? "")|\(snap.context.windowTitle ?? "")"
+        let key = Self.pageKey(snap.context)
         switch r.action {
         case .quiet:
             return
         case .nudge:
-            let fp = snap.context.fingerprint
-            guard !busy, lastNudgeFingerprint != fp else { return }
-            lastNudgeFingerprint = fp
+            guard !busy, Date().timeIntervalSince(lastNudgeAt[key] ?? .distantPast) > 300 else { return }
+            lastNudgeAt[key] = Date()
             overlay.say("Hmm. Take your time here. If anyone is rushing you, that's a warning sign.", title: "Just checking")
             DispatchQueue.main.asyncAfter(deadline: .now() + 8) { [weak self] in
                 guard let self, !self.busy else { return }
@@ -532,10 +611,14 @@ final class Companion {
         let spoken = r.spoken.isEmpty ? "This looks like a scam. Let's stop here." : r.spoken
         overlay.say(spoken, title: "Wait — this looks like a scam")
         let canClose = demoInFront || NSWorkspace.shared.frontmostApplication?.bundleIdentifier?.contains("Safari") == true || NSWorkspace.shared.frontmostApplication?.bundleIdentifier?.contains("chrome") == true
-        card.show(title: "Let's be careful", message: "You're safe. Nothing has happened yet. \(LookoutConfig.familyName) has been told.", alarmed: true, buttons: [
-            .init(title: canClose ? "Close it for me" : "Got it", primary: true) { [weak self] in Log.info("user: close it"); self?.closeThreat() },
+        // Only offer to close in a browser: ⌘W anywhere else closes whatever window is in front.
+        let buttons: [ActionCard.Button] = canClose ? [
+            .init(title: "Close it for me", primary: true) { [weak self] in Log.info("user: close it"); self?.closeThreat() },
             .init(title: "I'm OK, thanks", primary: false) { [weak self] in Log.info("user: I'm OK"); self?.overlay.reset() },
-        ], near: buddyScreenPoint)
+        ] : [
+            .init(title: "Got it", primary: true) { [weak self] in Log.info("user: got it"); self?.overlay.reset() },
+        ]
+        card.show(title: "Let's be careful", message: "You're safe. Nothing has happened yet. \(LookoutConfig.familyName) has been told.", alarmed: true, buttons: buttons, near: buddyScreenPoint)
         Task {
             let thumb = snap.image.flatMap { ImageUtil.thumbnailDataURL($0.data) }
             await family.send(.init(type: "scam_alert",
@@ -755,7 +838,7 @@ final class Companion {
             // New page: allow fresh alerts.
             self?.lastAlertKey = nil
             self?.pausedApprovalFor = nil
-            self?.lastNudgeFingerprint = nil
+            self?.lastNudgeAt = [:]
         }
     }
 }

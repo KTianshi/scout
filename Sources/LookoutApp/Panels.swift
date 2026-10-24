@@ -21,7 +21,8 @@ final class ActionCard {
         p.backgroundColor = .clear
         p.level = .screenSaver
         p.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-        p.hasShadow = true
+        // The card draws its own soft shadow; the system one traces the transparent padding as a jagged outline.
+        p.hasShadow = false
         p.contentView = host
         let screen = NSScreen.main ?? NSScreen.screens[0]
         let vf = screen.visibleFrame
@@ -54,35 +55,45 @@ struct ActionCardView: View {
     var alarmed: Bool
     var buttons: [Item]
 
-    var accent: Color { alarmed ? Color(red: 0.93, green: 0.48, blue: 0.1) : Color(red: 0.2, green: 0.5, blue: 0.9) }
+    var accent: Color { alarmed ? Color(red: 0.90, green: 0.45, blue: 0.08) : Color(red: 0.16, green: 0.47, blue: 0.90) }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 10) {
-                Image(systemName: alarmed ? "exclamationmark.shield.fill" : "hand.wave.fill")
-                    .font(.system(size: 22)).foregroundStyle(accent)
-                Text(title).font(.system(size: 20, weight: .bold, design: .rounded)).foregroundStyle(Color(white: 0.08))
+                Image(systemName: alarmed ? "shield.lefthalf.filled" : "hand.wave.fill")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(accent)
+                    .frame(width: 32, height: 32)
+                    .background(Circle().fill(accent.opacity(0.12)))
+                Text(title).font(.system(size: 19, weight: .semibold)).foregroundStyle(Color(white: 0.08))
             }
-            Text(message).font(.system(size: 16, weight: .medium, design: .rounded)).foregroundStyle(Color(white: 0.15))
+            Text(message).font(.system(size: 16)).foregroundStyle(Color(white: 0.25))
+                .lineSpacing(2)
                 .fixedSize(horizontal: false, vertical: true)
-            HStack(spacing: 12) {
+            HStack(spacing: 10) {
                 ForEach(buttons) { b in
                     SwiftUI.Button(action: b.action) {
-                        Text(b.title).font(.system(size: 17, weight: .semibold, design: .rounded))
+                        Text(b.title).font(.system(size: 16, weight: .semibold))
                             .padding(.horizontal, 16).padding(.vertical, 10)
-                            .frame(minWidth: 130)
-                            .foregroundStyle(b.primary ? .white : Color(white: 0.1))
-                            .background(RoundedRectangle(cornerRadius: 14).fill(b.primary ? accent : Color(white: 0.9)))
+                            .frame(maxWidth: .infinity)
+                            .foregroundStyle(b.primary ? .white : Color(white: 0.15))
+                            .background(RoundedRectangle(cornerRadius: 11, style: .continuous).fill(b.primary ? accent : Color(white: 0.94)))
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                 }
             }
+            .padding(.top, 4)
         }
         .padding(20)
-        .frame(width: 380, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 24, style: .continuous).fill(.white))
-        .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).stroke(accent, lineWidth: 3))
-        .padding(6)
+        .frame(width: 360, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(.white)
+                .shadow(color: .black.opacity(0.18), radius: 20, y: 8)
+        )
+        .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(Color.black.opacity(0.08), lineWidth: 1))
+        .padding(24)
     }
 }
 
@@ -101,7 +112,7 @@ final class PayPauseScreen {
         model.onCancel = { [weak self] in self?.hide(); onCancel() }
         model.onOverride = { [weak self] in self?.hide(); onOverride() }
         for screen in NSScreen.screens {
-            let w = NSWindow(contentRect: screen.frame, styleMask: .borderless, backing: .buffered, defer: false)
+            let w = NSPanel(contentRect: screen.frame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
             w.level = .screenSaver
             w.isOpaque = false
             w.backgroundColor = .clear

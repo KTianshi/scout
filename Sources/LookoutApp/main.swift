@@ -5,6 +5,9 @@ import LookoutCore
 //   Lookout                          normal menu-bar companion
 //   Lookout --say "text" [--prewarm]  voice check (Cartesia, falls back to the system voice)
 //   Lookout --demo [scenario.html]   companion + demo browser window
+//   Lookout --render-icon out.png    write the app icon (used by scripts/bundle.sh)
+//   Lookout --ask-box                companion with the Ask box open
+//   Lookout --settings               companion with the Settings window open
 //   Lookout --fixture <file.html|.png> [--text "..."|--text-file f] [--apps "AnyDesk,Safari"]
 //           [--ask "question"] [--no-model] [--json]
 //                                    headless end-to-end run (no TCC needed): signals → risk → Claude → speech text → points
@@ -19,7 +22,13 @@ let app = NSApplication.shared
 
 MainActor.assumeIsolated {
 
-if let line = opt("--say") {
+if let out = opt("--render-icon") {
+    // Build step: scripts/bundle.sh turns this PNG into AppIcon.icns.
+    guard let img = AppIconView.image(), let tiff = img.tiffRepresentation,
+          let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]) else { exit(1) }
+    try? png.write(to: URL(fileURLWithPath: out))
+    exit(0)
+} else if let line = opt("--say") {
     // Voice check: Lookout --say "Hello"   (add --prewarm to cache the standard scam lines)
     app.setActivationPolicy(.accessory)
     let voice = CartesiaSpeech()
@@ -43,7 +52,8 @@ if let line = opt("--say") {
     }
     app.run()
 } else {
-    app.setActivationPolicy(.accessory)
+    // A Dock icon like a normal app; clicking it opens Settings. (The overlay is a panel, so it still floats over full-screen apps.)
+    app.setActivationPolicy(.regular)
     let delegate = AppDelegate()
     if args.contains("--demo") {
         let i = args.firstIndex(of: "--demo")!
@@ -51,6 +61,8 @@ if let line = opt("--say") {
         delegate.openDemoOnLaunch = .some(next)
     }
     delegate.askOnLaunch = opt("--ask")
+    delegate.openSettingsOnLaunch = args.contains("--settings")
+    delegate.openAskOnLaunch = args.contains("--ask-box")
     app.delegate = delegate
     app.run()
 }

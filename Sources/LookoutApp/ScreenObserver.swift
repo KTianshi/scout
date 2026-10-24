@@ -25,16 +25,34 @@ struct Snapshot {
 
     func screenPoint(forImagePoint p: CGPoint) -> CGPoint { p.applying(imageToScreen) }
 
-    /// Snap a point to the closest actionable element if one is close.
-    func snap(_ p: CGPoint, within radius: CGFloat = 48) -> (CGPoint, UIElementInfo?) {
-        var best: (CGFloat, UIElementInfo)?
-        for e in elements where e.frame.width > 4 && e.frame.height > 4 && e.frame.width < 900 {
-            let inside = e.frame.insetBy(dx: -6, dy: -6).contains(p)
-            let c = CGPoint(x: e.frame.midX, y: e.frame.midY)
-            let d = inside ? 0 : hypot(c.x - p.x, c.y - p.y)
-            if d <= radius, best == nil || d < best!.0 { best = (d, e) }
+    /// Snap a point to the control the model meant. Prefers a nearby control whose name matches `label`
+    /// (e.g. "Attach files"), then the smallest control under the point, then the closest small one.
+    /// Big containers (toolbars, rows, panes) are never chosen: highlighting them points at nothing.
+    func snap(_ p: CGPoint, label: String? = nil, within radius: CGFloat = 48) -> (CGPoint, UIElementInfo?) {
+        // Text boxes are often wide (a chat's message field), so they get a bigger size limit than buttons.
+        let fields: Set<String> = ["AXTextArea", "AXTextField", "AXComboBox", "AXSecureTextField"]
+        let controls = elements.filter { e in
+            let big = fields.contains(e.role)
+            return e.frame.width > 4 && e.frame.height > 4 && e.frame.width < (big ? 1600 : 320) && e.frame.height < (big ? 400 : 140)
         }
-        if let (_, e) = best { return (CGPoint(x: e.frame.midX, y: e.frame.midY), e) }
+        func center(_ e: UIElementInfo) -> CGPoint { CGPoint(x: e.frame.midX, y: e.frame.midY) }
+        func dist(_ e: UIElementInfo) -> CGFloat {
+            e.frame.insetBy(dx: -6, dy: -6).contains(p) ? 0 : hypot(center(e).x - p.x, center(e).y - p.y)
+        }
+        if let label, label.count >= 3 {
+            let words = label.lowercased().split(separator: " ").filter { $0.count >= 4 }
+            let named = controls.filter { e in
+                let l = e.label.lowercased()
+                return l.contains(label.lowercased()) || words.contains { l.contains($0) }
+            }
+            if let e = named.filter({ dist($0) <= radius * 3 }).min(by: { dist($0) < dist($1) }) { return (center(e), e) }
+        }
+        let area = { (e: UIElementInfo) in e.frame.width * e.frame.height }
+        if let e = controls.filter({ dist($0) == 0 }).min(by: { area($0) < area($1) }) { return (center(e), e) }
+        // The model named something we couldn't find (Gmail's "Recipients" line has no accessible name).
+        // Its own point beats the nearest control with a different name, which is how "Recipients" became "Subject".
+        if label != nil { return (p, nil) }
+        if let e = controls.filter({ dist($0) <= radius }).min(by: { dist($0) < dist($1) }) { return (center(e), e) }
         return (p, nil)
     }
 
@@ -100,7 +118,9 @@ final class ScreenObserver {
             let filter = SCContentFilter(display: display, excludingApplications: mine, exceptingWindows: [])
             let cfg = SCStreamConfiguration()
             let maxEdge = LookoutConfig.screenshotMaxEdge
-            let scale = min(1.0, maxEdge / CGFloat(max(display.width, display.height)))
+            // display.width is in points; go up to the Retina pixel density so small icons stay legible.
+            let density = NSScreen.screens.first { ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID) == display.displayID }?.backingScaleFactor ?? 1
+            let scale = min(density, maxEdge / CGFloat(max(display.width, display.height)))
             cfg.width = Int(CGFloat(display.width) * scale)
             cfg.height = Int(CGFloat(display.height) * scale)
             cfg.showsCursor = false
