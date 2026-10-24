@@ -48,8 +48,10 @@ final class Overlay {
     private(set) var screen: NSScreen
     /// While pointing or talking the buddy stays put; otherwise it rests at its home spot.
     var isPinned = false
-    /// Old behaviour (trail the cursor) with LOOKOUT_FOLLOW_CURSOR=1.
-    let followsCursor = ProcessInfo.processInfo.environment["LOOKOUT_FOLLOW_CURSOR"] == "1"
+    /// Trails the cursor like a cursor buddy. LOOKOUT_DOCK=1 parks it in a corner instead (drag to move, click to ask).
+    let followsCursor = ProcessInfo.processInfo.environment["LOOKOUT_DOCK"] != "1"
+    /// Offset of the resting buddy from the cursor tip.
+    static let cursorOffset = CGPoint(x: 24, y: 22)
     /// Where the buddy rests, in overlay coordinates. Drag the buddy to move it; remembered across launches.
     var home: CGPoint {
         get {
@@ -79,9 +81,9 @@ final class Overlay {
         w.contentView = host
         w.orderFrontRegardless()
         window = w
-        state.position = followsCursor ? toOverlay(NSEvent.mouseLocation).applying(.init(translationX: 40, y: 30)) : home
-        let h = BuddyHandle(overlay: self)
-        handle = h
+        state.position = followsCursor ? cursorTarget() : home
+        // The drag handle only exists in docked mode; next to the cursor it would swallow clicks.
+        if !followsCursor { handle = BuddyHandle(overlay: self) }
         followTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30.0, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
                 guard let self else { return }
@@ -121,13 +123,18 @@ final class Overlay {
         return toOverlay(appKit)
     }
 
+    func cursorTarget() -> CGPoint {
+        toOverlay(NSEvent.mouseLocation).applying(.init(translationX: Self.cursorOffset.x, y: Self.cursorOffset.y))
+    }
+
     private func followCursor() {
         guard !isPinned else { return }
-        let target = toOverlay(NSEvent.mouseLocation).applying(.init(translationX: 38, y: 34))
+        let target = cursorTarget()
         let cur = state.position
         let dx = target.x - cur.x, dy = target.y - cur.y
         if abs(dx) + abs(dy) < 0.5 { return }
-        state.position = CGPoint(x: cur.x + dx * 0.18, y: cur.y + dy * 0.18)
+        // Snappy but smooth: most of the way each frame, so it feels attached to the cursor.
+        state.position = CGPoint(x: cur.x + dx * 0.35, y: cur.y + dy * 0.35)
     }
 
     /// Fly to a point in overlay coordinates and point at it.
@@ -197,6 +204,7 @@ struct BuddyOverlayView: View {
                 if state.visible {
                     BuddyView(mood: state.mood, pointing: state.pointing, level: state.listeningLevel)
                         .frame(width: 64, height: 64)
+                        .scaleEffect(state.pointing || state.mood == .alarmed ? 0.8 : 0.6)
                         .position(state.position)
                     if let text = state.bubble {
                         SpeechBubble(title: state.bubbleTitle, text: text, alarmed: state.mood == .alarmed)
@@ -216,9 +224,9 @@ struct BuddyOverlayView: View {
     func bubblePosition(in size: CGSize) -> CGPoint {
         let p = state.position
         let w: CGFloat = 380, h: CGFloat = 160
-        var x = p.x + 60 + w / 2
-        if x + w / 2 > size.width - 16 { x = p.x - 60 - w / 2 }
-        var y = p.y + h / 2 + 20
+        var x = p.x + 36 + w / 2
+        if x + w / 2 > size.width - 16 { x = p.x - 36 - w / 2 }
+        var y = p.y + h / 2 + 14
         if y + h / 2 > size.height - 16 { y = p.y - h / 2 - 30 }
         x = min(max(x, w / 2 + 16), size.width - w / 2 - 16)
         y = min(max(y, h / 2 + 16), size.height - h / 2 - 16)
@@ -397,6 +405,7 @@ final class BuddyHandle {
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = false
+        panel.ignoresMouseEvents = false
         panel.level = .screenSaver
         panel.collectionBehavior = [.canJoinAllSpaces, .stationary, .fullScreenAuxiliary, .ignoresCycle]
         let v = HandleView(frame: NSRect(x: 0, y: 0, width: Self.size, height: Self.size))

@@ -242,7 +242,7 @@ struct SetupView: View {
                  why: "So I can point at the exact button you need.", granted: Permissions.accessibility,
                  pane: "Privacy_Accessibility", request: Permissions.requestAccessibility),
             Item(id: "mic", icon: "mic.fill", title: "Hear your questions",
-                 why: "Hold Option and Space, then just talk to me.", granted: Listener.micAuthorized && Listener.speechAuthorized,
+                 why: "Hold \(TalkShortcut.current.spoken), then just talk to me.", granted: Listener.micAuthorized && Listener.speechAuthorized,
                  pane: "Privacy_Microphone", request: { Task { _ = await Listener.requestPermissions() } }),
         ]
     }

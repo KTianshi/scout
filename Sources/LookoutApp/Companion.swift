@@ -1,5 +1,6 @@
 import AppKit
 import LookoutCore
+import Carbon.HIToolbox
 
 /// The brain of the app: ties observation, detection, Claude, voice and the buddy together.
 @MainActor
@@ -14,12 +15,18 @@ final class Companion {
     let payPause = PayPauseScreen()
     let setup = SetupWindow()
     let listener = Listener()
-    let hotkey = PushToTalkHotKey()
     lazy var demoBrowser = DemoBrowser(visible: true)
 
     var guardianEnabled = true
     private var guardianTask: Task<Void, Never>?
-    private var busy = false            // a help answer or alert is playing
+    /// A help answer or alert is playing. While busy, Esc stops everything.
+    private var busy = false {
+        didSet { if busy != oldValue { updateEscapeKey() } }
+    }
+    /// The help / explain request in progress, so Esc or a new question can cancel it.
+    private var activeTask: Task<Void, Never>?
+    /// Bumped on every stop; long-running loops check it and bail out.
+    private(set) var generation = 0
     private var listening = false
     private var lastAlertKey: String?
     private var lastAlertAt = Date.distantPast
@@ -36,9 +43,8 @@ final class Companion {
     func start() {
         overlay.show()
         overlay.onTap = { AppDelegate.shared?.askTyped() }
-        hotkey.onPress = { [weak self] in self?.beginListening() }
-        hotkey.onRelease = { [weak self] in self?.endListening() }
-        hotkey.register()
+        registerTalkShortcut()
+        demoBrowser.onClose = { [weak self] in self?.stopEverything() }
         startGuardian()
         startRemoteShield()
         stuck.start { [weak self] in self?.offerHelpBecauseStuck() }
@@ -60,7 +66,7 @@ final class Companion {
         let missing = (!Permissions.screenRecording || !Permissions.accessibility) && !demoBrowser.window.isVisible
         let hello = missing
             ? "Hi, I'm Lookout. I need a couple of permissions before I can see your screen. I've opened a window to help."
-            : "Hi, I'm Lookout. Hold Option and Space any time to ask me something."
+            : "Hi, I'm Lookout. Hold \(TalkShortcut.current.spoken) any time to ask me something."
         overlay.say(hello)
         if missing && !demoBrowser.window.isVisible { setup.show() }
         await speech.speak(hello)
@@ -76,7 +82,7 @@ final class Companion {
         overlay.moveTo(CGPoint(x: screen.width / 2 - 200, y: screen.height / 2 - 120))
         let lines: [(String?, String)] = [
             ("Hello!", "Hi, I'm Lookout. I'll stay here in the corner of your screen."),
-            ("I can help", "If you get stuck, hold the Option and Space keys and just ask me. I'll point to the right spot."),
+            ("I can help", "If you get stuck, hold \(TalkShortcut.current.spoken) and just ask me. I'll point to the right spot."),
             ("I watch out for you", "If something looks like a scam, I'll stop you gently and explain. And I'll let \(LookoutConfig.familyName) know."),
             ("One last thing", "I need your OK to see the screen. I'll open a window that shows you how."),
         ]
@@ -93,12 +99,55 @@ final class Companion {
         overlay.reset()
     }
 
+    // MARK: Shortcuts and stopping
+
+    @discardableResult
+    func registerTalkShortcut() -> Bool {
+        let sc = TalkShortcut.current
+        let ok = HotKeys.shared.register(id: HotKeys.talkID, keyCode: sc.keyCode, modifiers: sc.modifiers,
+                                         onPress: { [weak self] in self?.beginListening() },
+                                         onRelease: { [weak self] in self?.endListening() })
+        Log.info("push-to-talk \(sc.symbol) registered: \(ok)")
+        return ok
+    }
+
+    /// Esc is only grabbed while Lookout is talking or pointing, so it never steals Esc from other apps otherwise.
+    func updateEscapeKey() {
+        if busy {
+            HotKeys.shared.register(id: HotKeys.escapeID, keyCode: UInt32(kVK_Escape), modifiers: 0,
+                                    onPress: { [weak self] in Log.info("user: Esc"); self?.stopEverything() })
+        } else {
+            HotKeys.shared.unregister(id: HotKeys.escapeID)
+        }
+    }
+
+    /// Silence Lookout immediately: cancel the current answer, stop speaking, put the buddy back.
+    func stopEverything() {
+        generation += 1
+        activeTask?.cancel()
+        activeTask = nil
+        speech.stop()
+        card.hide()
+        overlay.reset()
+        busy = false
+    }
+
+    /// Run a help / explain request, replacing any request already in progress.
+    func runRequest(_ work: @escaping @MainActor () async -> Void) {
+        stopEverything()
+        activeTask = Task { await work() }
+    }
+
+    func ask(_ q: String) { runRequest { [weak self] in await self?.handleUtterance(q) } }
+    func explain() { runRequest { [weak self] in await self?.explainScreen() } }
+
     // MARK: Snapshots
 
     /// The demo browser counts as "the screen" when it is open and in front.
     var demoInFront: Bool {
         // In demo mode the demo browser is "the screen" whenever it is visible and not hidden behind other apps.
         demoBrowser.window.isVisible && !demoBrowser.window.isMiniaturized
+            && NSWorkspace.shared.frontmostApplication?.processIdentifier == getpid()
     }
 
     func snapshot(includeImage: Bool) async -> Snapshot {
@@ -155,8 +204,8 @@ final class Companion {
             let text = await listener.stop()
             overlay.state.listeningLevel = 0
             let q = text.trimmingCharacters(in: .whitespacesAndNewlines)
-            if q.isEmpty { overlay.say("I didn't catch that. Hold Option and Space and try again."); overlay.setMood(.idle); return }
-            await handleUtterance(q)
+            if q.isEmpty { overlay.say("I didn't catch that. Hold \(TalkShortcut.current.spoken) and try again."); overlay.setMood(.idle); return }
+            ask(q)
         }
     }
 
@@ -203,8 +252,10 @@ final class Companion {
             while consumed < steps.count { player.enqueue(steps[consumed]); consumed += 1 }
             Log.info("help answer: \(PointTags.strip(buffer).prefix(400))")
             await player.finish()
+            if Task.isCancelled { return }
             await family.send(.init(type: "help", title: "Helped with: \(question.prefix(80))", explanation: PointTags.strip(buffer).prefix(300).description, app: snap.context.appName))
         } catch {
+            if Task.isCancelled { return }
             Log.info("help failed: \(error.localizedDescription)")
             overlay.setMood(.idle)
             let msg = "Sorry, I couldn't reach my helper just now. Please try again in a moment."
@@ -212,6 +263,7 @@ final class Companion {
             await speech.speak(msg)
         }
         try? await Task.sleep(nanoseconds: 2_500_000_000)
+        if Task.isCancelled { return }
         overlay.reset()
     }
 
@@ -258,7 +310,8 @@ final class Companion {
         private var waiting: CheckedContinuation<Void, Never>?
         private var done = false
 
-        init(companion: Companion, snap: Snapshot) { self.companion = companion; self.snap = snap }
+        let generation: Int
+        @MainActor init(companion: Companion, snap: Snapshot) { self.companion = companion; self.snap = snap; self.generation = companion.generation }
 
         @MainActor func enqueue(_ s: PointTags.Step) {
             queue.append(s)
@@ -277,6 +330,7 @@ final class Companion {
         @MainActor private func run() async {
             let c = companion
             while true {
+                if c.generation != generation { return }
                 if queue.isEmpty {
                     if done { break }
                     await withCheckedContinuation { waiting = $0 }
@@ -296,6 +350,7 @@ final class Companion {
                 c.overlay.say(step.text, title: step.index > 0 ? "Step \(step.index)" : nil)
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) { DebugShot.take("help-step\(step.index)") }
                 await c.speech.speak(step.text)
+                if c.generation != generation { return }
                 try? await Task.sleep(nanoseconds: 700_000_000)
             }
             c.overlay.setMood(.happy)
@@ -323,16 +378,19 @@ final class Companion {
             for try await delta in claude.stream(system: Prompts.explainDocument, text: text, image: snap.image, maxTokens: 900, effort: "low") {
                 buffer += delta
                 // Speak sentence by sentence as they complete.
+                if Task.isCancelled { return }
                 while let end = Companion.sentenceEnd(in: buffer, from: spokenUpTo) {
                     let sentence = String(buffer[spokenUpTo..<end]).trimmingCharacters(in: .whitespacesAndNewlines)
                     spokenUpTo = end
                     if !sentence.isEmpty { overlay.say(sentence, title: "About this letter"); await speech.speak(sentence) }
                 }
             }
+            if Task.isCancelled { return }
             let rest = String(buffer[spokenUpTo...]).trimmingCharacters(in: .whitespacesAndNewlines)
             if !rest.isEmpty { overlay.say(rest); await speech.speak(rest) }
             await family.send(.init(type: "help", title: "Explained a letter", explanation: String(buffer.prefix(400)), app: snap.context.appName))
         } catch {
+            if Task.isCancelled { return }
             let msg = "Sorry, I couldn't read it just now."
             overlay.say(msg); await speech.speak(msg)
         }
@@ -660,11 +718,11 @@ final class Companion {
     func offerHelpBecauseStuck() {
         guard !busy, !listening, !card.isShowing else { return }
         overlay.setMood(.happy)
-        overlay.say(Prompts.stuckNudge, title: "Need a hand?")
+        overlay.say("Want some help? Just hold \(TalkShortcut.current.spoken) and tell me what you're trying to do.", title: "Need a hand?")
         card.show(title: "Want some help?", message: "I can show you where to click.", alarmed: false, buttons: [
             .init(title: "Yes, please", primary: true) { [weak self] in
                 guard let self else { return }
-                if Listener.canUseMicrophone { self.overlay.say("Hold Option and Space, and tell me what you're trying to do.") }
+                if Listener.canUseMicrophone { self.overlay.say("Hold \(TalkShortcut.current.spoken), and tell me what you're trying to do.") }
                 else { AppDelegate.shared?.askTyped() }
             },
             .init(title: "No thanks", primary: false) { [weak self] in self?.overlay.reset() },

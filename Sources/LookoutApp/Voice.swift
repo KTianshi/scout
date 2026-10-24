@@ -104,7 +104,7 @@ final class CartesiaSpeech: NSObject, SpeechOutput, AVAudioPlayerDelegate {
         var lines = HardRules.all.map(\.spoken)
         let fam = LookoutConfig.familyName
         lines += [
-            "Hi, I'm Lookout. Hold Option and Space any time to ask me something.",
+            "Hi, I'm Lookout. Hold \(TalkShortcut.current.spoken) any time to ask me something.",
             "There. It's gone. You did great.",
             "Good choice. Nothing was sent.",
             "\(fam) says it's OK. You can go ahead.",
@@ -185,35 +185,94 @@ final class SystemSpeech: NSObject, SpeechOutput, AVSpeechSynthesizerDelegate {
     }
 }
 
-// MARK: - Push to talk (Option + Space, hold)
+// MARK: - Global shortcuts (push to talk, Esc to stop)
 
-/// Carbon hot key: works without Accessibility or Input Monitoring permission, and reports press + release.
-final class PushToTalkHotKey {
-    static var shared: PushToTalkHotKey?
-    var onPress: (() -> Void)?
-    var onRelease: (() -> Void)?
-    private var ref: EventHotKeyRef?
-    private var handler: EventHandlerRef?
+/// The hold-to-talk shortcut. Changeable from the menu because ⌥Space clashes with other assistants.
+enum TalkShortcut: String, CaseIterable {
+    case ctrlOptionSpace, ctrlShiftSpace, optionSpace
 
-    func register() {
-        PushToTalkHotKey.shared = self
+    var keyCode: UInt32 { UInt32(kVK_Space) }
+    var modifiers: UInt32 {
+        switch self {
+        case .ctrlOptionSpace: return UInt32(controlKey | optionKey)
+        case .ctrlShiftSpace: return UInt32(controlKey | shiftKey)
+        case .optionSpace: return UInt32(optionKey)
+        }
+    }
+    var symbol: String {
+        switch self {
+        case .ctrlOptionSpace: return "⌃⌥ Space"
+        case .ctrlShiftSpace: return "⌃⇧ Space"
+        case .optionSpace: return "⌥ Space"
+        }
+    }
+    /// How Lookout says it out loud.
+    var spoken: String {
+        switch self {
+        case .ctrlOptionSpace: return "Control, Option and Space"
+        case .ctrlShiftSpace: return "Control, Shift and Space"
+        case .optionSpace: return "Option and Space"
+        }
+    }
+
+    static var current: TalkShortcut {
+        get { UserDefaults.standard.string(forKey: "talkShortcut").flatMap(TalkShortcut.init) ?? .ctrlOptionSpace }
+        set { UserDefaults.standard.set(newValue.rawValue, forKey: "talkShortcut") }
+    }
+}
+
+/// Carbon hot keys: work without Accessibility or Input Monitoring permission, and report press + release.
+final class HotKeys {
+    static let shared = HotKeys()
+    private var refs: [UInt32: EventHotKeyRef] = [:]
+    private var press: [UInt32: () -> Void] = [:]
+    private var release: [UInt32: () -> Void] = [:]
+    private var installed = false
+
+    static let talkID: UInt32 = 1
+    static let escapeID: UInt32 = 2
+
+    private func install() {
+        guard !installed else { return }
+        installed = true
         var types = [
             EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed)),
             EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyReleased)),
         ]
         InstallEventHandler(GetApplicationEventTarget(), { _, event, _ -> OSStatus in
             guard let event else { return noErr }
+            var hk = EventHotKeyID()
+            GetEventParameter(event, EventParamName(kEventParamDirectObject), EventParamType(typeEventHotKeyID), nil, MemoryLayout<EventHotKeyID>.size, nil, &hk)
             let kind = GetEventKind(event)
+            let id = hk.id
             DispatchQueue.main.async {
-                if kind == UInt32(kEventHotKeyPressed) { PushToTalkHotKey.shared?.onPress?() }
-                else if kind == UInt32(kEventHotKeyReleased) { PushToTalkHotKey.shared?.onRelease?() }
+                if kind == UInt32(kEventHotKeyPressed) { HotKeys.shared.press[id]?() }
+                else if kind == UInt32(kEventHotKeyReleased) { HotKeys.shared.release[id]?() }
             }
             return noErr
-        }, 2, &types, nil, &handler)
-        let id = EventHotKeyID(signature: OSType(0x4C4B4F55), id: 1) // 'LKOU'
-        let status = RegisterEventHotKey(UInt32(kVK_Space), UInt32(optionKey), id, GetApplicationEventTarget(), 0, &ref)
-        Log.info("push-to-talk hotkey ⌥Space registered: \(status == noErr)")
+        }, 2, &types, nil, nil)
     }
+
+    @discardableResult
+    func register(id: UInt32, keyCode: UInt32, modifiers: UInt32, onPress: @escaping () -> Void, onRelease: (() -> Void)? = nil) -> Bool {
+        install()
+        unregister(id: id)
+        var ref: EventHotKeyRef?
+        let status = RegisterEventHotKey(keyCode, modifiers, EventHotKeyID(signature: OSType(0x4C4B4F55), id: id), GetApplicationEventTarget(), 0, &ref)
+        guard status == noErr, let ref else { return false }
+        refs[id] = ref
+        press[id] = onPress
+        release[id] = onRelease
+        return true
+    }
+
+    func unregister(id: UInt32) {
+        if let r = refs.removeValue(forKey: id) { UnregisterEventHotKey(r) }
+        press[id] = nil
+        release[id] = nil
+    }
+
+    func isRegistered(_ id: UInt32) -> Bool { refs[id] != nil }
 }
 
 // MARK: - Speech recognition

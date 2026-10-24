@@ -7,6 +7,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let companion = Companion()
     private var statusItem: NSStatusItem!
     private var guardianItem: NSMenuItem!
+    private var shortcutItems: [NSMenuItem] = []
     var openDemoOnLaunch: String?? = nil
     /// Scripted question after launch (rehearsal / testing): --ask "..."
     var askOnLaunch: String?
@@ -17,7 +18,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         companion.start()
         if let demo = openDemoOnLaunch { companion.openDemo(demo) }
         if let q = askOnLaunch {
-            Task { try? await Task.sleep(nanoseconds: 6_000_000_000); await companion.handleUtterance(q) }
+            Task { try? await Task.sleep(nanoseconds: 6_000_000_000); companion.ask(q) }
         }
     }
 
@@ -34,6 +35,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guardianItem = item("Watching for scams", #selector(toggleGuardian), "")
         guardianItem.state = .on
         m.addItem(guardianItem)
+        let sc = NSMenuItem(title: "Talk shortcut (hold)", action: nil, keyEquivalent: "")
+        let scm = NSMenu()
+        for s in TalkShortcut.allCases {
+            let i = item(s.symbol, #selector(pickShortcut(_:)), "")
+            i.representedObject = s.rawValue
+            i.state = s == TalkShortcut.current ? .on : .off
+            scm.addItem(i)
+            shortcutItems.append(i)
+        }
+        sc.submenu = scm
+        m.addItem(sc)
         m.addItem(.separator())
         let demo = NSMenuItem(title: "Demo", action: nil, keyEquivalent: "")
         let dm = NSMenu()
@@ -52,7 +64,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         demo.submenu = dm
         m.addItem(demo)
         m.addItem(item("Set up permissions…", #selector(setupAction), ""))
-        m.addItem(item("Stop talking", #selector(stopTalking), "."))
+        m.addItem(item("Stop talking (Esc)", #selector(stopTalking), "."))
         m.addItem(.separator())
         m.addItem(item("Quit Lookout", #selector(NSApplication.terminate(_:)), "q"))
         statusItem.menu = m
@@ -67,6 +79,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc func askTypedAction() { askTyped() }
 
     func askTyped() {
+        // Remember what the person was looking at, so Lookout answers about that screen, not the question box.
+        let previous = NSWorkspace.shared.frontmostApplication
+        let demoWasFront = previous?.processIdentifier == getpid() && companion.demoBrowser.window.isVisible
         NSApp.activate(ignoringOtherApps: true)
         let a = NSAlert()
         a.messageText = "What can I help with?"
@@ -80,14 +95,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard a.runModal() == .alertFirstButtonReturn else { return }
         let q = f.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !q.isEmpty else { return }
-        // Give focus back to whatever was in front (e.g. the demo browser) before looking.
-        if companion.demoBrowser.window.isVisible { companion.demoBrowser.show() }
-        Task { try? await Task.sleep(nanoseconds: 300_000_000); await companion.handleUtterance(q) }
+        // Give focus back to whatever was in front before looking.
+        if demoWasFront { companion.demoBrowser.show() }
+        else if let previous, previous.processIdentifier != getpid() { previous.activate() }
+        Task { try? await Task.sleep(nanoseconds: 400_000_000); companion.ask(q) }
     }
 
     @objc func explainAction() {
-        if companion.demoBrowser.window.isVisible { companion.demoBrowser.show() }
-        Task { await companion.explainScreen() }
+        companion.explain()
     }
 
     @objc func toggleGuardian() {
@@ -98,5 +113,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc func openDemoAction() { companion.openDemo() }
     @objc func openScenario(_ sender: NSMenuItem) { companion.openDemo(sender.representedObject as? String) }
     @objc func setupAction() { companion.setup.show() }
-    @objc func stopTalking() { companion.speech.stop(); companion.overlay.reset(); companion.card.hide() }
+    @objc func stopTalking() { companion.stopEverything() }
+
+    @objc func pickShortcut(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String, let s = TalkShortcut(rawValue: raw) else { return }
+        TalkShortcut.current = s
+        let ok = companion.registerTalkShortcut()
+        for i in shortcutItems { i.state = (i.representedObject as? String) == raw ? .on : .off }
+        if !ok {
+            let a = NSAlert()
+            a.messageText = "That shortcut is taken"
+            a.informativeText = "Another app is already using \(s.symbol). Please pick a different one."
+            a.runModal()
+        }
+    }
 }
