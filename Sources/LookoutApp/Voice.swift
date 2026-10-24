@@ -467,7 +467,11 @@ final class WakeListener {
     private var lastChange = Date()
 
     /// "hey lookout", and how the recognizer tends to hear it.
-    static let phrases = ["hey lookout", "hey look out", "hi lookout", "hi look out", "okay lookout", "ok lookout", "hey, lookout", "hey lookup"]
+    static let phrases = ["hey lookout", "hey look out", "hey lookouts", "hey look at", "hi lookout", "hi look out", "okay lookout",
+                          "ok lookout", "hey, lookout", "hey lookup"]
+    /// Said on its own at the start of an utterance ("Lookout, what is this?"). Only at the start, so a sentence
+    /// that merely contains "look out" doesn't wake it.
+    static let leading = ["lookout", "look out"]
 
     var canRun: Bool { recognizer?.supportsOnDeviceRecognition == true && Listener.micAuthorized && Listener.speechAuthorized }
 
@@ -557,7 +561,13 @@ final class WakeListener {
     private func heard(_ text: String) {
         if woke == nil {
             let lower = text.lowercased()
-            for p in Self.phrases {
+            for p in Self.leading where lower.hasPrefix(p) {
+                woke = (Date(), text.index(text.startIndex, offsetBy: p.count))
+                Log.info("wake word heard")
+                onWake?()
+                break
+            }
+            for p in Self.phrases where woke == nil {
                 if let r = lower.range(of: p, options: .backwards) {
                     // Map the match back onto the original string (same length: lowercasing ASCII).
                     let offset = text.index(text.startIndex, offsetBy: lower.distance(from: lower.startIndex, to: r.upperBound))
