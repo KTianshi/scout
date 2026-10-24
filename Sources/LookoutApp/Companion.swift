@@ -33,6 +33,7 @@ final class Companion {
     private var lastAlertAt = Date.distantPast
     /// Pages Claude confidently called safe, and when. The guardian stays quiet there for a while.
     private var clearedPages: [String: Date] = [:]
+    private var scamPages: [String: Date] = [:]
     /// Developer tools are full of scam words (code, docs, chats about Lookout itself) and aren't where our users get scammed.
     static let ignoredApps: Set<String> = ["Terminal", "iTerm2", "Xcode", "Code", "Visual Studio Code", "Cursor", "Warp", "Ghostty", "Claude"]
     private var lastConfirmedFingerprint: Int?
@@ -747,17 +748,19 @@ final class Companion {
         // A page Claude called safe stays quiet for 10 minutes, but its screens still feed the playbook
         // engine so the session history stays complete; only a hard rule can interrupt it.
         let cleared = clearedPages[page].map { Date().timeIntervalSince($0) < 600 } ?? false
+        // Claude already called this page a scam: don't re-ask every pass (a blinking cursor changes the fingerprint).
+        let knownScam = scamPages[page].map { Date().timeIntervalSince($0) < 120 } ?? false
         stuck.observe(fingerprint: snap.context.fingerprint, window: (snap.context.appName ?? "") + (snap.context.windowTitle ?? ""))
         // Preview first: if Claude is about to check this screen, the playbook observation is committed
         // once, together with Claude's answer as evidence.
         var result = pipeline.evaluate(snap.context, commitPlaybook: false)
         let fp = snap.context.fingerprint
         if fp != stableFingerprint { stableFingerprint = fp; stableSince = Date() }
-        let willConfirm = !cleared && result.action > .quiet && result.shouldConfirmWithModel && claude.isConfigured && fp != lastConfirmedFingerprint && !confirmInFlight
+        let willConfirm = !cleared && !knownScam && result.action > .quiet && result.shouldConfirmWithModel && claude.isConfigured && fp != lastConfirmedFingerprint && !confirmInFlight
         // Deep check: Claude also reads screens the on-device rules found nothing on (friendly romance and
         // crypto chats have no trigger words). On the 154-screen benchmark Claude alone caught 79/79 scams
         // with 0/75 false alarms. Text only, once per settled screen, at most every 8 s.
-        let willSweep = !willConfirm && !cleared && DeepCheck.enabled && claude.isConfigured && !confirmInFlight
+        let willSweep = !willConfirm && !cleared && !knownScam && DeepCheck.enabled && claude.isConfigured && !confirmInFlight
             && snap.context.text.count >= 80 && fp != lastConfirmedFingerprint
             && Date().timeIntervalSince(stableSince) >= 2 && Date().timeIntervalSince(lastSweepAt) >= 8
         if !willConfirm && !willSweep { result = pipeline.commit(snap.context) }
@@ -776,6 +779,7 @@ final class Companion {
                 let v = try await claude.confirmScam(screen: full.context, image: full.image, heuristicSummary: result.summary)
                 verdict = v
                 result = pipeline.applyModelVerdict(v, ctx: full.context)
+                if v.isScam { scamPages[page] = Date() }
                 // Claude read the screen and says scam: warn, even if the rules and the playbook are still quiet.
                 if v.isScam, result.action < .interrupt {
                     result.decision.action = .interrupt
@@ -920,19 +924,22 @@ final class Companion {
         return "Possible scam on \(LookoutConfig.elderName)'s screen"
     }
 
-    func closeThreat() {
-        pipeline.engine.reset()
-        if demoInFront || demoBrowser.window.isVisible {
-            Task {
-                await demoBrowser.load(Companion.demoIndexURL())
-            }
-        } else if Permissions.accessibility {
-            // Cmd+W in the browser.
+    /// Leaves the page in front: the demo browser goes back to its launcher; a real browser closes the tab (⌘W).
+    /// Decided by what's in front, not by whether the demo browser happens to be open somewhere behind it.
+    func closeFrontPage() {
+        if demoInFront {
+            Task { await demoBrowser.load(Companion.demoIndexURL()) }
+        } else if Self.isBrowser(NSWorkspace.shared.frontmostApplication), Permissions.accessibility {
             let src = CGEventSource(stateID: .hidSystemState)
             let down = CGEvent(keyboardEventSource: src, virtualKey: 13, keyDown: true); down?.flags = .maskCommand
             let up = CGEvent(keyboardEventSource: src, virtualKey: 13, keyDown: false); up?.flags = .maskCommand
             down?.post(tap: .cghidEventTap); up?.post(tap: .cghidEventTap)
         }
+    }
+
+    func closeThreat() {
+        pipeline.engine.reset()
+        closeFrontPage()
         overlay.setMood(.happy)
         let msg = "There. It's gone. You did great."
         overlay.say(msg)
@@ -954,7 +961,7 @@ final class Companion {
         let reason = "This page is asking for \(what), and something about it doesn't look right."
         payPause.show(familyName: LookoutConfig.familyName, reason: reason, onCancel: { [weak self] in
             guard let self else { return }
-            if self.demoBrowser.window.isVisible { Task { await self.demoBrowser.load(Companion.demoIndexURL()) } }
+            self.closeFrontPage()   // "Go back" really leaves the page
             self.overlay.setMood(.happy)
             Task { await self.speech.speak("Good choice. Nothing was sent.") ; self.overlay.reset() }
         }, onOverride: { [weak self] in

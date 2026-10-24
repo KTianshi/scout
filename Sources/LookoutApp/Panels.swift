@@ -122,6 +122,14 @@ final class PayPauseScreen {
             w.orderFrontRegardless()
             windows.append(w)
         }
+        // Testing only: LOOKOUT_TEST_AUTOCLICK presses "Go back" / "Cancel the payment" after 4 s.
+        if ProcessInfo.processInfo.environment["LOOKOUT_TEST_AUTOCLICK"] != nil {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 4) { [weak self] in
+                guard let self, self.isShowing else { return }
+                Log.info("test autoclick: pay pause go back")
+                self.model.onCancel()
+            }
+        }
     }
 
     func hide() { windows.forEach { $0.orderOut(nil) }; windows.removeAll() }
