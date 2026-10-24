@@ -43,6 +43,11 @@ public final class ScamPipeline: @unchecked Sendable {
         let screen = ScamSignals.analyze(ctx)
         let a = engine.ingestModelVerdict(isScam: v.isScam, confidence: v.confidence, at: now, screen: screen)
         var r = decide(ctx: ctx, assessment: a)
+        // A confident "this is safe" from the model caps the reaction at a gentle nudge, unless a hard rule fires.
+        if !v.isScam, v.confidence >= 0.85, r.rules.isEmpty, r.decision.action > .nudge {
+            r.decision.action = .nudge
+            r.decision.reason += "; capped by confident model verdict"
+        }
         if v.isScam, !v.explanation.isEmpty {
             r.explanation = v.explanation
             r.advice = v.whatToDo

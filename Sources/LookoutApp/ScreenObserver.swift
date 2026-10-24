@@ -1,0 +1,224 @@
+import AppKit
+import ApplicationServices
+import ScreenCaptureKit
+import LookoutCore
+
+/// An on-screen control we can point at. Frame is in top-left-origin global display coordinates.
+struct UIElementInfo {
+    var role: String
+    var label: String
+    var frame: CGRect
+}
+
+/// Everything observed in one pass.
+struct Snapshot {
+    var context: ScreenContext
+    /// JPEG sent to Claude, and its pixel size.
+    var image: ClaudeClient.Image?
+    /// Maps image pixels → top-left global display points.
+    var imageToScreen: CGAffineTransform = .identity
+    var elements: [UIElementInfo] = []
+    /// When the snapshot came from Lookout's own demo browser, threat rects are known exactly.
+    var knownThreatRects: [String: CGRect] = [:]
+    var knownTargetRects: [String: CGRect] = [:]
+    var isFixture = false
+
+    func screenPoint(forImagePoint p: CGPoint) -> CGPoint { p.applying(imageToScreen) }
+
+    /// Snap a point to the closest actionable element if one is close.
+    func snap(_ p: CGPoint, within radius: CGFloat = 48) -> (CGPoint, UIElementInfo?) {
+        var best: (CGFloat, UIElementInfo)?
+        for e in elements where e.frame.width > 4 && e.frame.height > 4 && e.frame.width < 900 {
+            let inside = e.frame.insetBy(dx: -6, dy: -6).contains(p)
+            let c = CGPoint(x: e.frame.midX, y: e.frame.midY)
+            let d = inside ? 0 : hypot(c.x - p.x, c.y - p.y)
+            if d <= radius, best == nil || d < best!.0 { best = (d, e) }
+        }
+        if let (_, e) = best { return (CGPoint(x: e.frame.midX, y: e.frame.midY), e) }
+        return (p, nil)
+    }
+
+    /// Find the element whose label contains `text` (e.g. the phone number the detector flagged).
+    func element(matching text: String) -> UIElementInfo? {
+        let needle = text.lowercased()
+        guard needle.count >= 3 else { return nil }
+        return elements.first { $0.label.lowercased().contains(needle) }
+    }
+}
+
+enum Permissions {
+    static var screenRecording: Bool { CGPreflightScreenCaptureAccess() }
+    static var accessibility: Bool { AXIsProcessTrusted() }
+
+    static func requestScreenRecording() { _ = CGRequestScreenCaptureAccess() }
+    static func requestAccessibility() {
+        let key = kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String
+        _ = AXIsProcessTrustedWithOptions([key: true] as CFDictionary)
+    }
+
+    static func openSettings(_ pane: String) {
+        // pane: Privacy_ScreenCapture, Privacy_Accessibility, Privacy_Microphone, Privacy_SpeechRecognition
+        if let u = URL(string: "x-apple.systempreferences:com.apple.preference.security?\(pane)") {
+            NSWorkspace.shared.open(u)
+        }
+    }
+}
+
+@MainActor
+final class ScreenObserver {
+    /// Live snapshot of the main display + frontmost window. Missing permissions degrade gracefully.
+    func snapshot(includeImage: Bool) async -> Snapshot {
+        let front = NSWorkspace.shared.frontmostApplication
+        let running = NSWorkspace.shared.runningApplications.compactMap { $0.localizedName }
+        var ctx = ScreenContext(text: "", appName: front?.localizedName, runningApps: running)
+        var snap = Snapshot(context: ctx)
+
+        if Permissions.accessibility, let pid = front?.processIdentifier, pid != getpid() {
+            let ax = AXReader(pid: pid)
+            let r = ax.read()
+            ctx.text = r.text
+            ctx.windowTitle = r.windowTitle
+            ctx.url = r.url
+            ctx.sensitiveFields = r.sensitive
+            snap.elements = r.elements
+        }
+        snap.context = ctx
+
+        if includeImage, Permissions.screenRecording, let (img, xf) = await captureMainDisplay() {
+            snap.image = img
+            snap.imageToScreen = xf
+        }
+        return snap
+    }
+
+    /// ScreenCaptureKit screenshot of the main display without Lookout's own windows.
+    func captureMainDisplay() async -> (ClaudeClient.Image, CGAffineTransform)? {
+        do {
+            let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+            guard let display = content.displays.first(where: { $0.displayID == CGMainDisplayID() }) ?? content.displays.first else { return nil }
+            let mine = content.applications.filter { $0.processID == getpid() }
+            let filter = SCContentFilter(display: display, excludingApplications: mine, exceptingWindows: [])
+            let cfg = SCStreamConfiguration()
+            let maxEdge = LookoutConfig.screenshotMaxEdge
+            let scale = min(1.0, maxEdge / CGFloat(max(display.width, display.height)))
+            cfg.width = Int(CGFloat(display.width) * scale)
+            cfg.height = Int(CGFloat(display.height) * scale)
+            cfg.showsCursor = false
+            let cg = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: cfg)
+            guard let jpeg = ImageUtil.jpeg(cg, quality: 0.72) else { return nil }
+            let bounds = CGDisplayBounds(display.displayID)
+            let sx = bounds.width / CGFloat(cg.width), sy = bounds.height / CGFloat(cg.height)
+            let xf = CGAffineTransform(a: sx, b: 0, c: 0, d: sy, tx: bounds.minX, ty: bounds.minY)
+            return (ClaudeClient.Image(data: jpeg, width: cg.width, height: cg.height), xf)
+        } catch {
+            Log.info("capture failed: \(error.localizedDescription)")
+            return nil
+        }
+    }
+}
+
+enum ImageUtil {
+    /// Downscale so the longest edge is at most `maxEdge` pixels.
+    static func downscale(_ cg: CGImage, maxEdge: CGFloat) -> CGImage {
+        let k = maxEdge / CGFloat(max(cg.width, cg.height))
+        guard k < 1 else { return cg }
+        let w = Int(CGFloat(cg.width) * k), h = Int(CGFloat(cg.height) * k)
+        guard let ctx = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: 0,
+                                  space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue) else { return cg }
+        ctx.interpolationQuality = .high
+        ctx.draw(cg, in: CGRect(x: 0, y: 0, width: w, height: h))
+        return ctx.makeImage() ?? cg
+    }
+
+    static func jpeg(_ cg: CGImage, quality: CGFloat) -> Data? {
+        let rep = NSBitmapImageRep(cgImage: cg)
+        return rep.representation(using: .jpeg, properties: [.compressionFactor: quality])
+    }
+
+    /// Small thumbnail data URL for the family feed.
+    static func thumbnailDataURL(_ jpeg: Data, maxEdge: CGFloat = 640) -> String? {
+        guard let img = NSImage(data: jpeg) else { return nil }
+        let s = img.size
+        let k = min(1, maxEdge / max(s.width, s.height))
+        let size = NSSize(width: s.width * k, height: s.height * k)
+        let out = NSImage(size: size)
+        out.lockFocus()
+        img.draw(in: NSRect(origin: .zero, size: size))
+        out.unlockFocus()
+        guard let tiff = out.tiffRepresentation, let rep = NSBitmapImageRep(data: tiff),
+              let d = rep.representation(using: .jpeg, properties: [.compressionFactor: 0.6]) else { return nil }
+        return "data:image/jpeg;base64," + d.base64EncodedString()
+    }
+}
+
+/// Walks the Accessibility tree of the frontmost window: visible text, actionable elements, URL, secure fields.
+struct AXReader {
+    let pid: pid_t
+    struct Result { var text = ""; var windowTitle: String?; var url: String?; var elements: [UIElementInfo] = []; var sensitive: [String] = [] }
+
+    func attr(_ e: AXUIElement, _ name: String) -> AnyObject? {
+        var v: AnyObject?
+        return AXUIElementCopyAttributeValue(e, name as CFString, &v) == .success ? v : nil
+    }
+    func str(_ e: AXUIElement, _ name: String) -> String? {
+        if let s = attr(e, name) as? String { return s }
+        if let u = attr(e, name) as? URL { return u.absoluteString }
+        return nil
+    }
+    func frame(_ e: AXUIElement) -> CGRect? {
+        guard let pv = attr(e, kAXPositionAttribute), let sv = attr(e, kAXSizeAttribute) else { return nil }
+        var p = CGPoint.zero, s = CGSize.zero
+        AXValueGetValue(pv as! AXValue, .cgPoint, &p)
+        AXValueGetValue(sv as! AXValue, .cgSize, &s)
+        return CGRect(origin: p, size: s)
+    }
+
+    func read(maxNodes: Int = 2500) -> Result {
+        var r = Result()
+        let app = AXUIElementCreateApplication(pid)
+        AXUIElementSetMessagingTimeout(app, 0.4)
+        // Chrome / Electron only expose web content when asked.
+        AXUIElementSetAttributeValue(app, "AXEnhancedUserInterface" as CFString, kCFBooleanTrue)
+        AXUIElementSetAttributeValue(app, "AXManualAccessibility" as CFString, kCFBooleanTrue)
+        guard let win = attr(app, kAXFocusedWindowAttribute) else { return r }
+        let w = win as! AXUIElement
+        r.windowTitle = str(w, kAXTitleAttribute)
+        var lines: [String] = []
+        var seen = Set<String>()
+        var queue: [AXUIElement] = [w]
+        var visited = 0
+        let actionable: Set<String> = ["AXButton", "AXLink", "AXTextField", "AXSecureTextField", "AXMenuItem", "AXCheckBox", "AXPopUpButton", "AXTab", "AXRadioButton", "AXComboBox", "AXTextArea", "AXImage", "AXStaticText"]
+        while !queue.isEmpty && visited < maxNodes {
+            let e = queue.removeFirst()
+            visited += 1
+            let role = str(e, kAXRoleAttribute) ?? ""
+            if role == "AXWebArea", r.url == nil { r.url = str(e, "AXURL") }
+            if r.url == nil, role == "AXTextField", let d = str(e, kAXDescriptionAttribute), d.lowercased().contains("address") {
+                r.url = str(e, kAXValueAttribute)
+            }
+            let value = role == "AXSecureTextField" ? nil : str(e, kAXValueAttribute)
+            let title = str(e, kAXTitleAttribute)
+            let desc = str(e, kAXDescriptionAttribute)
+            let placeholder = str(e, "AXPlaceholderValue")
+            let label = [title, desc, value, placeholder].compactMap { $0 }.filter { !$0.isEmpty }.first ?? ""
+            for t in [title, desc, value, placeholder].compactMap({ $0 }) where !t.isEmpty && t.count < 2000 {
+                if seen.insert(t).inserted { lines.append(t) }
+            }
+            if role == "AXSecureTextField" { r.sensitive.append("password") }
+            if role == "AXTextField" {
+                let l = label.lowercased()
+                if l.contains("card number") || l.contains("cvv") || l.contains("cvc") { r.sensitive.append("card") }
+                if l.contains("gift card") || l.contains("pin") && l.contains("card") { r.sensitive.append("gift-card") }
+                if l.contains("social security") || l.contains("ssn") { r.sensitive.append("ssn") }
+                if l.contains("routing") || l.contains("account number") { r.sensitive.append("bank") }
+            }
+            if actionable.contains(role), let f = frame(e), !label.isEmpty {
+                r.elements.append(UIElementInfo(role: role, label: label, frame: f))
+            }
+            if let kids = attr(e, kAXChildrenAttribute) as? [AXUIElement] { queue.append(contentsOf: kids) }
+        }
+        r.text = lines.joined(separator: "\n")
+        r.sensitive = Array(Set(r.sensitive))
+        return r
+    }
+}

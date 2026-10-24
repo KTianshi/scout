@@ -30,7 +30,8 @@ public struct ScreenContext: Sendable, Equatable {
     /// Stable fingerprint so the guardian can skip re-analysing an unchanged screen.
     public var fingerprint: Int {
         var hasher = Hasher()
-        hasher.combine(text)
+        // Ignore digits so ticking counters / progress bars don't count as a new screen.
+        hasher.combine(text.filter { !$0.isNumber })
         hasher.combine(url)
         hasher.combine(appName)
         hasher.combine(runningApps)

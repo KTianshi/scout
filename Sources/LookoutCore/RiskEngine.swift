@@ -31,6 +31,9 @@ public final class RiskEngine: @unchecked Sendable {
 
     private struct Memory { var signal: Signal; var at: Date }
 
+    /// Evidence about the current page's address only counts while that page is on screen.
+    public static let pageLocal: Set<SignalKind> = [.lookalikeDomain, .punycodeDomain, .suspiciousTLD, .govDomainMismatch, .sensitiveEntryOnRiskyPage]
+
     public let config: Config
     private var memory: [SignalKind: Memory] = [:]
     private let lock = NSLock()
@@ -48,7 +51,7 @@ public final class RiskEngine: @unchecked Sendable {
     public func ingest(_ signals: [Signal], at now: Date = Date()) -> Assessment {
         lock.lock(); defer { lock.unlock() }
         // Refresh memory with positive evidence.
-        for s in signals where s.weight > 0 {
+        for s in signals where s.weight > 0 && !RiskEngine.pageLocal.contains(s.kind) {
             if let m = memory[s.kind] {
                 let old = decayed(m.signal.weight, from: m.at, to: now)
                 if s.weight >= old { memory[s.kind] = Memory(signal: s, at: now) }
@@ -82,6 +85,8 @@ public final class RiskEngine: @unchecked Sendable {
             var s = m.signal; s.weight = w
             active.append(s)
         }
+        let local = currentScreen.filter { $0.weight > 0 && RiskEngine.pageLocal.contains($0.kind) }
+        active.append(contentsOf: local)
         active.sort { $0.weight > $1.weight }
         let positive = active.reduce(0) { $0 + $1.weight }
         let negative = currentScreen.filter { $0.weight < 0 }.reduce(0) { $0 + $1.weight }
