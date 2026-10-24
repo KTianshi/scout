@@ -581,9 +581,19 @@ final class WakeListener {
         if let w = woke { onPartialQuestion?(question(after: w.offset)) }
     }
 
+    /// Everything after the wake phrase in the latest transcript. The recognizer rewrites earlier words as it hears more,
+    /// so the phrase is found again each time; a remembered offset clipped "what is this" to "t is this".
     private func question(after offset: String.Index) -> String {
-        guard offset <= transcript.endIndex else { return "" }
-        return String(transcript[offset...]).trimmingCharacters(in: CharacterSet(charactersIn: " ,.!?").union(.whitespaces))
+        let lower = transcript.lowercased()
+        var cut: String.Index?
+        for p in Self.phrases + Self.leading {
+            if let r = lower.range(of: p, options: .backwards), cut.map({ r.upperBound > $0 }) ?? true { cut = r.upperBound }
+        }
+        let start: String.Index
+        if let c = cut { start = transcript.index(transcript.startIndex, offsetBy: lower.distance(from: lower.startIndex, to: c)) }
+        else if offset <= transcript.endIndex { start = offset }
+        else { return "" }
+        return String(transcript[start...]).trimmingCharacters(in: CharacterSet(charactersIn: " ,.!?…").union(.whitespaces))
     }
 
     private func tick() {
