@@ -1,6 +1,6 @@
 # Good morning ☀️ — Lookout handoff
 
-Branch `overnight`, 7 commits, not pushed. Everything below was run overnight unless marked *untested*.
+Branch `overnight`, not pushed (`git log --oneline main..overnight` won't work: `main` has no commits; use `git log --oneline`). Everything below was run overnight unless marked *untested*.
 
 ## 1. What works, and how to run it
 
