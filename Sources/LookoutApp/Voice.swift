@@ -113,11 +113,12 @@ final class CartesiaSpeech: NSObject, SpeechOutput, AVAudioPlayerDelegate {
             "Hi, I'm Lookout. Hold \(TalkShortcut.current.spoken) any time to ask me something.",
             "There. It's gone. You did great.",
             "Good choice. Nothing was sent.",
-            "\(fam) says it's OK. You can go ahead.",
-            "\(fam) says please don't. This isn't safe. Nothing was sent.",
             "Want some help? I'm right here.",
             "This looks like a scam. Let's stop here.",
         ]
+        if LookoutConfig.familyEnabled {
+            lines += ["\(fam) says it's OK. You can go ahead.", "\(fam) says please don't. This isn't safe. Nothing was sent."]
+        }
         return lines
     }
 }

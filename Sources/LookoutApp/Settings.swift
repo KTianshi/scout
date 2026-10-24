@@ -125,7 +125,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .voice: return "Voice"
         case .buddy: return "Buddy"
         case .talking: return "Talking"
-        case .safety: return "Safety & Family"
+        case .safety: return "Safety"
         }
     }
     var subtitle: String {
@@ -133,7 +133,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .voice: return "Pick how Lookout sounds. Tap a voice to hear it."
         case .buddy: return "Pick how Lookout looks and where it waits."
         case .talking: return "Hold the keys, ask your question, then let go."
-        case .safety: return "Scam watching, and who Lookout tells when it stops one."
+        case .safety: return "How Lookout watches out for scams."
         }
     }
     var icon: String {
@@ -565,6 +565,7 @@ struct SafetyPane: View {
                 .padding(.vertical, 6)
                 .glassCard()
         }
+        if LookoutConfig.familyEnabled {
         VStack(alignment: .leading, spacing: 8) {
             CardTitle(text: "Names")
             VStack(alignment: .leading, spacing: 14) {
@@ -577,6 +578,7 @@ struct SafetyPane: View {
             }
             .padding(16)
             .glassCard()
+        }
         }
         permissionsButton
     }

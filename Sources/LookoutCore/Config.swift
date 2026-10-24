@@ -13,6 +13,10 @@ public enum LookoutConfig {
     public static var familyServer: URL {
         URL(string: Secrets.shared["LOOKOUT_FAMILY_URL"] ?? "http://127.0.0.1:4545")!
     }
+    /// Family features (alerts to the family app, "check with Sarah first" approvals, family wording).
+    /// Off for now: it felt infantilizing. Turn back on with LOOKOUT_FAMILY=1 in secrets.env.
+    public static var familyEnabled: Bool { Secrets.shared["LOOKOUT_FAMILY"] == "1" }
+
     /// Names come from Settings first, then secrets.env, then demo defaults.
     public static var elderName: String { saved("elderName") ?? Secrets.shared["ELDER_NAME"] ?? "Mom" }
     public static var familyName: String { saved("familyName") ?? Secrets.shared["FAMILY_NAME"] ?? "Sarah" }

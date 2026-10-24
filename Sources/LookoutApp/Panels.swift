@@ -130,7 +130,7 @@ final class PayPauseScreen {
 
 @MainActor
 final class PayPauseModel: ObservableObject {
-    enum Status { case waiting, approved, denied, offline }
+    enum Status { case waiting, approved, denied, offline, selfPause }
     @Published var familyName = "Sarah"
     @Published var reason = ""
     @Published var status: Status = .waiting
@@ -164,7 +164,7 @@ struct PayPauseView: View {
                 }
                 HStack(spacing: 20) {
                     Button(action: model.onCancel) {
-                        Text(model.status == .denied ? "OK, close this" : "Cancel the payment")
+                        Text(model.status == .denied ? "OK, close this" : model.status == .selfPause ? "Go back" : "Cancel the payment")
                             .font(.system(size: 26, weight: .semibold, design: .rounded))
                             .padding(.horizontal, 34).padding(.vertical, 18)
                             .background(RoundedRectangle(cornerRadius: 18).fill(.white))
@@ -179,7 +179,7 @@ struct PayPauseView: View {
                         }.buttonStyle(.plain)
                     }
                 }
-                if model.status == .waiting || model.status == .offline {
+                if model.status == .waiting || model.status == .offline || model.status == .selfPause {
                     Button(confirmOverride ? "Tap again if you're sure it's safe" : "I'm sure — continue anyway") {
                         if confirmOverride { model.onOverride() } else { confirmOverride = true }
                     }
@@ -195,6 +195,7 @@ struct PayPauseView: View {
 
     var headline: String {
         switch model.status {
+        case .selfPause: return "Let's slow down for a moment"
         case .waiting, .offline: return "Let's check with \(model.familyName) first"
         case .approved: return "\(model.familyName) says it's OK"
         case .denied: return "\(model.familyName) says please stop"
@@ -203,6 +204,7 @@ struct PayPauseView: View {
 
     var subline: String {
         switch model.status {
+        case .selfPause: return "\(model.reason)\nTake a slow breath. A real company will never rush you, and nobody can make you pay right now."
         case .waiting: return "\(model.reason)\nI've sent \(model.familyName) a message. Take a slow breath. We'll wait together."
         case .offline: return "\(model.reason)\nI couldn't reach \(model.familyName). Please call them on a number you know."
         case .approved: return "You can go ahead now."

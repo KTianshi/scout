@@ -31,7 +31,6 @@ final class Companion {
     private var listening = false
     private var lastAlertKey: String?
     private var lastAlertAt = Date.distantPast
-    private var lastNudgeAt: [String: Date] = [:]
     /// Pages Claude confidently called safe, and when. The guardian stays quiet there for a while.
     private var clearedPages: [String: Date] = [:]
     /// Developer tools are full of scam words (code, docs, chats about Lookout itself) and aren't where our users get scammed.
@@ -90,7 +89,7 @@ final class Companion {
         let lines: [(String?, String)] = [
             ("Hello!", "Hi, I'm Lookout. I'll stay close by, right next to your pointer."),
             ("I can help", "If you get stuck, hold \(TalkShortcut.current.spoken) and just ask me. I'll point to the right spot."),
-            ("I watch out for you", "If something looks like a scam, I'll stop you gently and explain. And I'll let \(LookoutConfig.familyName) know."),
+            ("I watch out for you", "If something looks like a scam, I'll stop you gently and explain." + (LookoutConfig.familyEnabled ? " And I'll let \(LookoutConfig.familyName) know." : "")),
             ("One last thing", "I need your OK to see the screen. I'll open a window that shows you how."),
         ]
         for (title, text) in lines {
@@ -574,9 +573,11 @@ final class Companion {
                 verdict = v
                 result = pipeline.applyModelVerdict(v, ctx: full.context)
                 Log.info("claude verdict: scam=\(v.isScam) conf=\(v.confidence) type=\(v.scamType) why=\(v.explanation.prefix(160)) → \(result.summary)")
-                if !v.isScam, v.confidence >= 0.85, result.rules.isEmpty {
+                // Claude has looked at the actual screen: its "not a scam" is final unless a hard rule fired.
+                // (Not gated on confidence: the schema's "0 to 1" comes back as either certainty or scam odds.)
+                if !v.isScam, result.rules.isEmpty {
                     clearedPages[page] = Date()
-                    Log.info("guardian: page cleared by model for 10 min")
+                    Log.info("guardian: page cleared by Claude for 10 min")
                     confirmInFlight = false
                     if !busy { overlay.setMood(.idle) }
                     return
@@ -603,13 +604,9 @@ final class Companion {
         case .quiet:
             return
         case .nudge:
-            guard !busy, Date().timeIntervalSince(lastNudgeAt[key] ?? .distantPast) > 300 else { return }
-            lastNudgeAt[key] = Date()
-            overlay.say("Hmm. Take your time here. If anyone is rushing you, that's a warning sign.", title: "Just checking")
-            DispatchQueue.main.asyncAfter(deadline: .now() + 8) { [weak self] in
-                guard let self, !self.busy else { return }
-                self.overlay.say(nil)
-            }
+            // Low-level suspicion stays silent: the "take your time" bubble popped up far too often to be useful.
+            // Only real warnings (interrupt and above) reach the person.
+            return
         case .interrupt, .blockAndAlert:
             if key == lastAlertKey, Date().timeIntervalSince(lastAlertAt) < 90 { return }
             lastAlertKey = key
@@ -658,7 +655,7 @@ final class Companion {
         ] : [
             .init(title: "Got it", primary: true) { [weak self] in Log.info("user: got it"); self?.overlay.reset() },
         ]
-        card.show(title: "Let's be careful", message: "You're safe. Nothing has happened yet. \(LookoutConfig.familyName) has been told.", alarmed: true, buttons: buttons, near: buddyScreenPoint)
+        card.show(title: "Let's be careful", message: "You're safe. Nothing has happened yet." + (LookoutConfig.familyEnabled ? " \(LookoutConfig.familyName) has been told." : ""), alarmed: true, buttons: buttons, near: buddyScreenPoint)
         Task {
             let thumb = snap.image.flatMap { ImageUtil.thumbnailDataURL($0.data) }
             await family.send(.init(type: "scam_alert",
@@ -746,6 +743,12 @@ final class Companion {
             Log.info("pay pause: user continued")
         })
         DebugShot.take("paypause")
+        guard LookoutConfig.familyEnabled else {
+            // No family check: just a calm pause, and the choice stays theirs.
+            payPause.model.status = .selfPause
+            Task { await speech.speak("Let's slow down for a moment. \(reason) Take a breath. Nobody real will rush you.") }
+            return
+        }
         let spoken = "Let's pause for a moment. \(reason) I'm asking \(LookoutConfig.familyName) to take a look."
         Task { await speech.speak(spoken) }
         let thumb = snap.image.flatMap { ImageUtil.thumbnailDataURL($0.data) }
@@ -897,7 +900,6 @@ final class Companion {
             // New page: allow fresh alerts.
             self?.lastAlertKey = nil
             self?.pausedApprovalFor = nil
-            self?.lastNudgeAt = [:]
         }
     }
 }

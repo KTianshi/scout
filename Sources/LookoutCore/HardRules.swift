@@ -57,7 +57,7 @@ public enum HardRules {
         HardRule(
             id: "remote-access-with-money",
             message: "Someone may be controlling your computer while money is on the screen.",
-            advice: "Let's end that connection first. Your family has been told.",
+            advice: "Let's end that connection first.",
             minimum: .blockAndAlert, target: .remoteApp,
             matches: { s, _ in s.contains(.remoteAccessAppRunning) && any(s, .sensitiveEntryOnRiskyPage, .refundBait, .credentialRequest, .comboRemoteRefund) }
         ),

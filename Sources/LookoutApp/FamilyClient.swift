@@ -45,6 +45,7 @@ final class FamilyClient: @unchecked Sendable {
     }
 
     private func post(_ path: String, _ body: [String: Any]) async -> [String: Any]? {
+        guard LookoutConfig.familyEnabled else { return nil }
         var r = URLRequest(url: base.appendingPathComponent(path))
         r.httpMethod = "POST"
         r.setValue("application/json", forHTTPHeaderField: "content-type")
