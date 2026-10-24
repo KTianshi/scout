@@ -63,7 +63,7 @@ final class Companion {
     /// The demo browser counts as "the screen" when it is open and in front.
     var demoInFront: Bool {
         // In demo mode the demo browser is "the screen" whenever it is visible and not hidden behind other apps.
-        demoBrowser.window.isVisible && demoBrowser.window.occlusionState.contains(.visible)
+        demoBrowser.window.isVisible && !demoBrowser.window.isMiniaturized
     }
 
     func snapshot(includeImage: Bool) async -> Snapshot {
@@ -287,9 +287,9 @@ final class Companion {
             for try await delta in claude.stream(system: Prompts.explainDocument, text: text, image: snap.image, maxTokens: 900, effort: "low") {
                 buffer += delta
                 // Speak sentence by sentence as they complete.
-                while let end = buffer[spokenUpTo...].firstIndex(where: { ".!?".contains($0) }) {
-                    let sentence = String(buffer[spokenUpTo...end]).trimmingCharacters(in: .whitespacesAndNewlines)
-                    spokenUpTo = buffer.index(after: end)
+                while let end = Companion.sentenceEnd(in: buffer, from: spokenUpTo) {
+                    let sentence = String(buffer[spokenUpTo..<end]).trimmingCharacters(in: .whitespacesAndNewlines)
+                    spokenUpTo = end
                     if !sentence.isEmpty { overlay.say(sentence, title: "About this letter"); await speech.speak(sentence) }
                 }
             }
@@ -302,6 +302,21 @@ final class Companion {
         }
         try? await Task.sleep(nanoseconds: 2_000_000_000)
         overlay.reset()
+    }
+
+    /// End of the next complete sentence: . ! ? followed by whitespace (so "$48.36" and "Dr." mid-stream don't split).
+    static func sentenceEnd(in s: String, from start: String.Index) -> String.Index? {
+        var i = start
+        while i < s.endIndex {
+            let c = s[i]
+            let next = s.index(after: i)
+            if ".!?".contains(c), next < s.endIndex, s[next].isWhitespace {
+                let abbrev = ["Dr", "Mr", "Mrs", "Ms", "St"].contains { s[start..<i].hasSuffix($0) }
+                if !(c == "." && abbrev) { return next }
+            }
+            i = next
+        }
+        return nil
     }
 
     // MARK: Dictation
@@ -479,6 +494,7 @@ final class Companion {
             self?.overlay.reset()
             Log.info("pay pause: user continued")
         })
+        DebugShot.take("paypause")
         let spoken = "Let's pause for a moment. \(reason) I'm asking \(LookoutConfig.familyName) to take a look."
         Task { await speech.speak(spoken) }
         let thumb = snap.image.flatMap { ImageUtil.thumbnailDataURL($0.data) }
@@ -493,10 +509,12 @@ final class Companion {
             switch status {
             case .approved:
                 payPause.model.status = .approved
+                DebugShot.take("paypause-approved")
                 await speech.speak("\(LookoutConfig.familyName) says it's OK. You can go ahead.")
                 return
             case .denied:
                 payPause.model.status = .denied
+                DebugShot.take("paypause-denied")
                 await speech.speak("\(LookoutConfig.familyName) says please don't. This isn't safe. Nothing was sent.")
                 return
             default: continue
@@ -567,6 +585,11 @@ final class Companion {
 
     func endRemoteSession(_ app: NSRunningApplication) {
         let name = app.localizedName ?? "the program"
+        // Test safety switch: only ever terminate Lookout's own dummy apps.
+        if ProcessInfo.processInfo.environment["LOOKOUT_TERMINATE_ONLY_DEMO"] == "1", !(app.bundleIdentifier ?? "").hasPrefix("com.lookout.demo") {
+            Log.info("remote shield: refusing to terminate non-demo app \(name) (LOOKOUT_TERMINATE_ONLY_DEMO)")
+            return
+        }
         Log.info("remote shield: terminating \(name) pid=\(app.processIdentifier) on user request")
         app.terminate()
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) { if !app.isTerminated { app.forceTerminate() } }
@@ -672,7 +695,10 @@ enum DebugShot {
         guard enabled else { return }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
             // Only Lookout's own windows (never other apps' content), composited over a plain background.
-            let mine = NSApp.windows.filter { $0.isVisible && $0.windowNumber > 0 }.map { CGWindowID($0.windowNumber) }
+            // Front-to-back order from the window server, filtered to this process.
+            let info = CGWindowListCopyWindowInfo(.optionOnScreenOnly, kCGNullWindowID) as? [[String: Any]] ?? []
+            let pid = Int(getpid())
+            let mine = info.filter { ($0[kCGWindowOwnerPID as String] as? Int) == pid }.compactMap { ($0[kCGWindowNumber as String] as? Int).map { CGWindowID($0) } }
             guard !mine.isEmpty else { return }
             var ptrs = mine.map { UnsafeRawPointer(bitPattern: UInt($0)) }
             guard let arr = CFArrayCreate(nil, &ptrs, ptrs.count, nil),

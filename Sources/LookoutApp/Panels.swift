@@ -32,6 +32,15 @@ final class ActionCard {
         p.setFrameOrigin(NSPoint(x: x, y: vf.minY + 40))
         p.orderFrontRegardless()
         panel = p
+        // Testing only: LOOKOUT_TEST_AUTOCLICK=primary|secondary presses a button after 3 s.
+        if let auto = ProcessInfo.processInfo.environment["LOOKOUT_TEST_AUTOCLICK"], !buttons.isEmpty {
+            let b = auto == "secondary" && buttons.count > 1 ? buttons[1] : buttons[0]
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self, weak p] in
+                guard let self, let p, self.panel === p else { return }
+                Log.info("test autoclick: \(b.title)")
+                self.hide(); b.action()
+            }
+        }
     }
 
     func hide() { panel?.orderOut(nil); panel = nil }
@@ -126,7 +135,7 @@ struct PayPauseView: View {
 
     var body: some View {
         ZStack {
-            Color(red: 0.06, green: 0.12, blue: 0.22).opacity(0.86).ignoresSafeArea()
+            Color(red: 0.06, green: 0.12, blue: 0.22).opacity(0.94).ignoresSafeArea()
             VStack(spacing: 28) {
                 Circle()
                     .fill(Color(red: 0.35, green: 0.66, blue: 0.98).opacity(0.85))
@@ -186,7 +195,7 @@ struct PayPauseView: View {
         case .waiting: return "\(model.reason)\nI've sent \(model.familyName) a message. Take a slow breath. We'll wait together."
         case .offline: return "\(model.reason)\nI couldn't reach \(model.familyName). Please call them on a number you know."
         case .approved: return "You can go ahead now."
-        case .denied: return "This payment isn't safe. Nothing has been sent. You did the right thing by pausing."
+        case .denied: return "This isn't safe. Nothing has been sent. You did the right thing by pausing."
         }
     }
 }
