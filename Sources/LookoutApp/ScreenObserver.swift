@@ -47,7 +47,8 @@ struct Snapshot {
         }
         if let label, label.count >= 3 {
             let words = label.lowercased().split(separator: " ").filter { $0.count >= 4 }
-            let named = controls.filter { e in
+            // An exact name is strong evidence, so size limits don't apply (file rows and menu items are wide).
+            let named = elements.filter { $0.frame.width > 4 && $0.frame.height > 4 && $0.frame.height < 200 }.filter { e in
                 let l = e.label.lowercased()
                 return l.contains(label.lowercased()) || words.contains { l.contains($0) }
             }

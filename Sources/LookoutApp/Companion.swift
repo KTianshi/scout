@@ -53,6 +53,10 @@ final class Companion {
         overlay.onTap = { AppDelegate.shared?.askTyped() }
         registerTalkShortcut()
         watchAppSwitches()
+        ActionWatcher.extraWindowKey = { [weak self] in
+            guard let self, self.demoInFront else { return "" }
+            return self.demoBrowser.web.url?.absoluteString ?? ""
+        }
         startWakeWord()
         demoBrowser.onClose = { [weak self] in self?.stopEverything() }
         startGuardian()
@@ -331,6 +335,7 @@ final class Companion {
         let turn = beginTurn(question, app: NSWorkspace.shared.frontmostApplication?.localizedName)
         currentTurn = turn
         defer { if currentTurn == turn { currentTurn = nil } }
+        defer { guideWaiting = false }
         var given: [String] = []
         var lastAction: ActionWatcher.Action?
         var early = await takePrefetched()
@@ -367,7 +372,7 @@ final class Companion {
                     }
                     let visible = PointTags.strip(PointTags.stripTrailingPartialTag(body))
                     guard !visible.isEmpty else { continue }
-                    if watcher == nil { watcher = ActionWatcher(); interrupter?.stop() }   // people often click as soon as they see where to go
+                    if watcher == nil { watcher = ActionWatcher(); interrupter?.stop(); guideWaiting = false }   // people often click as soon as they see where to go
                     overlay.setMood(.speaking)
                     overlay.say(visible, title: title)
                     let chars = Array(visible)
@@ -425,11 +430,12 @@ final class Companion {
                 return
             }
             overlay.setMood(.idle)
+            // Stays true until the next step starts talking: the step they just did may open another app.
             guideWaiting = true
             let action = await w8.wait(timeout: 90)
-            guideWaiting = false
-            if Task.isCancelled || generation != gen { return }
+            if Task.isCancelled || generation != gen { guideWaiting = false; return }
             guard let action else {
+                guideWaiting = false
                 overlay.release()
                 overlay.say("I'm right here whenever you're ready.")
                 break
@@ -448,6 +454,44 @@ final class Companion {
         overlay.reset()
     }
 
+    /// Testing only (LOOKOUT_TEST_GUIDE_CLICK=1): click what Lookout pointed at, 2.5 s later, so the follow-along
+    /// loop can be exercised end to end without a person. Clicks only inside the front window of the app named by
+    /// LOOKOUT_TEST_GUIDE_APP (e.g. Calculator), or the demo browser when that's unset.
+    func testAutoClick(at p: CGPoint) {
+        let env = ProcessInfo.processInfo.environment
+        guard env["LOOKOUT_TEST_GUIDE_CLICK"] == "1" else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [weak self] in
+            guard let self else { return }
+            var allowed: CGRect?
+            if let name = env["LOOKOUT_TEST_GUIDE_APP"] {
+                if let app = NSWorkspace.shared.frontmostApplication, app.localizedName == name { allowed = Self.focusedWindowFrame(app.processIdentifier) }
+            } else if self.demoInFront {
+                let f = self.demoBrowser.window.frame
+                let primary = NSScreen.screens.first?.frame.height ?? 0
+                allowed = CGRect(x: f.minX, y: primary - f.maxY, width: f.width, height: f.height)
+            }
+            guard let allowed, allowed.contains(p) else { Log.info("test click skipped: outside the allowed window"); return }
+            Log.info("test click at \(Int(p.x)),\(Int(p.y))")
+            for type in [CGEventType.leftMouseDown, .leftMouseUp] {
+                CGEvent(mouseEventSource: nil, mouseType: type, mouseCursorPosition: p, mouseButton: .left)?.post(tap: .cghidEventTap)
+            }
+        }
+    }
+
+    /// Top-left global frame of an app's focused window (Accessibility).
+    static func focusedWindowFrame(_ pid: pid_t) -> CGRect? {
+        let ax = AXUIElementCreateApplication(pid)
+        var win: AnyObject?
+        guard AXUIElementCopyAttributeValue(ax, kAXFocusedWindowAttribute as CFString, &win) == .success, let w = win else { return nil }
+        var pv: AnyObject?, sv: AnyObject?
+        guard AXUIElementCopyAttributeValue(w as! AXUIElement, kAXPositionAttribute as CFString, &pv) == .success,
+              AXUIElementCopyAttributeValue(w as! AXUIElement, kAXSizeAttribute as CFString, &sv) == .success else { return nil }
+        var pt = CGPoint.zero, sz = CGSize.zero
+        AXValueGetValue(pv as! AXValue, .cgPoint, &pt)
+        AXValueGetValue(sv as! AXValue, .cgSize, &sz)
+        return CGRect(origin: pt, size: sz)
+    }
+
     /// Fly to what the model pointed at and ring it.
     func point(at p: PointTags.Point, snap: Snapshot) {
         let screenPt = snap.screenPoint(forImagePoint: CGPoint(x: p.x, y: p.y))
@@ -456,6 +500,7 @@ final class Companion {
         let hl = el.map { overlayRect(fromScreenTopLeft: $0.frame) }
             ?? overlayRect(fromScreenTopLeft: CGRect(x: snapped.x - 22, y: snapped.y - 16, width: 44, height: 32))
         overlay.fly(to: overlayPoint(fromScreenTopLeft: snapped), highlight: hl)
+        testAutoClick(at: snapped)
         Log.info("point: img(\(Int(p.x)),\(Int(p.y))) → screen(\(Int(snapped.x)),\(Int(snapped.y))) label=\(p.label ?? "-") snapped=\(el?.label.prefix(30) ?? "no")")
     }
 
@@ -1133,16 +1178,28 @@ final class ActionWatcher {
     private var monitor: Any?
     private let startWindow = ActionWatcher.frontWindowKey()
     private var windowChangedAt: Date?
+    private var lastWindowCheck = Date()
     var sawClick: Bool { lastClick != nil }
     private var lastClick: (at: Date, point: CGPoint)?
     private var lastKey: Date?
     private var keys = 0
+
+    private var localMonitor: Any?
+    /// Extra state that changes when the person moves on inside Lookout's own windows (the demo browser's page).
+    static var extraWindowKey: (@MainActor () -> String)?
 
     init() {
         monitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseUp, .keyDown]) { [weak self] e in
             let isKey = e.type == .keyDown
             let loc = NSEvent.mouseLocation
             Task { @MainActor in self?.record(isKey: isKey, appKitPoint: loc) }
+        }
+        // Global monitors never see events in our own windows, and the demo browser is one of them.
+        localMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseUp, .keyDown]) { [weak self] e in
+            let isKey = e.type == .keyDown
+            let loc = NSEvent.mouseLocation
+            Task { @MainActor in self?.record(isKey: isKey, appKitPoint: loc) }
+            return e
         }
     }
 
@@ -1154,7 +1211,9 @@ final class ActionWatcher {
 
     func stop() {
         if let m = monitor { NSEvent.removeMonitor(m) }
+        if let m = localMonitor { NSEvent.removeMonitor(m) }
         monitor = nil
+        localMonitor = nil
     }
 
     /// Front app + its focused window's title: changes when a page, tab, dialog or app changes.
@@ -1170,7 +1229,7 @@ final class ActionWatcher {
                 if AXUIElementCopyAttributeValue(w as! AXUIElement, kAXTitleAttribute as CFString, &t) == .success { title = (t as? String) ?? "" }
             }
         }
-        return "\(app.processIdentifier)|\(title)"
+        return "\(app.processIdentifier)|\(title)|\(extraWindowKey?() ?? "")"
     }
 
     /// Returns once they've clicked (and the screen had a moment to update) or finished typing (2 s pause).
@@ -1180,7 +1239,11 @@ final class ActionWatcher {
             if let k = lastKey, Date().timeIntervalSince(k) > 1.3 { break }
             if let c = lastClick, lastKey.map({ $0 < c.at }) ?? true, Date().timeIntervalSince(c.at) > 0.5 { break }
             // A new window, tab or app (Enter submitted a form, a link opened) counts too.
-            if windowChangedAt == nil, Self.frontWindowKey() != startWindow { windowChangedAt = Date() }
+            // (An Accessibility round-trip, so at most twice a second: a slow app must not stall the overlay.)
+            if windowChangedAt == nil, Date().timeIntervalSince(lastWindowCheck) >= 0.5 {
+                lastWindowCheck = Date()
+                if Self.frontWindowKey() != startWindow { windowChangedAt = Date() }
+            }
             if let w = windowChangedAt, Date().timeIntervalSince(w) > 0.6 { break }
             try? await Task.sleep(nanoseconds: 120_000_000)
         }
