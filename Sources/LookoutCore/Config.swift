@@ -17,7 +17,10 @@ public enum LookoutConfig {
     public static var familyName: String { Secrets.shared["FAMILY_NAME"] ?? "Sarah" }
 
     /// Probability above which the guardian asks Claude to confirm.
-    public static let confirmThreshold = 0.10
+    /// Override with LOOKOUT_CONFIRM_THRESHOLD (e.g. 0.03 to ask Claude about nearly every screen with any signal).
+    public static var confirmThreshold: Double {
+        ProcessInfo.processInfo.environment["LOOKOUT_CONFIRM_THRESHOLD"].flatMap(Double.init) ?? 0.10
+    }
     /// Seconds between guardian passes.
     public static let guardianInterval: TimeInterval = 3
     /// Longest edge of screenshots sent to the model.

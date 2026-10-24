@@ -28,6 +28,8 @@ let verbose = args.contains("--verbose")
 let demoDir = opt("--demo")
 let markdownOut = opt("--markdown")
 
+let useModel = args.contains("--model")
+
 struct Row { var id: String; var label: String; var category: String; var split: String; var p: Double; var action: Action; var rules: [String]; var summary: String; var difficulty: String }
 
 func run(_ ctx: ScreenContext) -> ScamPipeline.Result {
@@ -36,6 +38,7 @@ func run(_ ctx: ScreenContext) -> ScamPipeline.Result {
 }
 
 var rows: [Row] = []
+var pending: [(Fixture, ScreenContext)] = []
 let text = (try? String(contentsOfFile: fixturesPath, encoding: .utf8)) ?? ""
 if text.isEmpty { FileHandle.standardError.write("No fixtures at \(fixturesPath)\n".data(using: .utf8)!) }
 let dec = JSONDecoder()
@@ -47,9 +50,45 @@ for line in text.split(whereSeparator: \.isNewline) where !line.trimmingCharacte
     if splitFilter != "all" && split != splitFilter { continue }
     let apps = f.apps ?? []
     let ctx = ScreenContext(text: f.text, url: f.url, appName: apps.first, runningApps: apps)
-    let r = run(ctx)
-    rows.append(Row(id: f.id, label: f.label, category: f.category, split: split, p: r.probability, action: r.action, rules: r.rules.map(\.id), summary: r.summary, difficulty: f.difficulty ?? "?"))
+    pending.append((f, ctx))
 }
+
+/// Heuristics, then (with --model) a text-only Claude confirmation when the pipeline would ask for one.
+func evaluateAll(_ items: [(Fixture, ScreenContext)]) async -> [Row] {
+    let client = ClaudeClient()
+    if useModel && !client.isConfigured { FileHandle.standardError.write("--model: no ANTHROPIC_API_KEY; heuristics only\n".data(using: .utf8)!) }
+    return await withTaskGroup(of: Row.self) { group in
+        var out: [Row] = []
+        var it = items.makeIterator()
+        func add(_ item: (Fixture, ScreenContext)) {
+            group.addTask {
+                let (f, ctx) = item
+                let pipeline = ScamPipeline()
+                var r = pipeline.evaluate(ctx)
+                if useModel && client.isConfigured && r.shouldConfirmWithModel {
+                    for attempt in 0..<3 {
+                        do {
+                            let v = try await client.confirmScam(screen: ctx, image: nil, heuristicSummary: r.summary)
+                            r = pipeline.applyModelVerdict(v, ctx: ctx)
+                            break
+                        } catch {
+                            if attempt == 2 { FileHandle.standardError.write("model error \(f.id): \(error.localizedDescription)\n".data(using: .utf8)!) }
+                            try? await Task.sleep(nanoseconds: 2_000_000_000)
+                        }
+                    }
+                }
+                return Row(id: f.id, label: f.label, category: f.category, split: f.split ?? "dev", p: r.probability, action: r.action, rules: r.rules.map(\.id), summary: r.summary, difficulty: f.difficulty ?? "?")
+            }
+        }
+        for _ in 0..<6 { if let x = it.next() { add(x) } }
+        for await row in group {
+            out.append(row)
+            if let x = it.next() { add(x) }
+        }
+        return out.sorted { $0.id < $1.id }
+    }
+}
+rows = await evaluateAll(pending)
 
 // Demo scenarios (HTML): strip tags, read meta.
 if let demoDir {
@@ -82,7 +121,7 @@ func pct(_ a: Int, _ b: Int) -> String { b == 0 ? "  n/a" : String(format: "%5.1
 var out = ""
 func say(_ s: String = "") { print(s); out += s + "\n" }
 
-say("# Lookout benchmark (on-device heuristics only, no model)")
+say(useModel ? "# Lookout benchmark (heuristics + Claude text confirmation, \(LookoutConfig.model))" : "# Lookout benchmark (on-device heuristics only, no model)")
 say()
 say("Fixtures: \(fixturesPath) · split: \(splitFilter) · alarm = policy action ≥ interrupt")
 say()
