@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1280">
+<meta name="lookout-label" content="scam">
+<meta name="lookout-url" content="https://micros0ft-security-alert.com/windows-defender/alert.html?err=0x80073b01">
+<meta name="lookout-app" content="Safari">
+<title>Windows Defender Security Center - Critical Alert</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body { font-family: "Segoe UI", -apple-system, "Helvetica Neue", Arial, sans-serif; background: #0a5fb4; overflow: hidden; }
+  /* fake Safari chrome */
+  .chrome { height: 78px; background: linear-gradient(#ececec, #dcdcdc); border-bottom: 1px solid #b9b9b9; font-family: -apple-system, "Helvetica Neue", Arial, sans-serif; position: relative; z-index: 5; }
+  .tabs { height: 36px; display: flex; align-items: flex-end; padding-left: 86px; }
+  .lights { position: absolute; left: 14px; top: 13px; display: flex; gap: 8px; }
+  .lights i { width: 12px; height: 12px; border-radius: 50%; display: block; }
+  .lights i:nth-child(1) { background: #ff5f57; border: 1px solid #e0443e; }
+  .lights i:nth-child(2) { background: #febc2e; border: 1px solid #dea123; }
+  .lights i:nth-child(3) { background: #28c840; border: 1px solid #1aab29; }
+  .tab { background: #f6f6f6; border: 1px solid #c4c4c4; border-bottom: none; border-radius: 8px 8px 0 0; padding: 7px 16px; font-size: 12px; color: #333; width: 300px; display: flex; gap: 8px; align-items: center; white-space: nowrap; overflow: hidden; }
+  .tab .fav { width: 12px; height: 12px; background: #d92b2b; border-radius: 2px; flex: none; }
+  .tab.inactive { background: transparent; border-color: transparent; color: #777; width: 200px; }
+  .bar { height: 42px; background: #f6f6f6; display: flex; align-items: center; gap: 12px; padding: 0 14px; }
+  .nav { color: #888; font-size: 18px; letter-spacing: 10px; }
+  .addr { flex: 1; max-width: 760px; margin: 0 auto; height: 28px; background: #fff; border: 1px solid #cfcfcf; border-radius: 7px; display: flex; align-items: center; padding: 0 10px; font-size: 13px; color: #222; gap: 7px; }
+  .addr .warn { color: #c00; font-size: 12px; font-weight: 600; }
+  .addr .host { color: #111; }
+  .addr .path { color: #8a8a8a; }
+
+  /* scam page */
+  .page { position: absolute; top: 78px; left: 0; right: 0; bottom: 0; background: #0a5fb4; color: #fff; }
+  .topbar { background: #fff; color: #222; display: flex; align-items: center; padding: 10px 24px; gap: 12px; font-size: 15px; box-shadow: 0 2px 6px rgba(0,0,0,.25); }
+  .squares { display: grid; grid-template-columns: 11px 11px; gap: 2px; }
+  .squares b { width: 11px; height: 11px; display: block; }
+  .squares b:nth-child(1){background:#f25022}.squares b:nth-child(2){background:#7fba00}.squares b:nth-child(3){background:#00a4ef}.squares b:nth-child(4){background:#ffb900}
+  .topbar .right { margin-left: auto; color: #c00; font-weight: 600; }
+  .bg-scan { position: absolute; left: 24px; top: 70px; width: 320px; font-size: 11.5px; white-space: nowrap; overflow: hidden; color: #cfe3ff; line-height: 1.7; font-family: Consolas, Menlo, monospace; opacity: .85; }
+  .bg-scan .bad { color: #ffb3b3; }
+  .bg-right { position: absolute; right: 30px; top: 70px; width: 300px; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.25); padding: 14px; font-size: 13px; line-height: 1.6; }
+  .bg-right h4 { margin: 0 0 6px; font-size: 14px; }
+  .modal { position: absolute; left: 50%; top: 60px; transform: translateX(-50%); width: 560px; background: #fff; color: #222; box-shadow: 0 12px 40px rgba(0,0,0,.5); border: 1px solid #888; }
+  .mhead { background: #c50f1f; color: #fff; padding: 10px 14px; display: flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 600; }
+  .mhead .x { margin-left: auto; font-weight: 400; opacity: .9; }
+  .mbody { padding: 18px 24px 20px; }
+  .shield { float: left; margin: 2px 16px 6px 0; }
+  .mbody h2 { margin: 0 0 8px; font-size: 20px; color: #c50f1f; font-weight: 700; }
+  .mbody p { margin: 0 0 10px; font-size: 14px; line-height: 1.45; }
+  .errcode { background: #f3f3f3; border-left: 4px solid #c50f1f; padding: 8px 12px; font-family: Consolas, Menlo, monospace; font-size: 13px; margin: 10px 0; clear: both; }
+  .call { text-align: center; margin: 14px 0 6px; }
+  .call .lbl { font-size: 14px; color: #444; }
+  .call .num { display: inline-block; margin-top: 6px; font-size: 34px; font-weight: 800; color: #fff; background: #c50f1f; padding: 8px 26px; border-radius: 4px; letter-spacing: .5px; animation: pulse 1.2s infinite; }
+  @keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(197,15,31,.6); } 50% { box-shadow: 0 0 0 12px rgba(197,15,31,0); } }
+  .call .toll { font-size: 13px; color: #333; margin-top: 6px; }
+  .progress { height: 14px; background: #e5e5e5; border-radius: 2px; overflow: hidden; margin: 6px 0 4px; }
+  .progress i { display: block; height: 100%; width: 12%; background: linear-gradient(90deg, #c50f1f, #ff4757); transition: width .4s; }
+  .scanline { font-size: 12px; color: #555; font-family: Consolas, Menlo, monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .btns { display: flex; justify-content: flex-end; gap: 10px; margin-top: 14px; }
+  .btns button { font: inherit; font-size: 13px; padding: 7px 22px; border: 1px solid #999; background: #e9e9e9; cursor: pointer; }
+  .btns button.primary { background: #0067c0; color: #fff; border-color: #0067c0; }
+  .footer { position: absolute; bottom: 0; left: 0; right: 0; background: #c50f1f; color: #fff; text-align: center; padding: 10px; font-size: 16px; font-weight: 600; }
+</style>
+</head>
+<body>
+<div class="chrome">
+  <div class="lights"><i></i><i></i><i></i></div>
+  <div class="tabs">
+    <div class="tab"><span class="fav"></span>Windows Defender Security Center - Critic…</div>
+    <div class="tab inactive">Weather – Sacramento</div>
+  </div>
+  <div class="bar">
+    <span class="nav">‹ ›</span>
+    <div class="addr"><span class="warn">⚠ Not Secure</span><span><span class="host">micros0ft-security-alert.com</span><span class="path">/windows-defender/alert.html?err=0x80073b01</span></span></div>
+    <span class="nav">⇪ ＋</span>
+  </div>
+</div>
+
+<div class="page">
+  <div class="topbar">
+    <div class="squares"><b></b><b></b><b></b><b></b></div>
+    <strong>Windows Defender</strong> <span style="color:#666">Security Center</span>
+    <span class="right">● Activate license</span>
+  </div>
+
+  <div class="bg-scan" id="bgscan">
+    Quick scan in progress…<br>
+    C:\Windows\System32\drivers\etc\hosts <span class="bad">INFECTED</span><br>
+    C:\Users\Public\Documents\banking.dat <span class="bad">INFECTED</span><br>
+    C:\Program Files\Common Files\svchost.exe <span class="bad">Trojan:Win32/Emotet</span><br>
+    C:\Users\AppData\Roaming\passwords.db <span class="bad">Spyware.Keylogger</span><br>
+    C:\Windows\Temp\~df39a.tmp <span class="bad">INFECTED</span><br>
+    Threats found: <span class="bad" id="threatcount">17</span>
+  </div>
+
+  <div class="bg-right">
+    <h4>Your information is at risk:</h4>
+    • Email account credentials<br>
+    • Banking passwords<br>
+    • Facebook login<br>
+    • Photos and documents<br>
+    • Credit card details<br><br>
+    Access to this PC has been <b>blocked for security reasons</b>.
+  </div>
+
+  <div class="modal" role="alertdialog" aria-label="Windows Defender Security Alert">
+    <div class="mhead">
+      <svg width="18" height="18" viewBox="0 0 24 24"><path fill="#fff" d="M12 2 3 6v6c0 5 3.8 9.4 9 10 5.2-.6 9-5 9-10V6z"/><path fill="#c50f1f" d="M11 7h2v7h-2zm0 8.5h2v2h-2z"/></svg>
+      Windows Defender - Security Warning
+      <span class="x">✕</span>
+    </div>
+    <div class="mbody">
+      <svg class="shield" width="64" height="72" viewBox="0 0 24 27"><path fill="#c50f1f" d="M12 0 1 4.5v7.2C1 18.6 5.7 24.6 12 26.4c6.3-1.8 11-7.8 11-14.7V4.5z"/><path fill="#fff" d="M10.8 6.5h2.4v9h-2.4zm0 11h2.4v2.6h-2.4z"/></svg>
+      <h2>Your computer has been infected!</h2>
+      <p><b>Trojan Spyware alert.</b> Your computer has been locked due to suspicious activity. Hackers may be stealing your passwords, banking information and photos right now.</p>
+      <p><b>Do not close this window or restart your computer.</b> Doing so may lead to data loss and suspension of your Windows registration.</p>
+      <div class="errcode">Error # 0x80073b01 &nbsp;|&nbsp; Threat: Trojan:Win32/Pornspy.A!rfn &nbsp;|&nbsp; IP: 73.162.xx.xx</div>
+      <div class="progress"><i id="bar"></i></div>
+      <div class="scanline" id="scanline">Scanning: C:\Windows\System32\config\SAM …</div>
+      <div class="call">
+        <div class="lbl">Call Microsoft Support immediately:</div>
+        <div class="num" data-lookout-threat="phone">(888) 555-0142</div>
+        <div class="toll">Toll Free · Certified Microsoft Technicians available 24/7</div>
+      </div>
+      <div class="btns"><button>Cancel</button><button class="primary">OK</button></div>
+    </div>
+  </div>
+
+  <div class="footer">⚠ Windows Security: Call Microsoft Support (888) 555-0142 — Do not ignore this critical alert ⚠</div>
+</div>
+
+<script>
+  // fake scanning progress (purely visual, no sound, no dialogs)
+  (function () {
+    var files = ["C:\\Windows\\System32\\config\\SAM", "C:\\Users\\Documents\\taxes_2025.pdf", "C:\\Windows\\System32\\winlogon.exe", "C:\\Users\\AppData\\Local\\Chrome\\Login Data", "C:\\ProgramData\\Microsoft\\Crypto\\RSA", "C:\\Users\\Pictures\\grandkids.jpg"];
+    var pct = 12, i = 0, threats = 17;
+    setInterval(function () {
+      pct = pct >= 96 ? 12 : pct + Math.random() * 7;
+      document.getElementById("bar").style.width = pct + "%";
+      document.getElementById("scanline").textContent = "Scanning: " + files[i++ % files.length] + " …  " + Math.floor(pct) + "%";
+      if (Math.random() > .6) document.getElementById("threatcount").textContent = ++threats;
+    }, 700);
+  })();
+</script>
+</body>
+</html>

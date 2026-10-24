@@ -1,0 +1,12 @@
+.DS_Store
+.build/
+*.app
+build/
+dist/
+secrets.env
+.env
+*.env
+node_modules/
+family/data/
+*.xcodeproj/xcuserdata/
+.swiftpm/

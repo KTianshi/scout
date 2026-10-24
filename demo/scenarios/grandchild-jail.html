@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1280">
+<meta name="lookout-label" content="scam">
+<meta name="lookout-url" content="sms:+1-916-555-0168">
+<meta name="lookout-app" content="Messages">
+<title>Messages – Tyler</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body { font-family: -apple-system, "SF Pro Text", "Helvetica Neue", Arial, sans-serif; color: #1d1d1f; background: #fff; overflow: hidden; font-size: 13px; }
+  .win { position: absolute; inset: 0; display: flex; }
+  .side { width: 320px; background: #f5f4f4; border-right: 1px solid #dcdcdc; flex: none; display: flex; flex-direction: column; }
+  .side .top { height: 52px; display: flex; align-items: center; padding: 0 14px; gap: 8px; }
+  .lights { display: flex; gap: 8px; }
+  .lights i { width: 12px; height: 12px; border-radius: 50%; display: block; }
+  .lights i:nth-child(1) { background: #ff5f57; } .lights i:nth-child(2) { background: #febc2e; } .lights i:nth-child(3) { background: #28c840; }
+  .side .compose { margin-left: auto; color: #6e6e73; font-size: 16px; }
+  .search { margin: 0 12px 8px; height: 28px; background: #e3e2e2; border-radius: 7px; color: #8e8e93; padding: 6px 10px; font-size: 13px; }
+  .conv { display: flex; gap: 10px; padding: 9px 12px; margin: 0 6px; border-radius: 8px; }
+  .conv.sel { background: #0a7cff; color: #fff; }
+  .conv.sel .pre, .conv.sel .t { color: #dceaff; }
+  .av { width: 42px; height: 42px; border-radius: 50%; flex: none; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 600; font-size: 15px; background: linear-gradient(#a8a8ad, #85858a); }
+  .conv .nm { font-weight: 600; display: flex; justify-content: space-between; font-size: 13px; }
+  .conv .t { font-weight: 400; color: #8e8e93; font-size: 12px; }
+  .conv .pre { color: #8e8e93; font-size: 12.5px; line-height: 1.3; height: 33px; overflow: hidden; margin-top: 2px; }
+  .conv > div:last-child { flex: 1; min-width: 0; }
+  .chat { flex: 1; display: flex; flex-direction: column; }
+  .chead { height: 72px; border-bottom: 1px solid #e3e3e3; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; background: #fbfbfb; }
+  .chead .av { width: 36px; height: 36px; font-size: 13px; }
+  .chead .who { font-size: 12px; margin-top: 3px; }
+  .chead .who small { color: #8e8e93; }
+  .chead .icons { position: absolute; right: 18px; top: 24px; color: #0a7cff; font-size: 17px; letter-spacing: 14px; }
+  .thread { flex: 1; padding: 16px 22px; overflow: hidden; display: flex; flex-direction: column; gap: 4px; }
+  .stamp { text-align: center; color: #8e8e93; font-size: 11px; margin: 8px 0 6px; }
+  .stamp b { font-weight: 600; }
+  .unk { text-align: center; color: #8e8e93; font-size: 11.5px; margin-bottom: 6px; }
+  .b { max-width: 500px; padding: 8px 13px; border-radius: 18px; font-size: 15px; line-height: 1.36; }
+  .in { background: #e9e9eb; align-self: flex-start; }
+  .out { background: #0a7cff; color: #fff; align-self: flex-end; }
+  .b.threat { outline: none; }
+  .del { align-self: flex-end; color: #8e8e93; font-size: 11px; margin: 0 4px 4px; }
+  .typing { align-self: flex-start; background: #e9e9eb; border-radius: 17px; padding: 10px 14px; display: flex; gap: 4px; }
+  .typing i { width: 7px; height: 7px; border-radius: 50%; background: #9a9a9f; display: block; animation: blink 1.2s infinite; }
+  .typing i:nth-child(2) { animation-delay: .2s; } .typing i:nth-child(3) { animation-delay: .4s; }
+  @keyframes blink { 0%,100% { opacity: .3; } 50% { opacity: 1; } }
+  .input { height: 52px; border-top: 1px solid #e8e8e8; display: flex; align-items: center; padding: 0 16px; gap: 10px; }
+  .input .field { flex: 1; height: 30px; border: 1px solid #d0d0d0; border-radius: 15px; padding: 6px 12px; color: #a0a0a5; font-size: 13px; }
+  .input .app { color: #8e8e93; font-size: 18px; }
+</style>
+</head>
+<body>
+<div class="win">
+  <div class="side">
+    <div class="top"><div class="lights"><i></i><i></i><i></i></div><span class="compose">✎</span></div>
+    <div class="search">⌕ Search</div>
+    <div class="conv sel"><div class="av">T</div><div><div class="nm">Tyler <span class="t">10:42 AM</span></div><div class="pre">Please Grandma I'm so scared. Please don't tell Mom and Dad…</div></div></div>
+    <div class="conv"><div class="av" style="background:linear-gradient(#f7a3b5,#e0738c)">SM</div><div><div class="nm">Sarah <span class="t">Yesterday</span></div><div class="pre">We'll bring the pies! The kids can't wait 🥧</div></div></div>
+    <div class="conv"><div class="av" style="background:linear-gradient(#9fd18b,#6eb15a)">BC</div><div><div class="nm">Book Club <span class="t">Thursday</span></div><div class="pre">Joan: Next month is "Lessons in Chemistry"</div></div></div>
+    <div class="conv"><div class="av" style="background:linear-gradient(#8fb8f2,#5d8fd9)">DP</div><div><div class="nm">Dr. Patel's Office <span class="t">Tuesday</span></div><div class="pre">Reminder: appt Nov 3 at 10:30 AM. Reply C to confirm.</div></div></div>
+    <div class="conv"><div class="av" style="background:linear-gradient(#f5c97a,#e3a43c)">R</div><div><div class="nm">Robert <span class="t">10/18/26</span></div><div class="pre">Golf moved to Saturday, see you there</div></div></div>
+  </div>
+
+  <div class="chat">
+    <div class="chead">
+      <div class="av">T</div>
+      <div class="who">Tyler <small>+1 (916) 555-0168 ›</small></div>
+      <div class="icons">📹 ⓘ</div>
+    </div>
+    <div class="thread">
+      <div class="stamp"><b>iMessage</b><br>Today 10:31 AM</div>
+      <div class="unk">This sender is not in your contacts.</div>
+      <div class="b in">Grandma? It's me Tyler. I'm texting from a different phone, mine got broken</div>
+      <div class="b out">Tyler? Honey is everything ok?? Your voice sounded strange on the phone</div>
+      <div class="b in">I have a broken nose from the airbag thats why I sound different. I was in a car accident last night and the other driver got hurt. The police arrested me 😢</div>
+      <div class="b in">I'm in jail right now. I need $3,000 for bail or they keep me here until the court date next month</div>
+      <div class="b in" data-lookout-threat="wire">My lawyer Mr. Davis will call you in a few minutes. He said you can send the bail money by <b>wire transfer or Zelle</b> to his office account — Davis Legal Services, acct ending 4417, phone (888) 555-0131. It has to be today before 3pm</div>
+      <div class="b in">Please Grandma I'm so scared. <b>Please don't tell Mom and Dad</b>, they'll be so mad at me. I'll pay you back I promise ❤️</div>
+      <div class="del">Delivered</div>
+      <div class="typing"><i></i><i></i><i></i></div>
+    </div>
+    <div class="input"><span class="app">⊕</span><div class="field">iMessage</div><span class="app">🎙</span></div>
+  </div>
+</div>
+</body>
+</html>

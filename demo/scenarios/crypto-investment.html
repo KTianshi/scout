@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1280">
+<meta name="lookout-label" content="scam">
+<meta name="lookout-url" content="https://app.bitgrowth-pro.io/dashboard?ref=linda-w-silverhearts">
+<meta name="lookout-app" content="Safari">
+<title>BitGrowth Pro – My Portfolio</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body { font-family: "Inter", -apple-system, "Helvetica Neue", Arial, sans-serif; background: #0b1220; overflow: hidden; color: #e5e7eb; }
+  .chrome { height: 78px; background: linear-gradient(#ececec, #dcdcdc); border-bottom: 1px solid #b9b9b9; font-family: -apple-system, "Helvetica Neue", Arial, sans-serif; position: relative; color: #222; }
+  .tabs { height: 36px; display: flex; align-items: flex-end; padding-left: 86px; gap: 2px; }
+  .lights { position: absolute; left: 14px; top: 13px; display: flex; gap: 8px; }
+  .lights i { width: 12px; height: 12px; border-radius: 50%; display: block; }
+  .lights i:nth-child(1) { background: #ff5f57; } .lights i:nth-child(2) { background: #febc2e; } .lights i:nth-child(3) { background: #28c840; }
+  .tab { background: #f6f6f6; border: 1px solid #c4c4c4; border-bottom: none; border-radius: 8px 8px 0 0; padding: 7px 16px; font-size: 12px; color: #333; width: 260px; display: flex; gap: 8px; align-items: center; white-space: nowrap; overflow: hidden; }
+  .tab.inactive { background: transparent; border-color: transparent; color: #777; }
+  .tab .fav { width: 12px; height: 12px; background: #10b981; border-radius: 3px; flex: none; }
+  .bar { height: 42px; background: #f6f6f6; display: flex; align-items: center; gap: 12px; padding: 0 14px; }
+  .nav { color: #888; font-size: 18px; letter-spacing: 10px; }
+  .addr { flex: 1; max-width: 760px; margin: 0 auto; height: 28px; background: #fff; border: 1px solid #cfcfcf; border-radius: 7px; display: flex; align-items: center; padding: 0 10px; font-size: 13px; color: #222; gap: 7px; white-space: nowrap; overflow: hidden; }
+  .addr .path { color: #8a8a8a; }
+
+  .page { position: absolute; top: 78px; left: 0; right: 0; bottom: 0; display: flex; }
+  .nav2 { width: 200px; background: #0f172a; border-right: 1px solid #1e293b; padding: 18px 14px; flex: none; }
+  .brand { display: flex; align-items: center; gap: 8px; font-weight: 800; font-size: 18px; margin-bottom: 22px; }
+  .nav2 div.i { padding: 9px 10px; border-radius: 8px; color: #94a3b8; font-size: 14px; margin-bottom: 2px; }
+  .nav2 div.i.on { background: #1e293b; color: #fff; }
+  .vip { margin-top: 18px; background: linear-gradient(135deg, #f59e0b, #d97706); color: #111; border-radius: 10px; padding: 12px; font-size: 12.5px; font-weight: 600; }
+  .vip b { display: block; font-size: 14px; }
+  .content { flex: 1; padding: 18px 22px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+  .promo { background: linear-gradient(90deg, #065f46, #047857); border-radius: 10px; padding: 10px 16px; font-size: 14px; display: flex; align-items: center; gap: 10px; }
+  .promo b { color: #fde68a; }
+  .promo .cd { margin-left: auto; font-family: Menlo, monospace; background: rgba(0,0,0,.25); padding: 3px 8px; border-radius: 6px; }
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .stat { background: #111a2e; border: 1px solid #1e293b; border-radius: 12px; padding: 12px 16px; }
+  .stat .l { color: #94a3b8; font-size: 12.5px; }
+  .stat .v { font-size: 26px; font-weight: 800; margin-top: 4px; }
+  .up { color: #34d399; }
+  .row { display: flex; gap: 14px; min-height: 0; align-items: flex-start; }
+  .chart { flex: 1; background: #111a2e; border: 1px solid #1e293b; border-radius: 12px; padding: 12px 16px; }
+  .chart h4, .deposit h4 { margin: 0 0 6px; font-size: 14px; }
+  .deposit { width: 330px; flex: none; background: #111a2e; border: 1px solid #f59e0b; border-radius: 12px; padding: 14px 16px; font-size: 13px; color: #cbd5e1; }
+  .wallet { margin-top: 8px; background: #0b1220; border: 1px dashed #f59e0b; border-radius: 8px; padding: 10px; font-family: Menlo, monospace; font-size: 12px; color: #fde68a; word-break: break-all; }
+  .qr { width: 86px; height: 86px; float: right; margin: 0 0 6px 10px; background:
+      conic-gradient(from 90deg at 30% 30%, #fff 25%, #000 0 50%, #fff 0 75%, #000 0) 0 0 / 14px 14px; border: 5px solid #fff; border-radius: 4px; }
+  .deposit .btn { margin-top: 10px; width: 100%; height: 38px; border: 0; border-radius: 8px; background: #f59e0b; color: #111; font-weight: 800; font-size: 14px; font-family: inherit; }
+  .deposit .note { font-size: 11.5px; color: #fbbf24; margin-top: 8px; }
+  .chat { position: absolute; left: 222px; bottom: 14px; width: 572px; background: #fff; color: #111; border-radius: 14px; box-shadow: 0 12px 40px rgba(0,0,0,.5); overflow: hidden; }
+  .chat .h { background: #e11d48; color: #fff; padding: 9px 12px; display: flex; gap: 10px; align-items: center; font-size: 13px; }
+  .chat .h .av { width: 34px; height: 34px; border-radius: 50%; background: linear-gradient(#fda4af, #fb7185); border: 2px solid #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; }
+  .chat .h small { display: block; opacity: .85; font-size: 11px; }
+  .chat .msgs { padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; font-size: 13.5px; line-height: 1.35; background: #fff1f2; }
+  .chat .m { background: #fff; border: 1px solid #fecdd3; border-radius: 12px 12px 12px 4px; padding: 6px 10px; max-width: 520px; }
+  .payouts { position: absolute; right: 22px; bottom: 14px; left: 810px; background: #111a2e; border: 1px solid #1e293b; border-radius: 12px; padding: 12px 16px; font-size: 13px; color: #cbd5e1; }
+  .payouts h4 { margin: 0 0 8px; font-size: 14px; color: #e5e7eb; }
+  .payouts div { display: flex; justify-content: space-between; padding: 5px 0; border-top: 1px solid #1e293b; }
+  .payouts b { color: #34d399; }
+  .chat .t { font-size: 10.5px; color: #9f1239; }
+</style>
+</head>
+<body>
+<div class="chrome">
+  <div class="lights"><i></i><i></i><i></i></div>
+  <div class="tabs"><div class="tab"><span class="fav"></span>BitGrowth Pro – My Portfolio</div><div class="tab inactive">SilverHearts – Messages (3)</div></div>
+  <div class="bar">
+    <span class="nav">‹ ›</span>
+    <div class="addr"><span>🔒</span><span><span>app.bitgrowth-pro.io</span><span class="path">/dashboard?ref=linda-w-silverhearts</span></span></div>
+    <span class="nav">⇪ ＋</span>
+  </div>
+</div>
+
+<div class="page">
+  <div class="nav2">
+    <div class="brand"><svg width="26" height="26" viewBox="0 0 24 24"><rect width="24" height="24" rx="6" fill="#10b981"/><path d="M5 16l5-5 3 3 6-7" stroke="#fff" stroke-width="2.4" fill="none"/></svg>BitGrowth Pro</div>
+    <div class="i on">▦ Dashboard</div>
+    <div class="i">⇅ Trade</div>
+    <div class="i">↓ Deposit</div>
+    <div class="i">↑ Withdraw</div>
+    <div class="i">☺ My Mentor</div>
+    <div class="i">⚙ Settings</div>
+    <div class="vip"><b>VIP Gold Tier</b>Deposit $10,000 more to unlock 45% monthly AI-arbitrage returns.</div>
+  </div>
+
+  <div class="content">
+    <div class="promo">🔥 <span><b>GUARANTEED 30% MONTHLY RETURNS</b> — AI quantitative trading. Zero risk. Limited-time deposit bonus +20%.</span><span class="cd" id="cd">Ends in 02:14:37</span></div>
+    <div class="stats">
+      <div class="stat"><div class="l">Total Balance</div><div class="v">$48,912.36</div><div class="up">▲ +$11,287.40 this month</div></div>
+      <div class="stat"><div class="l">Total Profit</div><div class="v up">+$23,912.36</div><div class="l">Initial deposit: $25,000.00</div></div>
+      <div class="stat"><div class="l">Monthly Return</div><div class="v up">+30.2%</div><div class="l">Guaranteed by BitGrowth AI</div></div>
+    </div>
+    <div class="row">
+      <div class="chart">
+        <h4>Portfolio growth (6 months)</h4>
+        <svg width="100%" height="168" viewBox="0 0 560 200" preserveAspectRatio="none">
+          <defs><linearGradient id="g" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#10b981" stop-opacity=".45"/><stop offset="1" stop-color="#10b981" stop-opacity="0"/></linearGradient></defs>
+          <g stroke="#1e293b"><line x1="0" y1="50" x2="560" y2="50"/><line x1="0" y1="100" x2="560" y2="100"/><line x1="0" y1="150" x2="560" y2="150"/></g>
+          <path d="M0 185 L40 182 L80 176 L120 178 L160 166 L200 160 L240 148 L280 150 L320 128 L360 118 L400 96 L440 84 L480 60 L520 40 L560 18 L560 200 L0 200Z" fill="url(#g)"/>
+          <path d="M0 185 L40 182 L80 176 L120 178 L160 166 L200 160 L240 148 L280 150 L320 128 L360 118 L400 96 L440 84 L480 60 L520 40 L560 18" stroke="#34d399" stroke-width="3" fill="none"/>
+          <g fill="#64748b" font-size="11" font-family="Arial"><text x="4" y="196">May</text><text x="100" y="196">Jun</text><text x="200" y="196">Jul</text><text x="300" y="196">Aug</text><text x="400" y="196">Sep</text><text x="520" y="196">Oct</text></g>
+        </svg>
+      </div>
+      <div class="deposit" data-lookout-threat="crypto">
+        <h4>⚡ Deposit via Bitcoin ATM</h4>
+        <div class="qr"></div>
+        Take cash to any Bitcoin ATM (CoinFlip, Bitcoin Depot) at your local gas station or grocery store. Scan this QR code or enter the wallet address below.
+        <div style="clear:both"></div>
+        <div class="wallet">bc1q-DEMO-FAKE-WALLET-lookout-0000-not-real-xx</div>
+        <button class="btn" type="button" onclick="return false;">I've sent my deposit</button>
+        <div class="note">⏳ Minimum $5,000 to keep your bonus. Withdrawals require a 15% "unlock tax" first.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="payouts">
+    <h4>Live member withdrawals</h4>
+    <div>Robert H., 71 · Tampa FL <b>+$18,440</b></div>
+    <div>Susan K., 66 · Mesa AZ <b>+$9,212</b></div>
+    <div>Gary P., 74 · Dayton OH <b>+$31,050</b></div>
+    <div>Patricia M., 69 · Reno NV <b>+$6,780</b></div>
+  </div>
+  <div class="chat">
+    <div class="h"><div class="av">L</div><div><b>Linda W.</b> · SilverHearts match<small>● Active now · "your mentor"</small></div></div>
+    <div class="msgs">
+      <div class="m">Good morning my dear 🌹 Did you see your profits today? My uncle's AI system never loses.</div>
+      <div class="m">Trust me, I did the same and paid off my house in 6 months. Put in more before the bonus ends tonight, ok? It's guaranteed 30% every month 💕</div>
+      <div class="m">Don't tell your bank what it's for, they don't understand crypto and will block it.</div>
+      <div class="t">Linda · 8:47 AM</div>
+    </div>
+  </div>
+</div>
+<script>
+  (function () {
+    var s = 2 * 3600 + 14 * 60 + 37;
+    setInterval(function () {
+      s--; var h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = s % 60;
+      document.getElementById("cd").textContent = "Ends in " + String(h).padStart(2, "0") + ":" + String(m).padStart(2, "0") + ":" + String(x).padStart(2, "0");
+    }, 1000);
+  })();
+</script>
+</body>
+</html>

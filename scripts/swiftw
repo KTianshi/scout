@@ -1,0 +1,31 @@
+#!/bin/bash
+# Wrapper around `swift build|test|run` that works around a broken Command Line Tools install
+# on this machine (stale files left over from an older CLT version):
+#   - /Library/Developer/CommandLineTools/usr/include/swift/module.modulemap redefines SwiftBridging
+#   - ManifestAPI/PackageDescription.swiftmodule/*.private.swiftinterface is from an older SwiftPM
+# We hide both with a clang/swift VFS overlay instead of touching system files.
+# The permanent fix is reinstalling CLT (see MORNING.md). If the stale files are gone, this is a no-op.
+set -euo pipefail
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+FIX="$ROOT/.build/toolchain-fix"
+CLT=/Library/Developer/CommandLineTools
+MOD="$CLT/usr/include/swift/module.modulemap"
+PD="$CLT/usr/lib/swift/pm/ManifestAPI/PackageDescription.swiftmodule"
+ARCH="$(uname -m)"; [ "$ARCH" = "arm64" ] || ARCH=x86_64
+mkdir -p "$FIX"
+: > "$FIX/empty.modulemap"
+ROOTS=()
+if [ -f "$MOD" ] && [ -f "$CLT/usr/include/swift/bridging.modulemap" ]; then
+  ROOTS+=("{ \"type\": \"directory\", \"name\": \"$CLT/usr/include/swift\", \"contents\": [ { \"type\": \"file\", \"name\": \"module.modulemap\", \"external-contents\": \"$FIX/empty.modulemap\" } ] }")
+fi
+if [ -f "$PD/$ARCH-apple-macos.private.swiftinterface" ]; then
+  ROOTS+=("{ \"type\": \"directory\", \"name\": \"$PD\", \"contents\": [ { \"type\": \"file\", \"name\": \"$ARCH-apple-macos.private.swiftinterface\", \"external-contents\": \"$PD/$ARCH-apple-macos.swiftinterface\" } ] }")
+fi
+if [ ${#ROOTS[@]} -eq 0 ]; then exec swift "$@"; fi
+JOINED=$(IFS=,; echo "${ROOTS[*]}")
+echo "{ \"version\": 0, \"case-sensitive\": \"false\", \"roots\": [ $JOINED ] }" > "$FIX/overlay.yaml"
+O="$FIX/overlay.yaml"
+SUB="$1"; shift
+exec swift "$SUB" \
+  -Xmanifest -vfsoverlay -Xmanifest "$O" -Xmanifest -module-cache-path -Xmanifest "$FIX/manifest-mc" \
+  -Xswiftc -vfsoverlay -Xswiftc "$O" "$@"

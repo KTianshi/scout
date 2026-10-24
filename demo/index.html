@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lookout Demo Scenarios</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, "Helvetica Neue", Arial, sans-serif; background: #f6f4ef; color: #1f2328; }
+  .wrap { max-width: 1240px; margin: 0 auto; padding: 18px 32px 24px; }
+  .note { background: #fff8db; border: 1px solid #e9d27a; color: #5c4a00; border-radius: 10px; padding: 12px 16px; font-size: 17px; font-weight: 600; }
+  h1 { font-size: 32px; margin: 14px 0 2px; }
+  .lead { font-size: 17px; color: #555; margin: 0 0 14px; }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  h2 { font-size: 22px; margin: 0 0 10px; display: flex; align-items: center; gap: 10px; }
+  .pill { font-size: 13px; padding: 3px 10px; border-radius: 999px; font-weight: 700; }
+  .scam .pill { background: #fde2e1; color: #a1251b; }
+  .benign .pill { background: #dcf3e4; color: #1d6b3a; }
+  a.card { display: block; text-decoration: none; color: inherit; background: #fff; border: 1px solid #e3e0d8; border-radius: 12px; padding: 9px 16px; margin-bottom: 8px; transition: transform .08s, box-shadow .08s; }
+  a.card:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(0,0,0,.08); }
+  .scam a.card { border-left: 6px solid #d64535; }
+  .benign a.card { border-left: 6px solid #2f9e5b; }
+  .t { font-size: 19px; font-weight: 700; }
+  .d { font-size: 14.5px; color: #555; margin-top: 2px; line-height: 1.35; }
+  .m { font-size: 12.5px; color: #888; margin-top: 3px; font-family: Menlo, monospace; }
+  .k { display: inline-block; width: 22px; height: 22px; line-height: 22px; text-align: center; border-radius: 6px; background: #eee; font-size: 13px; font-weight: 700; margin-right: 6px; color: #444; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="note">All pages are fake and local. For the Lookout demo only.</div>
+  <h1>Lookout demo scenarios</h1>
+  <p class="lead">Six scams that target older adults, and four normal pages that look a little scary but are fine. Press a number key to open one.</p>
+  <div class="cols">
+    <div class="scam">
+      <h2>Scams <span class="pill">should warn</span></h2>
+      <a class="card" href="scenarios/tech-support.html"><div class="t"><span class="k">1</span>Fake virus alert</div><div class="d">"Windows Defender" pop-up says the computer is infected and to call support now.</div><div class="m">threat: phone · micros0ft-security-alert.com</div></a>
+      <a class="card" href="scenarios/irs-gift-card.html"><div class="t"><span class="k">2</span>IRS gift-card demand</div><div class="d">Email threatens arrest unless $1,500 is paid in gift cards, read over the phone.</div><div class="m">threat: gift-card · irs-gov-payments.co</div></a>
+      <a class="card" href="scenarios/grandchild-jail.html"><div class="t"><span class="k">3</span>"Grandson in jail"</div><div class="d">Text from "Tyler" asking for $3,000 bail by wire or Zelle. "Don't tell Mom and Dad."</div><div class="m">threat: wire · unknown number</div></a>
+      <a class="card" href="scenarios/bank-login.html"><div class="t"><span class="k">4</span>Fake bank sign-in</div><div class="d">"Account locked" page on a lookalike domain asks for password, SSN and card.</div><div class="m">threat: login · …verify-account.net</div></a>
+      <a class="card" href="scenarios/refund-anydesk.html"><div class="t"><span class="k">5</span>Refund + remote access</div><div class="d">"$399.99 renewal refund" page says to download AnyDesk and read the code to a technician.</div><div class="m">threat: remote-app · support-desk.live</div></a>
+      <a class="card" href="scenarios/crypto-investment.html"><div class="t"><span class="k">6</span>Romance crypto investment</div><div class="d">Online "friend" Linda pushes guaranteed 30% monthly returns and a Bitcoin ATM deposit.</div><div class="m">threat: crypto · bitgrowth-pro.io</div></a>
+    </div>
+    <div class="benign">
+      <h2>Normal pages <span class="pill">should stay quiet</span></h2>
+      <a class="card" href="scenarios/amazon-gift-card.html"><div class="t"><span class="k">7</span>Buying a birthday gift card</div><div class="d">A $50 eGift card for a grandchild on a regular store site.</div><div class="m">target: Add to Cart · shopriver.com</div></a>
+      <a class="card" href="scenarios/bank-statement.html"><div class="t"><span class="k">8</span>Real bank statement</div><div class="d">Monthly statement with a fraud tips box ("we will never ask for your password").</div><div class="m">target: balance · firstnationaltrust.com</div></a>
+      <a class="card" href="scenarios/medicare-letter.html"><div class="t"><span class="k">9</span>Medicare letter</div><div class="d">"This is not a bill" summary notice in Preview. Help demo: "what does this letter mean?"</div><div class="m">target: letter · Preview</div></a>
+      <a class="card" href="scenarios/email-attach.html"><div class="t"><span class="k">0</span>Attach a PDF to an email</div><div class="d">New message to Sarah. Help demo: "how do I attach this PDF?"</div><div class="m">target: paperclip · Mail</div></a>
+    </div>
+  </div>
+</div>
+<script>
+  // number keys open scenarios in the same tab
+  document.addEventListener("keydown", function (e) {
+    var links = document.querySelectorAll("a.card");
+    var i = "1234567890".indexOf(e.key);
+    if (i >= 0 && links[i]) location.href = links[i].href;
+  });
+</script>
+</body>
+</html>

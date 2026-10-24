@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1280">
+<meta name="lookout-label" content="scam">
+<meta name="lookout-url" content="mailto:notice@irs-gov-payments.co">
+<meta name="lookout-app" content="Mail">
+<title>Inbox – FINAL NOTICE: Outstanding Federal Tax Balance</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body { font-family: -apple-system, "SF Pro Text", "Helvetica Neue", Arial, sans-serif; color: #1d1d1f; background: #fff; overflow: hidden; font-size: 13px; }
+  .win { position: absolute; inset: 0; display: flex; flex-direction: column; }
+  .titlebar { height: 52px; background: #f3f2f2; border-bottom: 1px solid #d6d6d6; display: flex; align-items: center; padding: 0 14px; gap: 14px; flex: none; }
+  .lights { display: flex; gap: 8px; }
+  .lights i { width: 12px; height: 12px; border-radius: 50%; display: block; }
+  .lights i:nth-child(1) { background: #ff5f57; } .lights i:nth-child(2) { background: #febc2e; } .lights i:nth-child(3) { background: #28c840; }
+  .tb-title { font-weight: 600; font-size: 13px; margin-left: 150px; }
+  .tb-sub { color: #86868b; font-size: 11px; }
+  .tools { margin-left: auto; display: flex; gap: 18px; color: #6e6e73; font-size: 16px; align-items: center; }
+  .search { width: 180px; height: 26px; background: #e4e3e3; border-radius: 6px; color: #8e8e93; font-size: 12px; padding: 5px 8px; }
+  .main { flex: 1; display: flex; min-height: 0; }
+  .side { width: 190px; background: #e9e7ea; border-right: 1px solid #d6d6d6; padding: 12px 8px; flex: none; }
+  .side h6 { margin: 8px 8px 4px; font-size: 11px; color: #8e8e93; font-weight: 600; }
+  .side div { padding: 4px 10px; border-radius: 6px; display: flex; justify-content: space-between; }
+  .side .on { background: #d3d1d6; }
+  .side span.c { color: #8e8e93; }
+  .list { width: 330px; border-right: 1px solid #e0e0e0; overflow: hidden; flex: none; }
+  .lhead { padding: 10px 14px; border-bottom: 1px solid #ececec; font-weight: 700; font-size: 15px; }
+  .lhead small { display: block; font-weight: 400; color: #86868b; font-size: 11px; }
+  .item { padding: 9px 14px 9px 24px; border-bottom: 1px solid #ececec; position: relative; }
+  .item.sel { background: #0a63d6; color: #fff; }
+  .item.sel .pre, .item.sel .date { color: #dbe8ff; }
+  .item .from { font-weight: 600; display: flex; justify-content: space-between; }
+  .item .date { font-weight: 400; color: #86868b; font-size: 12px; }
+  .item .subj { margin-top: 1px; }
+  .item .pre { color: #86868b; font-size: 12px; margin-top: 2px; line-height: 1.35; height: 32px; overflow: hidden; }
+  .item .dot { position: absolute; left: 9px; top: 14px; width: 8px; height: 8px; border-radius: 50%; background: #0a63d6; }
+  .msg { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
+  .mhdr { padding: 14px 24px 12px; border-bottom: 1px solid #e5e5e5; display: flex; gap: 12px; }
+  .avatar { width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(#a1a1a6, #7c7c80); color: #fff; font-weight: 600; display: flex; align-items: center; justify-content: center; font-size: 15px; flex: none; }
+  .mhdr .who { font-weight: 600; font-size: 14px; }
+  .mhdr .who .addr { font-weight: 400; color: #6e6e73; }
+  .mhdr .line { color: #6e6e73; font-size: 12px; margin-top: 2px; }
+  .mhdr .line b { color: #1d1d1f; font-weight: 600; }
+  .mhdr .when { margin-left: auto; color: #86868b; font-size: 12px; white-space: nowrap; }
+  .body { padding: 18px 30px; overflow: hidden; flex: 1; background: #fff; }
+  /* the scam email itself */
+  .letter { max-width: 640px; font-family: Georgia, "Times New Roman", serif; font-size: 14px; line-height: 1.5; color: #111; }
+  .seal { display: flex; align-items: center; gap: 12px; border-bottom: 3px double #1b3a6b; padding-bottom: 8px; margin-bottom: 10px; }
+  .seal .org { font-family: Arial, sans-serif; color: #1b3a6b; font-weight: 700; font-size: 15px; letter-spacing: .3px; }
+  .seal .org small { display: block; font-weight: 400; font-size: 11px; color: #444; }
+  .red { color: #b30000; font-weight: 700; }
+  .final { background: #b30000; color: #fff; font-family: Arial, sans-serif; font-weight: 700; padding: 6px 10px; display: inline-block; font-size: 13px; letter-spacing: .5px; margin-bottom: 6px; }
+  .letter p { margin: 0 0 9px; }
+  .amount { font-family: Arial, sans-serif; border: 1px solid #ccc; background: #fafafa; padding: 8px 12px; font-size: 13px; margin: 6px 0 10px; display: grid; grid-template-columns: 170px 1fr; row-gap: 2px; }
+  .pay { border: 2px solid #b30000; padding: 10px 12px; margin: 8px 0; background: #fff7f7; }
+  .giftform { font-family: Arial, sans-serif; border: 1px solid #c9c9c9; background: #f6f8fb; padding: 10px 12px; margin-top: 8px; font-size: 13px; }
+  .giftform h4 { margin: 0 0 6px; font-size: 13px; color: #1b3a6b; }
+  .giftform .row { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; }
+  .giftform select, .giftform input { font: inherit; font-size: 13px; padding: 4px 6px; border: 1px solid #aaa; border-radius: 3px; background: #fff; }
+  .giftform input.code { width: 230px; font-family: Menlo, monospace; letter-spacing: 1px; }
+  .giftform button { background: #1b3a6b; color: #fff; border: 0; padding: 6px 14px; font-weight: 700; border-radius: 3px; font-size: 12px; }
+  .small { font-family: Arial, sans-serif; font-size: 10.5px; color: #666; margin-top: 8px; }
+</style>
+</head>
+<body>
+<div class="win">
+  <div class="titlebar">
+    <div class="lights"><i></i><i></i><i></i></div>
+    <div><div class="tb-title">Inbox</div><div class="tb-sub" style="margin-left:150px">1,284 messages, 3 unread</div></div>
+    <div class="tools"><span>✉︎</span><span>✎</span><span>⌫</span><span>↩︎</span><span>⤻</span><span>⚑</span><div class="search">⌕ Search</div></div>
+  </div>
+  <div class="main">
+    <div class="side">
+      <h6>Favorites</h6>
+      <div class="on"><span>📥 Inbox</span><span class="c">3</span></div>
+      <div><span>📤 Sent</span></div>
+      <div><span>📝 Drafts</span><span class="c">1</span></div>
+      <h6>Mailboxes</h6>
+      <div><span>🗑 Trash</span></div>
+      <div><span>⚠︎ Junk</span><span class="c">12</span></div>
+      <div><span>📁 Church</span></div>
+      <div><span>📁 Family</span></div>
+      <div><span>📁 Medical</span></div>
+    </div>
+    <div class="list">
+      <div class="lhead">Inbox<small>Sorted by Date</small></div>
+      <div class="item sel"><span class="dot" style="background:#fff"></span>
+        <div class="from">IRS Department of Treasury <span class="date">9:14 AM</span></div>
+        <div class="subj">FINAL NOTICE: Outstanding Federal Tax Balance</div>
+        <div class="pre">Case #IRS-2026-48213-CA. Our records indicate you owe back taxes. A warrant has been…</div>
+      </div>
+      <div class="item"><span class="dot"></span>
+        <div class="from">Walgreens <span class="date">8:02 AM</span></div>
+        <div class="subj">Your prescription is ready for pickup</div>
+        <div class="pre">Hi Margaret, your order at 4th &amp; J Street is ready. Pickup by Oct 28.</div>
+      </div>
+      <div class="item">
+        <div class="from">Sarah Mitchell <span class="date">Yesterday</span></div>
+        <div class="subj">Re: Thanksgiving plans</div>
+        <div class="pre">Mom, we'll bring the pies! The kids can't wait to see you. Love, S</div>
+      </div>
+      <div class="item">
+        <div class="from">St. Mark's Parish <span class="date">Yesterday</span></div>
+        <div class="subj">Weekly bulletin – October 25</div>
+        <div class="pre">Bake sale this Saturday in the fellowship hall from 9am to noon…</div>
+      </div>
+      <div class="item">
+        <div class="from">AARP <span class="date">Wednesday</span></div>
+        <div class="subj">5 ways to stay active this fall</div>
+        <div class="pre">Simple routines that keep you moving when the weather turns cooler.</div>
+      </div>
+      <div class="item">
+        <div class="from">Dr. Patel's Office <span class="date">Tuesday</span></div>
+        <div class="subj">Appointment reminder</div>
+        <div class="pre">This is a reminder of your appointment on Nov 3 at 10:30 AM.</div>
+      </div>
+    </div>
+    <div class="msg">
+      <div class="mhdr">
+        <div class="avatar">ID</div>
+        <div>
+          <div class="who">IRS Department of Treasury <span class="addr">&lt;notice@irs-gov-payments.co&gt;</span></div>
+          <div class="line"><b>To:</b> margaret.ellis52@example.com</div>
+          <div class="line"><b>Subject:</b> <span style="color:#1d1d1f">FINAL NOTICE: Outstanding Federal Tax Balance – Immediate Action Required</span></div>
+          <div class="line"><b>Reply-To:</b> agent.walker.irs@example-mail.co</div>
+        </div>
+        <div class="when">Today at 9:14 AM</div>
+      </div>
+      <div class="body">
+        <div class="letter">
+          <div class="seal">
+            <svg width="44" height="44" viewBox="0 0 44 44"><circle cx="22" cy="22" r="20" fill="#1b3a6b"/><circle cx="22" cy="22" r="15" fill="none" stroke="#e8d9a8" stroke-width="1.5"/><path d="M14 27h16M15 25v-7m4 7v-7m4 7v-7m4 7v-7M13 18l9-5 9 5z" stroke="#e8d9a8" stroke-width="1.6" fill="none"/></svg>
+            <div class="org">INTERNAL REVENUE SERVICE<small>Department of the Treasury · Criminal Investigation Division</small></div>
+          </div>
+          <div class="final">FINAL NOTICE – CASE #IRS-2026-48213-CA</div>
+          <p>Dear Taxpayer,</p>
+          <p>Our records indicate that you have an <span class="red">unpaid federal tax balance</span> from tax years 2022–2024. Multiple notices sent to your address have gone unanswered. <span class="red">A warrant for your arrest has been issued</span> and will be forwarded to your local Sheriff's office <span class="red">today at 5:00 PM</span> unless this balance is resolved.</p>
+          <div class="amount"><span>Amount Due:</span><b>$1,500.00</b><span>Penalty if unpaid today:</span><b class="red">$8,750.00 + arrest</b><span>Agent Assigned:</span><span>Officer James Walker, Badge #4471</span></div>
+          <div class="pay" data-lookout-threat="gift-card">
+            <b>To settle immediately, pay $1,500 using Target or Apple Gift Cards.</b> Purchase the cards at any Walgreens, CVS or Target, scratch off the back, and <b>read the gift card codes to Officer Walker over the phone at (888) 555-0177</b>. This is the only accepted payment method for expedited settlement.
+          </div>
+          <p><b>Do not discuss this matter with anyone</b>, including family members or bank employees, as this is a confidential federal investigation. Disclosure may result in additional charges.</p>
+          <form class="giftform" onsubmit="event.preventDefault(); return false;">
+            <h4>Secure Payment Portal – Enter gift card codes</h4>
+            <div class="row"><select><option>Apple Gift Card</option><option>Target GiftCard</option><option>Google Play</option></select>
+              <input class="code" type="text" placeholder="XXXX-XXXX-XXXX-XXXX" data-lookout-sensitive="gift-card">
+              <input type="text" placeholder="PIN" style="width:70px" data-lookout-sensitive="gift-card">
+              <input type="text" placeholder="$ Amount" style="width:90px"></div>
+            <button type="submit">Submit Payment</button>
+          </form>
+          <div class="small">IRS Notice CP-504 · This message is an official communication. Failure to respond is a federal offense under 26 U.S.C. § 7201.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>
