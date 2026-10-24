@@ -39,10 +39,11 @@ enum BuddyMood: Equatable {
 
 /// How the buddy looks. Picked from the menu; remembered across launches.
 enum BuddyStyle: String, CaseIterable {
-    case orb, cat, bear, chick, ghost, classic
+    case cursor, orb, cat, bear, chick, ghost, classic
 
     var title: String {
         switch self {
+        case .cursor: return "Blue cursor"
         case .orb: return "Glowing dot"
         case .cat: return "Cat 🐱"
         case .bear: return "Bear 🐻"
@@ -54,6 +55,7 @@ enum BuddyStyle: String, CaseIterable {
     /// Short name for the Settings tiles.
     var name: String {
         switch self {
+        case .cursor: return "Cursor"
         case .orb: return "Glow"
         case .cat: return "Cat"
         case .bear: return "Bear"
@@ -73,7 +75,7 @@ enum BuddyStyle: String, CaseIterable {
     }
 
     static var current: BuddyStyle {
-        get { UserDefaults.standard.string(forKey: "buddyStyle").flatMap(BuddyStyle.init) ?? .orb }
+        get { UserDefaults.standard.string(forKey: "buddyStyle").flatMap(BuddyStyle.init) ?? .cursor }
         set { UserDefaults.standard.set(newValue.rawValue, forKey: "buddyStyle") }
     }
 }
@@ -99,6 +101,11 @@ final class BuddyState: ObservableObject {
     @Published var style: BuddyStyle = .current
     /// Swells mid-flight (see Overlay.flyArc).
     @Published var flightScale: CGFloat = 1
+    /// The cursor-style buddy's heading: -35° at rest (like a pointer), along the arc in flight.
+    @Published var rotation: Double = -35
+    /// Small Clicky-style tag at the target ("right here!"), typed out a letter at a time.
+    @Published var tag: String = ""
+    @Published var tagScale: CGFloat = 1
     /// The pointer is over the bubble: fade it so whatever is underneath can be seen and clicked.
     @Published var bubbleFaded = false
 
@@ -131,6 +138,14 @@ final class BuddyState: ObservableObject {
     }
     /// Which placement the bubble took for the current anchor (plain var: set during layout, never published).
     private var lockedSide: (String, Int)?
+
+    /// Where the pointer tag goes: just right of the buddy like Clicky, or to its left near the screen's right edge.
+    func tagPosition(in size: CGSize) -> CGPoint {
+        let half = (18 + CGFloat(tag.count) * 7.6) / 2
+        var x = position.x + 12 + half
+        if x + half > size.width - 8 { x = position.x - 12 - half }
+        return CGPoint(x: max(half + 8, x), y: position.y + 20)
+    }
 
     /// The bubble's rough on-screen rect (same size estimate as the placement).
     func bubbleRect(in size: CGSize) -> CGRect {
@@ -166,7 +181,7 @@ final class Overlay {
         }
     }
     /// Offset of the resting buddy from the cursor tip.
-    static let cursorOffset = CGPoint(x: 24, y: 22)
+    static let cursorOffset = CGPoint(x: 35, y: 25)   // Clicky's offset: sits just below-right of the real pointer
     /// Where the buddy rests, in overlay coordinates. Drag the buddy to move it; remembered across launches.
     var home: CGPoint {
         get {
@@ -298,27 +313,62 @@ final class Overlay {
         // (just outside the highlighted element when we know it) so the target stays readable.
         var body = CGPoint(x: p.x + 34, y: p.y + 34)
         if let h = highlight { body = CGPoint(x: min(h.maxX, p.x + 140) + 26, y: h.maxY + 26) }
+        if state.style == .cursor {
+            // Like Clicky: the triangle's tip lands right at the target (8 right, 12 below).
+            body = CGPoint(x: p.x + 8, y: p.y + 12)
+            if let h = highlight { body = CGPoint(x: min(h.maxX, p.x + 60) + 6, y: h.maxY + 8) }
+        }
         let clamped = CGPoint(
             x: min(max(body.x, 30), screen.frame.width - 30),
             y: min(max(body.y, 30), screen.frame.height - 30)
         )
         state.bubbleAnchor = clamped
+        state.tag = ""
         withAnimation(.easeOut(duration: 0.25)) {
             state.pointing = true
             state.highlight = highlight
         }
-        flyArc(to: clamped)
+        flyArc(to: clamped) { [weak self] in self?.typeTag() }
+    }
+
+    private static let tagPhrases = ["right here!", "this one!", "over here!", "click this!", "here it is!"]
+    private var tagTask: Task<Void, Never>?
+
+    /// Clicky's pointer tag: pops in small and springs up, then types a short phrase with a natural rhythm.
+    /// (From Clicky's OverlayWindow.streamNavigationBubbleCharacter, MIT.)
+    private func typeTag() {
+        tagTask?.cancel()
+        guard state.pointing else { return }
+        let phrase = Self.tagPhrases.randomElement() ?? "right here!"
+        // Arrived: nose back to the resting pointer angle so it points at the target (Clicky's -35°).
+        withAnimation(.easeInOut(duration: 0.3)) { state.rotation = -35 }
+        state.tag = ""
+        state.tagScale = 0.5
+        tagTask = Task { @MainActor [weak self] in
+            for (i, ch) in phrase.enumerated() {
+                guard let self, !Task.isCancelled, self.state.pointing else { return }
+                self.state.tag.append(ch)
+                if i == 0 { withAnimation(.spring(response: 0.4, dampingFraction: 0.6)) { self.state.tagScale = 1 } }
+                try? await Task.sleep(nanoseconds: UInt64(Double.random(in: 0.03...0.06) * 1e9))
+            }
+        }
     }
 
     private var flight: Task<Void, Never>?
 
     /// Swoops along a quadratic bezier arc with smoothstep easing, swelling at the apex and settling on landing.
     /// Adapted from Clicky's OverlayWindow.animateBezierFlightArc (MIT); see THIRD_PARTY_NOTICES.md.
-    func flyArc(to end: CGPoint) {
+    func flyArc(to end: CGPoint, completion: (@MainActor () -> Void)? = nil) {
         flight?.cancel()
         let start = state.position
         let distance = hypot(end.x - start.x, end.y - start.y)
-        guard distance > 2 else { state.position = end; return }
+        guard distance > 2 else {
+            state.position = end
+            state.flightScale = 1
+            withAnimation(.easeInOut(duration: 0.3)) { state.rotation = -35 }
+            completion?()
+            return
+        }
         let duration = min(max(distance / 900, 0.45), 1.1)
         let mid = CGPoint(x: (start.x + end.x) / 2, y: (start.y + end.y) / 2)
         let control = CGPoint(x: mid.x, y: mid.y - min(distance * 0.2, 80))
@@ -334,10 +384,17 @@ final class Overlay {
                 let y: CGFloat = a * start.y + b * control.y + c * end.y
                 self.state.position = CGPoint(x: x, y: y)
                 self.state.flightScale = 1 + CGFloat(sin(Double(linear) * .pi)) * 0.3
+                // Face the direction of travel (tangent of the curve); +90° because the tip points up at 0°.
+                let tx: CGFloat = 2 * u * (control.x - start.x) + 2 * t * (end.x - control.x)
+                let ty: CGFloat = 2 * u * (control.y - start.y) + 2 * t * (end.y - control.y)
+                self.state.rotation = Double(atan2(ty, tx)) * 180 / .pi + 90
                 if linear >= 1 { break }
                 try? await Task.sleep(nanoseconds: 16_000_000)
             }
-            self?.state.flightScale = 1
+            guard let self, !Task.isCancelled else { return }
+            self.state.flightScale = 1
+            withAnimation(.easeInOut(duration: 0.3)) { self.state.rotation = -35 }
+            completion?()
         }
     }
 
@@ -361,10 +418,18 @@ final class Overlay {
     }
 
     func release() {
-        isPinned = false
+        let wasPointing = state.pointing
+        tagTask?.cancel()
+        state.tag = ""
         withAnimation(.easeOut(duration: 0.3)) {
             state.pointing = false
             state.highlight = nil
+        }
+        // Like Clicky: fly back to the pointer in an arc instead of jumping, then follow again.
+        if wasPointing, followsCursor {
+            flyArc(to: cursorTarget()) { [weak self] in self?.isPinned = false }
+        } else {
+            isPinned = false
         }
     }
 
@@ -390,10 +455,16 @@ struct BuddyOverlayView: View {
                     HighlightRing(rect: r, alarmed: state.mood == .alarmed)
                 }
                 if state.visible || state.bubble != nil || state.mood != .idle {
-                    BuddyView(style: state.style, mood: state.mood, pointing: state.pointing, level: state.listeningLevel)
+                    BuddyView(style: state.style, mood: state.mood, pointing: state.pointing, level: state.listeningLevel, rotation: state.rotation)
                         .frame(width: 64, height: 64)
-                        .scaleEffect((state.pointing || state.mood == .alarmed ? 0.8 : 0.6) * state.flightScale)
+                        .scaleEffect((state.style == .cursor ? 1 : (state.pointing || state.mood == .alarmed ? 0.8 : 0.6)) * state.flightScale)
                         .position(state.position)
+                    if !state.tag.isEmpty {
+                        PointerTag(text: state.tag, alarmed: state.mood == .alarmed)
+                            .scaleEffect(state.tagScale)
+                            .fixedSize()
+                            .position(state.tagPosition(in: geo.size))
+                    }
                     if let text = state.bubble {
                         SpeechBubble(title: state.bubbleTitle, text: text, alarmed: state.mood == .alarmed, talking: state.mood == .speaking, hint: state.hint)
                             .frame(maxWidth: 380)
@@ -417,9 +488,11 @@ struct BuddyView: View {
     var mood: BuddyMood
     var pointing: Bool
     var level: CGFloat
+    var rotation: Double = -35
 
     var body: some View {
         switch style {
+        case .cursor: CursorBuddy(mood: mood, level: level, rotation: rotation)
         case .orb: OrbBuddy(mood: mood, pointing: pointing, level: level)
         case .classic: FaceBuddy(mood: mood, pointing: pointing, level: level)
         default: EmojiBuddy(emoji: style.emoji ?? "🐱", mood: mood, pointing: pointing, level: level)
@@ -427,7 +500,105 @@ struct BuddyView: View {
     }
 }
 
-/// The default look: a small glowing orb. Breathes when idle, ripples when listening or alarmed,
+/// Clicky's look: a small glowing blue triangle that sits beside the real pointer like a second cursor.
+/// A waveform replaces it while listening, a spinner while thinking. (From Clicky's OverlayWindow, MIT.)
+struct CursorBuddy: View {
+    var mood: BuddyMood
+    var level: CGFloat
+    var rotation: Double
+
+    static let blue = Color(red: 0x33 / 255, green: 0x80 / 255, blue: 1)        // Clicky's #3380FF
+    static let amber = Color(red: 1, green: 0.55, blue: 0.2)
+    var color: Color { mood == .alarmed ? Self.amber : mood == .happy ? Color(red: 0.25, green: 0.78, blue: 0.5) : Self.blue }
+
+    var body: some View {
+        ZStack {
+            EquilateralTriangle()
+                .fill(color)
+                .frame(width: 16, height: 16)
+                .rotationEffect(.degrees(rotation))
+                .shadow(color: color, radius: mood == .alarmed ? 12 : 8)
+                .opacity(mood == .listening || mood == .thinking ? 0 : 1)
+            CursorWaveform(level: level, color: color)
+                .opacity(mood == .listening ? 1 : 0)
+            CursorSpinner(color: color)
+                .opacity(mood == .thinking ? 1 : 0)
+        }
+        .animation(.easeIn(duration: 0.15), value: mood)
+    }
+}
+
+/// Clicky's cursor-like triangle (equilateral, tip up before rotation).
+struct EquilateralTriangle: Shape {
+    func path(in rect: CGRect) -> Path {
+        var p = Path()
+        let size = min(rect.width, rect.height)
+        let h = size * sqrt(3.0) / 2.0
+        p.move(to: CGPoint(x: rect.midX, y: rect.midY - h / 1.5))
+        p.addLine(to: CGPoint(x: rect.midX - size / 2, y: rect.midY + h / 3))
+        p.addLine(to: CGPoint(x: rect.midX + size / 2, y: rect.midY + h / 3))
+        p.closeSubpath()
+        return p
+    }
+}
+
+/// Five bars that move with the voice (Clicky's BlueCursorWaveformView).
+struct CursorWaveform: View {
+    var level: CGFloat
+    var color: Color
+    private let profile: [CGFloat] = [0.4, 0.7, 1.0, 0.7, 0.4]
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 36.0)) { ctx in
+            HStack(alignment: .center, spacing: 2) {
+                ForEach(0..<5, id: \.self) { i in
+                    RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+                        .fill(color)
+                        .frame(width: 2.5, height: height(i, ctx.date))
+                }
+            }
+            .shadow(color: color.opacity(0.6), radius: 6)
+        }
+    }
+
+    private func height(_ i: Int, _ date: Date) -> CGFloat {
+        let phase = CGFloat(date.timeIntervalSinceReferenceDate * 3.6) + CGFloat(i) * 0.35
+        let eased = pow(min(max(level - 0.008, 0) * 2.85, 1), 0.76)
+        return 3 + eased * 12 * profile[i] + (sin(phase) + 1) / 2 * 1.5
+    }
+}
+
+/// Small spinning arc while Claude thinks (Clicky's BlueCursorSpinnerView).
+struct CursorSpinner: View {
+    var color: Color
+    @State private var spinning = false
+    var body: some View {
+        Circle()
+            .trim(from: 0.15, to: 0.85)
+            .stroke(AngularGradient(colors: [color.opacity(0), color], center: .center), style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+            .frame(width: 15, height: 15)
+            .rotationEffect(.degrees(spinning ? 360 : 0))
+            .shadow(color: color.opacity(0.6), radius: 6)
+            .onAppear { withAnimation(.linear(duration: 0.8).repeatForever(autoreverses: false)) { spinning = true } }
+    }
+}
+
+/// Clicky's little blue tag next to the target.
+struct PointerTag: View {
+    var text: String
+    var alarmed: Bool
+    var body: some View {
+        let c = alarmed ? CursorBuddy.amber : CursorBuddy.blue
+        Text(text)
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 9)
+            .padding(.vertical, 4)
+            .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(c).shadow(color: c.opacity(0.55), radius: 6))
+    }
+}
+
+/// The glowing-orb look. Breathes when idle, ripples when listening or alarmed,
 /// a spinning highlight while thinking.
 struct OrbBuddy: View {
     var mood: BuddyMood

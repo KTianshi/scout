@@ -334,6 +334,8 @@ final class Companion {
     // MARK: Help mode
 
     /// Short, cached acknowledgments said the moment they finish a step (prewarmed in standardLines).
+    /// Claude effort for a question's first answer (LOOKOUT_HELP_EFFORT overrides, for measuring).
+    static var firstStepEffort: String { ProcessInfo.processInfo.environment["LOOKOUT_HELP_EFFORT"] ?? "medium" }
     static let acks = ["Okay.", "Nice.", "Got it.", "Perfect."]
     static let allSet = "Perfect. You're all set."
 
@@ -382,7 +384,7 @@ final class Companion {
             do {
                 for try await delta in claude.stream(system: Prompts.guide(imageWidth: w, imageHeight: h),
                                                      text: guideUserText(question: question, snap: snap, given: given, action: lastAction),
-                                                     image: snap.image, maxTokens: 600, effort: stepNo == 1 ? "medium" : "low") {
+                                                     image: snap.image, maxTokens: 600, effort: stepNo == 1 ? Self.firstStepEffort : "low") {
                     if Task.isCancelled || generation != gen { speaker.cancel(); interrupter?.stop(); watcher?.stop(); return }
                     if spokenUpTo == 0, interrupter?.sawClick == true { superseded = true; break }
                     reply += delta
