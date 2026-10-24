@@ -81,6 +81,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func askTyped() {
         // The box doesn't take focus from the app the person was using, so Lookout answers about that screen.
         let demoWasFront = NSWorkspace.shared.frontmostApplication?.processIdentifier == getpid() && companion.demoBrowser.window.isVisible
+        companion.prepareForQuestion()
         askPanel.show { [weak self] q in
             guard let self else { return }
             if demoWasFront { self.companion.demoBrowser.show() }

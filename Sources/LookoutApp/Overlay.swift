@@ -97,6 +97,8 @@ final class BuddyState: ObservableObject {
     }
     @Published var listeningLevel: CGFloat = 0
     @Published var style: BuddyStyle = .current
+    /// Swells mid-flight (see Overlay.flyArc).
+    @Published var flightScale: CGFloat = 1
     /// The pointer is over the bubble: fade it so whatever is underneath can be seen and clicked.
     @Published var bubbleFaded = false
 
@@ -265,11 +267,42 @@ final class Overlay {
             x: min(max(body.x, 30), screen.frame.width - 30),
             y: min(max(body.y, 30), screen.frame.height - 30)
         )
-        withAnimation(.spring(response: 0.75, dampingFraction: 0.72)) {
-            state.position = clamped
-            state.bubbleAnchor = clamped
+        state.bubbleAnchor = clamped
+        withAnimation(.easeOut(duration: 0.25)) {
             state.pointing = true
             state.highlight = highlight
+        }
+        flyArc(to: clamped)
+    }
+
+    private var flight: Task<Void, Never>?
+
+    /// Swoops along a quadratic bezier arc with smoothstep easing, swelling at the apex and settling on landing.
+    /// Adapted from Clicky's OverlayWindow.animateBezierFlightArc (MIT); see THIRD_PARTY_NOTICES.md.
+    func flyArc(to end: CGPoint) {
+        flight?.cancel()
+        let start = state.position
+        let distance = hypot(end.x - start.x, end.y - start.y)
+        guard distance > 2 else { state.position = end; return }
+        let duration = min(max(distance / 900, 0.45), 1.1)
+        let mid = CGPoint(x: (start.x + end.x) / 2, y: (start.y + end.y) / 2)
+        let control = CGPoint(x: mid.x, y: mid.y - min(distance * 0.2, 80))
+        let began = Date()
+        flight = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                guard let self else { return }
+                let linear: CGFloat = min(1, CGFloat(Date().timeIntervalSince(began)) / duration)
+                let t: CGFloat = linear * linear * (3 - 2 * linear)
+                let u: CGFloat = 1 - t
+                let a: CGFloat = u * u, b: CGFloat = 2 * u * t, c: CGFloat = t * t
+                let x: CGFloat = a * start.x + b * control.x + c * end.x
+                let y: CGFloat = a * start.y + b * control.y + c * end.y
+                self.state.position = CGPoint(x: x, y: y)
+                self.state.flightScale = 1 + CGFloat(sin(Double(linear) * .pi)) * 0.3
+                if linear >= 1 { break }
+                try? await Task.sleep(nanoseconds: 16_000_000)
+            }
+            self?.state.flightScale = 1
         }
     }
 
@@ -324,7 +357,7 @@ struct BuddyOverlayView: View {
                 if state.visible || state.bubble != nil || state.mood != .idle {
                     BuddyView(style: state.style, mood: state.mood, pointing: state.pointing, level: state.listeningLevel)
                         .frame(width: 64, height: 64)
-                        .scaleEffect(state.pointing || state.mood == .alarmed ? 0.8 : 0.6)
+                        .scaleEffect((state.pointing || state.mood == .alarmed ? 0.8 : 0.6) * state.flightScale)
                         .position(state.position)
                     if let text = state.bubble {
                         SpeechBubble(title: state.bubbleTitle, text: text, alarmed: state.mood == .alarmed, talking: state.mood == .speaking, hint: state.hint)

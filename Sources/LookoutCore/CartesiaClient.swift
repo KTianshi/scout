@@ -48,6 +48,17 @@ public final class CartesiaClient: @unchecked Sendable {
         session = URLSession(configuration: cfg)
     }
 
+
+    /// Opens (and caches) the TLS connection before a real request needs it, so the first call after a key
+    /// press doesn't pay for a cold handshake. Fire-and-forget; failures don't matter.
+    /// (Approach from Clicky's ClaudeAPI.warmUpTLSConnectionIfNeeded, MIT.)
+    public func warmUp() {
+        var r = URLRequest(url: Self.baseURL)
+        r.httpMethod = "HEAD"
+        r.timeoutInterval = 5
+        session.dataTask(with: r).resume()
+    }
+
     public var isConfigured: Bool { !(apiKey ?? "").isEmpty }
 
     public func body(_ text: String) -> [String: Any] {

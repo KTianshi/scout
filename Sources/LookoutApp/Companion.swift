@@ -199,6 +199,7 @@ final class Companion {
     func beginListening() {
         guard !listening else { return }
         wake.stop()   // one microphone user at a time
+        prepareForQuestion()
         // Talking over Lookout interrupts it.
         stopEverything()
         guard Listener.canUseMicrophone else {
@@ -239,6 +240,7 @@ final class Companion {
         wake.onWake = { [weak self] in
             guard let self else { return }
             self.stopEverything()
+            self.prepareForQuestion()
             self.overlay.isPinned = false
             self.overlay.setMood(.listening)
             self.overlay.say("I'm listening…")
@@ -259,6 +261,25 @@ final class Companion {
                 if !shouldRun && self.wake.isRunning { self.wake.stop() }
             }
         }
+    }
+
+    /// Started the moment someone begins asking (key press, wake word, Ask box): warm the connections and
+    /// take the screenshot of what they're looking at while they're still talking.
+    private var prefetched: (snap: Task<Snapshot, Never>, at: Date, app: pid_t?)?
+
+    func prepareForQuestion() {
+        claude.warmUp()
+        (speech as? CartesiaSpeech)?.client.warmUp()
+        let app = NSWorkspace.shared.frontmostApplication?.processIdentifier
+        prefetched = (Task { await self.snapshot(includeImage: true) }, Date(), app)
+    }
+
+    /// The screenshot taken when they started asking, if it still describes the screen they asked about.
+    func takePrefetched() async -> Snapshot? {
+        guard let p = prefetched else { return nil }
+        prefetched = nil
+        guard Date().timeIntervalSince(p.at) < 20, p.app == NSWorkspace.shared.frontmostApplication?.processIdentifier else { return nil }
+        return await p.snap.value
     }
 
     func endListening() {
@@ -287,6 +308,9 @@ final class Companion {
 
     // MARK: Help mode
 
+    /// Short, cached acknowledgments said the moment they finish a step (prewarmed in standardLines).
+    static let acks = ["Okay.", "Nice.", "Got it.", "Perfect."]
+
     /// The guide's turn in `turns`, so its prompt shows the other turns as history.
     private var currentTurn: Int?
 
@@ -308,10 +332,17 @@ final class Companion {
         defer { if currentTurn == turn { currentTurn = nil } }
         var given: [String] = []
         var lastAction: ActionWatcher.Action?
-        for stepNo in 1...8 {
+        var early = await takePrefetched()
+        var stepNo = 0, looks = 0
+        while stepNo < 12 && looks < 20 {
+            stepNo += 1; looks += 1
             let t0 = Date()
-            let snap = await snapshot(includeImage: true)
+            let snap: Snapshot
+            if let e = early { snap = e; early = nil } else { snap = await snapshot(includeImage: true) }
             if Task.isCancelled || generation != gen { return }
+            // If they click while Claude is still writing, that answer is about a screen that's gone: look again.
+            let interrupter = stepNo > 1 ? ActionWatcher() : nil
+            var superseded = false
             let tSnap = Date().timeIntervalSince(t0)
             let w = snap.image?.width ?? 0, h = snap.image?.height ?? 0
             // Stream: fly as soon as the point arrives, speak each sentence as it completes.
@@ -324,7 +355,8 @@ final class Companion {
                 for try await delta in claude.stream(system: Prompts.guide(imageWidth: w, imageHeight: h),
                                                      text: guideUserText(question: question, snap: snap, given: given, action: lastAction),
                                                      image: snap.image, maxTokens: 600, effort: stepNo == 1 ? "medium" : "low") {
-                    if Task.isCancelled || generation != gen { speaker.cancel(); return }
+                    if Task.isCancelled || generation != gen { speaker.cancel(); interrupter?.stop(); return }
+                    if spokenUpTo == 0, interrupter?.sawClick == true { superseded = true; break }
                     reply += delta
                     if tFirst == nil { tFirst = Date().timeIntervalSince(t0) }
                     let body = reply.replacingOccurrences(of: "[DONE]", with: "", options: .caseInsensitive)
@@ -334,7 +366,7 @@ final class Companion {
                     }
                     let visible = PointTags.strip(PointTags.stripTrailingPartialTag(body))
                     guard !visible.isEmpty else { continue }
-                    if watcher == nil { watcher = ActionWatcher() }   // people often click as soon as they see where to go
+                    if watcher == nil { watcher = ActionWatcher(); interrupter?.stop() }   // people often click as soon as they see where to go
                     overlay.setMood(.speaking)
                     overlay.say(visible, title: title)
                     let chars = Array(visible)
@@ -354,7 +386,14 @@ final class Companion {
                 await speech.speak(msg)
                 return
             }
+            interrupter?.stop()
             if Task.isCancelled || generation != gen { speaker.cancel(); watcher?.stop(); return }
+            if superseded {
+                speaker.cancel(); watcher?.stop()
+                Log.info("guide: they acted while the step was being written; looking again")
+                stepNo -= 1
+                continue
+            }
             let done = reply.range(of: "[DONE]", options: .caseInsensitive) != nil
             let body = reply.replacingOccurrences(of: "[DONE]", with: "", options: .caseInsensitive)
             let text = PointTags.strip(body)
@@ -386,16 +425,19 @@ final class Companion {
             }
             overlay.setMood(.idle)
             guideWaiting = true
-            let action = await w8.wait(timeout: 60)
+            let action = await w8.wait(timeout: 90)
             guideWaiting = false
             if Task.isCancelled || generation != gen { return }
             guard let action else {
-                let msg = "Take your time. Ask me again whenever you're ready."
-                overlay.release(); overlay.say(msg); await speech.speak(msg)
+                overlay.release()
+                overlay.say("I'm right here whenever you're ready.")
                 break
             }
             lastAction = action
+            // Like a person watching over their shoulder: a quick "okay" while looking at what changed.
             overlay.setMood(.thinking)
+            let ack = Self.acks[stepNo % Self.acks.count]
+            Task { await speech.speak(ack) }
         }
         let summary = given.joined(separator: " ")
         Task { await family.send(.init(type: "help", title: "Helped with: \(question.prefix(80))", explanation: String(summary.prefix(300)), app: nil)) }
@@ -1061,7 +1103,7 @@ enum DeepCheck {
 /// Automatic: Lookout watches for the click and gives the next step on its own.
 enum GuideMode {
     static var automatic: Bool {
-        get { UserDefaults.standard.bool(forKey: "autoGuide") }
+        get { UserDefaults.standard.object(forKey: "autoGuide") as? Bool ?? true }
         set { UserDefaults.standard.set(newValue, forKey: "autoGuide") }
     }
 }
@@ -1083,11 +1125,14 @@ final class ActionWatcher {
                 parts.append("clicked\(on) (at \(Int(img.x)),\(Int(img.y)) in this screenshot)")
             }
             if typed > 0 { parts.append("typed some text (\(typed) keys)") }
-            return parts.isEmpty ? "did something" : parts.joined(separator: " and ")
+            return parts.isEmpty ? "moved to a new window or page" : parts.joined(separator: " and ")
         }
     }
 
     private var monitor: Any?
+    private let startWindow = ActionWatcher.frontWindowKey()
+    private var windowChangedAt: Date?
+    var sawClick: Bool { lastClick != nil }
     private var lastClick: (at: Date, point: CGPoint)?
     private var lastKey: Date?
     private var keys = 0
@@ -1111,16 +1156,35 @@ final class ActionWatcher {
         monitor = nil
     }
 
+    /// Front app + its focused window's title: changes when a page, tab, dialog or app changes.
+    static func frontWindowKey() -> String {
+        guard let app = NSWorkspace.shared.frontmostApplication else { return "" }
+        var title = ""
+        if Permissions.accessibility {
+            let ax = AXUIElementCreateApplication(app.processIdentifier)
+            AXUIElementSetMessagingTimeout(ax, 0.1)
+            var win: AnyObject?
+            if AXUIElementCopyAttributeValue(ax, kAXFocusedWindowAttribute as CFString, &win) == .success, let w = win {
+                var t: AnyObject?
+                if AXUIElementCopyAttributeValue(w as! AXUIElement, kAXTitleAttribute as CFString, &t) == .success { title = (t as? String) ?? "" }
+            }
+        }
+        return "\(app.processIdentifier)|\(title)"
+    }
+
     /// Returns once they've clicked (and the screen had a moment to update) or finished typing (2 s pause).
     func wait(timeout: TimeInterval) async -> Action? {
         let start = Date()
         while !Task.isCancelled && Date().timeIntervalSince(start) < timeout {
-            if let k = lastKey, Date().timeIntervalSince(k) > 1.6 { break }
+            if let k = lastKey, Date().timeIntervalSince(k) > 1.3 { break }
             if let c = lastClick, lastKey.map({ $0 < c.at }) ?? true, Date().timeIntervalSince(c.at) > 0.5 { break }
+            // A new window, tab or app (Enter submitted a form, a link opened) counts too.
+            if windowChangedAt == nil, Self.frontWindowKey() != startWindow { windowChangedAt = Date() }
+            if let w = windowChangedAt, Date().timeIntervalSince(w) > 0.6 { break }
             try? await Task.sleep(nanoseconds: 120_000_000)
         }
         stop()
-        guard !Task.isCancelled, lastClick != nil || lastKey != nil else { return nil }
+        guard !Task.isCancelled, lastClick != nil || lastKey != nil || windowChangedAt != nil else { return nil }
         return Action(click: lastClick?.point, typed: keys)
     }
 }
@@ -1167,6 +1231,7 @@ final class SentenceQueue {
                 await withCheckedContinuation { wake = $0 }
                 continue
             }
+            while speech.isSpeaking && !Task.isCancelled && isCurrent() { try? await Task.sleep(nanoseconds: 40_000_000) }
             await speech.speak(items.removeFirst())
         }
     }
