@@ -44,8 +44,20 @@ final class ActionCard {
         }
     }
 
-    func hide() { panel?.orderOut(nil); panel = nil }
+    func hide() { WindowRetirement.retire(panel); panel = nil }
     var isShowing: Bool { panel != nil }
+}
+
+/// Hides a window now but frees it a moment later. The cards' buttons close their own window: freeing it
+/// while SwiftUI is still dispatching that click left SwiftUI reading a dead window and crashed Scout
+/// (EXC_BAD_ACCESS inside MainActor.assumeIsolated in _ButtonGesture, right after "Yes, please").
+@MainActor
+enum WindowRetirement {
+    static func retire(_ w: NSWindow?) {
+        guard let w else { return }
+        w.orderOut(nil)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { w.contentView = nil; _ = w }
+    }
 }
 
 struct ActionCardView: View {
@@ -132,7 +144,7 @@ final class PayPauseScreen {
         }
     }
 
-    func hide() { windows.forEach { $0.orderOut(nil) }; windows.removeAll() }
+    func hide() { windows.forEach { WindowRetirement.retire($0) }; windows.removeAll() }
     var isShowing: Bool { !windows.isEmpty }
 }
 
