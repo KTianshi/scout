@@ -489,8 +489,17 @@ struct BuddyView: View {
     var pointing: Bool
     var level: CGFloat
     var rotation: Double = -35
+    @AppStorage(ClassicLook.key) private var classicLook = false
 
     var body: some View {
+        if classicLook, let sprite = PixelIcon.sprite(for: style) {
+            EmojiBuddy(emoji: "", mood: mood, pointing: pointing, level: level, sprite: sprite)
+        } else {
+            styled
+        }
+    }
+
+    @ViewBuilder private var styled: some View {
         switch style {
         case .cursor: CursorBuddy(mood: mood, level: level, rotation: rotation)
         case .orb: OrbBuddy(mood: mood, pointing: pointing, level: level)
@@ -674,6 +683,8 @@ struct EmojiBuddy: View {
     var mood: BuddyMood
     var pointing: Bool
     var level: CGFloat
+    /// Classic look: a pixel sprite in place of the emoji.
+    var sprite: PixelIcon? = nil
     @State private var bob = false
     @State private var pulse = false
 
@@ -692,8 +703,10 @@ struct EmojiBuddy: View {
                 .frame(width: 44, height: 44)
                 .blur(radius: 10)
                 .opacity(mood == .idle ? 0.25 : 0.6)
-            Text(emoji)
-                .font(.system(size: 44))
+            Group {
+                if let sprite { sprite.view.frame(width: 40, height: 40) }
+                else { Text(emoji).font(.system(size: 44)) }
+            }
                 .shadow(color: .black.opacity(0.25), radius: 4, y: 2)
                 .scaleEffect(mood == .listening ? 1 + level * 0.2 : 1)
             if pointing {

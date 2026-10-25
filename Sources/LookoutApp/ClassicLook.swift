@@ -147,6 +147,10 @@ struct PixelArt: View {
         "G": Color(red: 0.25, green: 0.70, blue: 0.20),
         "Y": Color(red: 1.0, green: 0.84, blue: 0.15),
         "p": Color(red: 0.72, green: 0.55, blue: 0.95),
+        "O": Color(red: 1.0, green: 0.62, blue: 0.15),
+        "N": Color(red: 0.55, green: 0.33, blue: 0.16),
+        "T": Color(red: 0.88, green: 0.70, blue: 0.48),
+        "P": Color(red: 1.0, green: 0.55, blue: 0.68),
     ]
 
     var body: some View {
@@ -167,6 +171,21 @@ struct PixelArt: View {
 
 enum PixelIcon: String {
     case voice, buddy, talking, safety, eye, hand, check, arrow
+    // Buddies
+    case orb, cat, bear, chick, ghost, smiley
+
+    /// The pixel version of a buddy style (the cursor style uses `.arrow` directly).
+    static func sprite(for style: BuddyStyle) -> PixelIcon? {
+        switch style {
+        case .cursor: return nil
+        case .orb: return .orb
+        case .cat: return .cat
+        case .bear: return .bear
+        case .chick: return .chick
+        case .ghost: return .ghost
+        case .classic: return .smiley
+        }
+    }
 
     var rows: [String] {
         switch self {
@@ -296,6 +315,98 @@ enum PixelIcon: String {
             "................",
             "................",
         ]
+        case .orb: return [
+            "................",
+            "................",
+            ".....BBBBBB.....",
+            "....BbbbbbbB....",
+            "...BbWWbbbbbB...",
+            "..BbWWbbbbbbbB..",
+            "..BbWbbbbbbbbB..",
+            "..BbbbbbbbbbbB..",
+            "..BbbbbbbbbbbB..",
+            "..BbbbbbbbbbBB..",
+            "...BbbbbbbbBB...",
+            "....BBbbbbBB....",
+            ".....BBBBBB.....",
+            "................",
+            "................",
+            "................",
+        ]
+        case .cat: return [
+            "................",
+            ".KK..........KK.",
+            ".KOK........KOK.",
+            ".KOOK......KOOK.",
+            ".KOPOKKKKKKOPOK.",
+            ".KOOOOOOOOOOOOK.",
+            "KOOOOOOOOOOOOOOK",
+            "KOOKKOOOOOOKKOOK",
+            "KOOKKOOOOOOKKOOK",
+            "KOOOOOOOOOOOOOOK",
+            "KKKOOOOPPOOOOKKK",
+            "KOOOOOOKKOOOOOOK",
+            ".KKOOOKOOKOOOKK.",
+            "..KOOOOOOOOOOK..",
+            "...KKKKKKKKKK...",
+            "................",
+        ]
+        case .bear: return [
+            "................",
+            ".KKK........KKK.",
+            "KNNNK......KNNNK",
+            "KNTNKKKKKKKKNTNK",
+            "KNNNNNNNNNNNNNNK",
+            ".KNNNNNNNNNNNNK.",
+            ".KNNKKNNNNKKNNK.",
+            "KNNNKKNNNNKKNNNK",
+            "KNNNNNTTTTNNNNNK",
+            "KNNNNTTKKTTNNNNK",
+            "KNNNNTTKKTTNNNNK",
+            ".KNNNTTTTTTNNNK.",
+            ".KNNNNTKKTNNNNK.",
+            "..KNNNNNNNNNNK..",
+            "...KKKKKKKKKK...",
+            "................",
+        ]
+        case .chick: return [
+            "................",
+            "......KKKK......",
+            ".....KYYYYK.....",
+            "....KYYYYYYK....",
+            "....KYKYYKYK....",
+            "....KYYYYYYK....",
+            "...KKYOOOOYKK...",
+            "..KYYKYOOYKYYK..",
+            ".KYYYYKKKKYYYYK.",
+            ".KYYYYYYYYYYYYK.",
+            "..KYYYYYYYYYYK..",
+            "...KYYYYYYYYK...",
+            "....KKKKKKKK....",
+            ".....KO..OK.....",
+            "....KOO..OOK....",
+            "................",
+        ]
+        case .ghost: return [
+            "................",
+            ".....KKKKKK.....",
+            "...KKWWWWWWKK...",
+            "..KWWWWWWWWWWK..",
+            ".KWWWWWWWWWWWWK.",
+            ".KWWKKWWWWKKWWK.",
+            ".KWWKKWWWWKKWWK.",
+            ".KWWWWWWWWWWWWK.",
+            "KKWWWWWPPWWWWWKK",
+            "KWWWWWWPPWWWWWWK",
+            ".KWWWWWWWWWWWWK.",
+            ".KWWWWWWWWWWWWK.",
+            ".KWWWWWWWWWWWWK.",
+            ".KWWWKWWWWKWWWK.",
+            ".KWWK.KWWK.KWWK.",
+            "..KK...KK...KK..",
+        ]
+        // The blue smiley buddy: the yellow face, recolored.
+        case .smiley: return PixelIcon.buddy.rows.map { String($0.map { $0 == "Y" ? "b" : $0 }) }
         // The classic white arrow pointer.
         case .arrow: return [
             "K...........",

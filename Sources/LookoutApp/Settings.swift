@@ -303,6 +303,7 @@ enum UIRenderer {
                     let tag = look ? "classic-" : ""
                     for step in 0...3 { save(SetupView(previewStep: step).lookoutTheme(force: look), "\(tag)setup-\(step)", width: 440, height: 500) }
                     for p in SettingsPane.allCases { save(SettingsView(model: model, pane: p).lookoutTheme(force: look), "\(tag)settings-\(p.rawValue)", width: 720, height: 560) }
+                    save(VStack(alignment: .leading, spacing: 22) { BuddyPane(model: model) }.padding(28).lookoutTheme(force: look), "\(tag)buddies", width: 560)
                 }
             } }
         }
@@ -478,6 +479,7 @@ struct StyleTile: View {
     var style: BuddyStyle
     var selected: Bool
     var action: () -> Void
+    @Environment(\.classic) private var classic
     @State private var hover = false
 
     var body: some View {
@@ -485,7 +487,7 @@ struct StyleTile: View {
             VStack(spacing: 8) {
                 BuddyView(style: style, mood: .idle, pointing: false, level: 0)
                     .frame(width: 64, height: 64)
-                    .scaleEffect(style == .classic ? 0.6 : 0.85)
+                    .scaleEffect(style == .classic && !classic ? 0.6 : 0.85)
                     .frame(width: 64, height: 64)
                 Text(style.name).lfont(14, .semibold)
             }
