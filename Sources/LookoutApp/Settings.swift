@@ -313,6 +313,17 @@ enum UIRenderer {
                 }
             } }
         }
+        // Every buddy expression, for checking the animation frames.
+        for icon in [PixelIcon.dog, .owl, .mouse, .chick] {
+            for (name, f) in [("base", SpriteFace.base), ("blink", .blink), ("talk", .talk), ("look", .look), ("happy", .happy), ("alarmed", .alarmed)] {
+                let r = ImageRenderer(content: PixelArt(rows: icon.rows(f)).frame(width: 160, height: 160).background(ClassicLook.face))
+                r.scale = 1
+                if let img = r.nsImage, let tiff = img.tiffRepresentation, let rep = NSBitmapImageRep(data: tiff),
+                   let png = rep.representation(using: .png, properties: [:]) {
+                    try? png.write(to: URL(fileURLWithPath: "\(dir)/sprite-\(icon.rawValue)-\(name).png"))
+                }
+            }
+        }
         print("rendered UI to \(dir)")
     }
 }

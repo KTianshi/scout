@@ -722,7 +722,7 @@ struct EmojiBuddy: View {
                 .blur(radius: 10)
                 .opacity(mood == .idle ? 0.25 : 0.6)
             Group {
-                if let sprite { sprite.view.frame(width: 40, height: 40) }
+                if let sprite { AnimatedSprite(icon: sprite, mood: mood).frame(width: 40, height: 40) }
                 else { Text(emoji).font(.system(size: 44)) }
             }
                 .shadow(color: .black.opacity(0.25), radius: 4, y: 2)

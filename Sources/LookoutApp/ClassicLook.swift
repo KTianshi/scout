@@ -492,3 +492,77 @@ enum PixelIcon: String {
 
     var view: PixelArt { PixelArt(rows: rows) }
 }
+
+// MARK: - Animation
+
+/// An expression: a few pixels changed on a buddy's base drawing.
+enum SpriteFace { case base, blink, talk, look, happy, alarmed }
+
+extension PixelIcon {
+    /// (row, column, replacement pixels) edits for each expression. Only the four mascots have them.
+    func patches(_ f: SpriteFace) -> [(Int, Int, String)] {
+        switch (self, f) {
+        case (.dog, .blink): return [(5, 5, "TT"), (5, 9, "TT")]
+        case (.dog, .talk): return [(10, 0, ".KNKTWKPPKWTKNK."), (11, 0, ".KNKTTWKKWTTKNK.")]
+        case (.dog, .look): return [(4, 5, "KK"), (4, 9, "KK"), (6, 5, "TT"), (6, 9, "TT")]
+        case (.dog, .happy): return patches(.blink) + [(12, 7, "PP")]
+        case (.dog, .alarmed): return [(4, 5, "KK"), (4, 9, "KK"), (10, 7, "KK"), (11, 6, "WWWW")]
+
+        case (.owl, .blink): return [(5, 3, "gggg"), (5, 9, "gggg"), (6, 2, "KKKKK"), (6, 9, "KKKKK"),
+                                     (7, 2, "ggggg"), (7, 9, "ggggg"), (8, 3, "gggg"), (8, 9, "gggg")]
+        case (.owl, .talk): return [(9, 7, "KK"), (10, 7, "OO")]
+        case (.owl, .look): return [(5, 4, "KK"), (5, 10, "KK"), (7, 4, "WW"), (7, 10, "WW")]
+        case (.owl, .happy): return patches(.blink)
+        case (.owl, .alarmed): return [(6, 4, "WK"), (7, 4, "WW"), (6, 10, "KW"), (7, 10, "WW"), (9, 7, "KK"), (10, 7, "OO")]
+
+        case (.mouse, .blink): return [(7, 5, "g"), (7, 10, "g")]
+        case (.mouse, .talk): return [(12, 7, "KK")]
+        case (.mouse, .look): return [(6, 5, "K"), (6, 10, "K"), (8, 5, "g"), (8, 10, "g")]
+        case (.mouse, .happy): return patches(.blink) + [(12, 6, "K"), (12, 9, "K"), (13, 7, "KK")]
+        case (.mouse, .alarmed): return [(6, 5, "K"), (6, 10, "K"), (12, 7, "KK")]
+
+        case (.chick, .blink): return [(4, 6, "Y"), (4, 9, "Y"), (5, 5, "KK"), (5, 9, "KK")]
+        case (.chick, .talk): return [(7, 7, "KK"), (8, 7, "OO")]
+        case (.chick, .look): return [(4, 6, "Y"), (4, 9, "Y"), (3, 6, "K"), (3, 9, "K")]
+        case (.chick, .happy): return patches(.blink)
+        case (.chick, .alarmed): return [(3, 6, "K"), (3, 9, "K"), (7, 7, "KK"), (8, 7, "OO")]
+
+        default: return []
+        }
+    }
+
+    func rows(_ f: SpriteFace) -> [String] {
+        var r = rows.map { Array($0) }
+        for (y, x, s) in patches(f) where y < r.count {
+            for (i, ch) in s.enumerated() where x + i < r[y].count { r[y][x + i] = ch }
+        }
+        return r.map { String($0) }
+    }
+}
+
+/// A pixel buddy that plays its expressions for the current mood: blinks when idle, moves its mouth
+/// while speaking, looks up while listening or thinking, wide-eyed when alarmed, beaming when happy.
+struct AnimatedSprite: View {
+    var icon: PixelIcon
+    var mood: BuddyMood
+    /// Spreads blinks out so two buddies on screen don't blink in step.
+    @State private var offset = Double.random(in: 0..<3)
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 0.08)) { ctx in
+            PixelArt(rows: icon.rows(face(ctx.date.timeIntervalSinceReferenceDate + offset)))
+        }
+    }
+
+    func face(_ t: Double) -> SpriteFace {
+        let blinking = t.truncatingRemainder(dividingBy: 3.4) < 0.14
+        switch mood {
+        case .idle: return blinking ? .blink : .base
+        case .speaking: return blinking ? .blink : (Int(t / 0.16) % 2 == 0 ? .talk : .base)
+        case .listening: return blinking ? .blink : .look
+        case .thinking: return Int(t / 0.7) % 2 == 0 ? .look : .base
+        case .alarmed: return .alarmed
+        case .happy: return .happy
+        }
+    }
+}
