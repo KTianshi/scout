@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 import LookoutCore
 
-/// One friendly window for everything a person (or whoever sets Lookout up for them) might want to change.
+/// One friendly window for everything a person (or whoever sets Scout up for them) might want to change.
 @MainActor
 final class SettingsWindow: NSObject, NSWindowDelegate {
     private var window: NSWindow?
@@ -16,7 +16,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         if let w = window { w.makeKeyAndOrderFront(nil); NSApp.activate(ignoringOtherApps: true); return }
         let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 720, height: 560),
                          styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
-        w.title = "Lookout Settings"
+        w.title = "Scout Settings"
         w.contentMinSize = NSSize(width: 640, height: 460)
         w.contentViewController = NSHostingController(rootView: SettingsView(model: model).lookoutTheme())
         w.setContentSize(NSSize(width: 720, height: 560))
@@ -77,7 +77,7 @@ final class SettingsModel: ObservableObject {
         guard let c = cartesia else { return }
         c.stop()
         Task {
-            await c.speak("Hi, I'm Lookout. This is how I'll sound.")
+            await c.speak("Hi, I'm Scout. This is how I'll sound.")
             // Re-cache the warning lines in the new voice so they still play instantly.
             _ = await c.client.prewarm(CartesiaSpeech.standardLines())
         }
@@ -204,7 +204,7 @@ struct SettingsSidebar: View {
                         .scaleEffect(0.5)
                         .frame(width: 32, height: 32)
                 }
-                Text("Lookout").lfont(18, .semibold)
+                Text("Scout").lfont(18, .semibold)
             }
             .padding(.leading, 4)
             .padding(.bottom, 14)
@@ -285,7 +285,7 @@ struct SettingsPageContent: View {
     }
 }
 
-/// `Lookout --render-ui DIR`: renders the setup steps and every settings page to PNGs (light and dark), offscreen.
+/// `Scout --render-ui DIR`: renders the setup steps and every settings page to PNGs (light and dark), offscreen.
 @MainActor
 enum UIRenderer {
     static func run(dir: String, companion: Companion) {
@@ -470,12 +470,12 @@ struct BuddyPane: View {
         VStack(alignment: .leading, spacing: 8) {
             CardTitle(text: "Behavior")
             VStack(spacing: 0) {
-                ToggleRow(icon: "eye.fill", tint: .blue, title: "Show Lookout on my screen",
+                ToggleRow(icon: "eye.fill", tint: .blue, title: "Show Scout on my screen",
                           isOn: Binding(get: { model.visible }, set: { model.setVisible($0) }))
                 Divider().padding(.leading, 14)
                 ToggleRow(icon: "hand.wave.fill", tint: .teal, title: "Offer help when I seem stuck",
-                          detail: model.stuckHelp ? "If you stay on one screen and keep clicking, Lookout asks if you want help."
-                                                  : "Off. Lookout only helps when you ask.",
+                          detail: model.stuckHelp ? "If you stay on one screen and keep clicking, Scout asks if you want help."
+                                                  : "Off. Scout only helps when you ask.",
                           isOn: Binding(get: { model.stuckHelp }, set: { model.setStuckHelp($0) }))
                 Divider().padding(.leading, 14)
                 ToggleRow(icon: "cursorarrow.motionlines", tint: .purple, title: "Follow my pointer",
@@ -578,16 +578,16 @@ struct TalkingPane: View {
         }
         VStack(alignment: .leading, spacing: 8) {
             CardTitle(text: "Hands-free")
-            ToggleRow(icon: "waveform.badge.mic", tint: .pink, title: "Start by saying “Hey Lookout”",
-                      detail: "Talk without pressing keys. Lookout only listens for its name, and nothing leaves your Mac until you say it.",
+            ToggleRow(icon: "waveform.badge.mic", tint: .pink, title: "Start by saying “Hey Scout”",
+                      detail: "Talk without pressing keys. Scout only listens for its name, and nothing leaves your Mac until you say it.",
                       isOn: Binding(get: { model.wakeWord }, set: { model.setWakeWord($0) }))
                 .settingsGroup()
         }
         VStack(alignment: .leading, spacing: 8) {
             CardTitle(text: "Step by step")
             ToggleRow(icon: "figure.walk", tint: .orange, title: "Give me the next step on its own",
-                      detail: model.autoGuide ? "After each click, Lookout looks again and tells you what to do next."
-                                              : "Lookout waits until you ask for the next step.",
+                      detail: model.autoGuide ? "After each click, Scout looks again and tells you what to do next."
+                                              : "Scout waits until you ask for the next step.",
                       isOn: Binding(get: { model.autoGuide }, set: { model.setAutoGuide($0) }))
                 .settingsGroup()
         }
@@ -643,7 +643,7 @@ struct SafetyPane: View {
                     NameField(title: "Your name", icon: "person.fill", text: $model.elderName, onCommit: model.saveNames)
                     NameField(title: "Family helper", icon: "heart.fill", text: $model.familyName, onCommit: model.saveNames)
                 }
-                Text("Lookout tells your family helper when it stops a scam, like “\(model.familyName.isEmpty ? "Sarah" : model.familyName) has been told.”")
+                Text("Scout tells your family helper when it stops a scam, like “\(model.familyName.isEmpty ? "Sarah" : model.familyName) has been told.”")
                     .lfont(13).foregroundStyle(.secondary)
             }
             .padding(16)
@@ -689,14 +689,11 @@ struct NameField: View {
 struct AppIconView: View {
     var body: some View {
         ZStack {
+            // Scout the dog, in pixels, on a sunny sky.
             RoundedRectangle(cornerRadius: 230, style: .continuous)
-                .fill(LinearGradient(colors: [Color(red: 0.10, green: 0.12, blue: 0.30), Color(red: 0.30, green: 0.18, blue: 0.55)],
-                                     startPoint: .topLeading, endPoint: .bottomTrailing))
-            Circle().fill(Color(red: 0.42, green: 0.76, blue: 1.0)).frame(width: 520).blur(radius: 110).opacity(0.75)
-            Circle()
-                .fill(RadialGradient(colors: [.white, Color(red: 0.42, green: 0.76, blue: 1.0)], center: .init(x: 0.4, y: 0.35), startRadius: 4, endRadius: 230))
-                .frame(width: 400)
-                .overlay(Circle().stroke(.white.opacity(0.7), lineWidth: 8).frame(width: 400))
+                .fill(LinearGradient(colors: [Color(red: 0.36, green: 0.62, blue: 0.98), Color(red: 0.70, green: 0.87, blue: 1.0)],
+                                     startPoint: .top, endPoint: .bottom))
+            PixelIcon.dog.view.frame(width: 720, height: 720).offset(y: 40)
         }
         .frame(width: 1024, height: 1024)
         .padding(0)

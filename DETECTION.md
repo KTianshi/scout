@@ -1,6 +1,6 @@
-# Lookout's scam detector: scams as playbooks
+# Scout's scam detector: scams as playbooks
 
-**Idea.** Scams follow a playbook of stages. A fake tech-support scam goes pop-up → phone call → remote access → bank → gift cards. Any single step is ambiguous: families really do use AnyDesk to help, and people really do buy gift cards as presents. The *sequence* is not ambiguous. Lookout models each scam type as a hidden sequence of stages, and an explainable probabilistic engine (not the LLM) decides whether a scam is in progress.
+**Idea.** Scams follow a playbook of stages. A fake tech-support scam goes pop-up → phone call → remote access → bank → gift cards. Any single step is ambiguous: families really do use AnyDesk to help, and people really do buy gift cards as presents. The *sequence* is not ambiguous. Scout models each scam type as a hidden sequence of stages, and an explainable probabilistic engine (not the LLM) decides whether a scam is in progress.
 
 ## The model (`model/playbooks.json`, one editable file)
 
@@ -32,7 +32,7 @@ Forward filtering in log space, one step per observation. After each step it rep
 
 ## CRS: checking the scammer, not grandma (`family/crs.js`, `SenderCheck.swift`)
 
-When a screen is already suspicious (risk ≥ 0.10), Lookout reads the **sender's email address** from it (a `mailto:` address or a "From:" line). It sends that address to **CRS Fraud Finder** (AtData email risk, CRS sandbox) through the family server, which holds the CRS keys. This runs in parallel with the Claude check.
+When a screen is already suspicious (risk ≥ 0.10), Scout reads the **sender's email address** from it (a `mailto:` address or a "From:" line). It sends that address to **CRS Fraud Finder** (AtData email risk, CRS sandbox) through the family server, which holds the CRS keys. This runs in parallel with the Claude check.
 - **The result is evidence, not a verdict.** It enters the playbook model as `CRS_SENDER_HIGH_RISK`, which, like Claude's flag, only counts on screens where the check actually ran.
 - **Calibration** (sandbox):
   - `auto-confirm@amazon.com` scores **0/100**, domain risk 1/10, first seen 2006.
@@ -40,7 +40,7 @@ When a screen is already suspicious (risk ≥ 0.10), Lookout reads the **sender'
   - P(high | scam) = 0.8, since some scammers use free mail; P(high | benign) = 0.04. One CRS answer can therefore move the odds by at most about 3 nats.
 - **The buddy says:** "I checked who sent this. That email address first appeared today and is rated very high risk." The family approval card shows the score.
 - **Responsible data:**
-  - Only the scam message's sender address is sent, never anything about the person Lookout protects.
+  - Only the scam message's sender address is sent, never anything about the person Scout protects.
   - It runs only on suspicious screens, with one lookup per address per day (cached).
   - Credentials stay on the family server.
   - Without credentials a clearly-labelled mock answer is used, and mock answers never change the score.

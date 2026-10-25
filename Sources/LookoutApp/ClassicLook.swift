@@ -16,7 +16,7 @@ enum ClassicLook {
 
     /// The classic look has no dark mode, so its windows use the light title bar too.
     @MainActor static func applyWindowAppearance(_ on: Bool) {
-        for w in NSApp.windows where w.title == "Lookout Settings" || w.title == "Set up Lookout" {
+        for w in NSApp.windows where w.title == "Scout Settings" || w.title == "Set up Scout" {
             w.appearance = on ? NSAppearance(named: .aqua) : nil
         }
     }
@@ -151,6 +151,7 @@ struct PixelArt: View {
         "N": Color(red: 0.55, green: 0.33, blue: 0.16),
         "T": Color(red: 0.88, green: 0.70, blue: 0.48),
         "P": Color(red: 1.0, green: 0.55, blue: 0.68),
+        "g": Color(white: 0.62),
     ]
 
     var body: some View {
@@ -172,12 +173,15 @@ struct PixelArt: View {
 enum PixelIcon: String {
     case voice, buddy, talking, safety, eye, hand, check, arrow
     // Buddies
-    case orb, cat, bear, chick, ghost, smiley
+    case dog, owl, mouse, orb, cat, bear, chick, ghost, smiley
 
     /// The pixel version of a buddy style (the cursor style uses `.arrow` directly).
     static func sprite(for style: BuddyStyle) -> PixelIcon? {
         switch style {
         case .cursor: return nil
+        case .dog: return .dog
+        case .owl: return .owl
+        case .mouse: return .mouse
         case .orb: return .orb
         case .cat: return .cat
         case .bear: return .bear
@@ -404,6 +408,60 @@ enum PixelIcon: String {
             ".KWWWKWWWWKWWWK.",
             ".KWWK.KWWK.KWWK.",
             "..KK...KK...KK..",
+        ]
+        case .dog: return [
+            "................",
+            "....KKKKKKKK....",
+            "..KKTTTTTTTTKK..",
+            ".KNKTTTTTTTTKNK.",
+            "KNNKTTTTTTTTKNNK",
+            "KNNKTKKTTKKTKNNK",
+            "KNNKTKKTTKKTKNNK",
+            "KNNKTTTTTTTTKNNK",
+            "KNNKTTWWWWTTKNNK",
+            "KNNKTWWKKWWTKNNK",
+            ".KNKTWWWWWWTKNK.",
+            ".KNKTTWPPWTTKNK.",
+            "..K.KTTTTTTK.K..",
+            "....KKKKKKKK....",
+            "................",
+            "................",
+        ]
+        case .owl: return [
+            "................",
+            "..K..........K..",
+            "..KK........KK..",
+            "..KgKKKKKKKKgK..",
+            ".KggggggggggggK.",
+            ".KgWWWWggWWWWgK.",
+            "KgWWKKWggWKKWWgK",
+            "KgWWKKWggWKKWWgK",
+            "KggWWWWOOWWWWggK",
+            "KggggggOOggggggK",
+            "KggssggggggssggK",
+            ".KggssggggssggK.",
+            ".KgggssggssgggK.",
+            "..KggggggggggK..",
+            "...KOOKKKKOOK...",
+            "................",
+        ]
+        case .mouse: return [
+            "................",
+            ".KKKK......KKKK.",
+            "KggggK....KggggK",
+            "KgPPgK....KgPPgK",
+            "KgPPgKKKKKKgPPgK",
+            ".KggKggggggKggK.",
+            "..KKggggggggKK..",
+            "...KgKggggKgK...",
+            "...KgKggggKgK...",
+            "...KggggggggK...",
+            "KK.KggggggggK.KK",
+            "..KKgggPPgggKK..",
+            "KK.KggggggggK.KK",
+            "....KKggggKK....",
+            "......KKKK......",
+            "................",
         ]
         // The blue smiley buddy: the yellow face, recolored.
         case .smiley: return PixelIcon.buddy.rows.map { String($0.map { $0 == "Y" ? "b" : $0 }) }

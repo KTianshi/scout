@@ -1,6 +1,6 @@
-# Lookout — family dashboard
+# Scout — family dashboard
 
-The family side of Lookout: a tiny zero-dependency Node server plus a mobile-first web page. The Mac app posts alerts and payment-approval requests here, and a family member watches them live on their phone. This is the phone that buzzes in the demo.
+The family side of Scout: a tiny zero-dependency Node server plus a mobile-first web page. The Mac app posts alerts and payment-approval requests here, and a family member watches them live on their phone. This is the phone that buzzes in the demo.
 
 ## Run
 
@@ -34,7 +34,7 @@ The server also reads `~/.config/lookout/secrets.env` (simple `KEY=VALUE` lines;
 `notify(event)` runs for `scam_alert`, `remote_access`, `payment_pause` and `help` events. It sends a text only when all four Twilio vars are set **and** `LOOKOUT_SMS_ENABLED=1`. It POSTs to `https://api.twilio.com/2010-04-01/Accounts/{SID}/Messages.json` using the built-in `https` module. Otherwise it only logs:
 
 ```
-[sms:mock] would text family: "Lookout: someone tried to remote into Mom's Mac. ... (Closed AnyDesk)"
+[sms:mock] would text family: "Scout: someone tried to remote into Mom's Mac. ... (Closed AnyDesk)"
 ```
 
 ## API
@@ -103,7 +103,7 @@ curl -N localhost:4545/api/stream
 curl localhost:4545/api/summary
 # {"from","to","total","countsByType":{scam_alert,remote_access,payment_pause,help,info},
 #  "scamsStopped","remoteAccessBlocked","payments":{"paused","approved","denied","pending"},
-#  "moneyProtected","helpSessions","headline":"Quiet week. Lookout stopped 2 scam attempts.",
+#  "moneyProtected","helpSessions","headline":"Quiet week. Scout stopped 2 scam attempts.",
 #  "perDay":[{"date":"2026-10-18","label":"Sun","total":2,"counts":{...}} x7, oldest first]}
 
 curl localhost:4545/api/config            # {"elderName":"Mom","familyName":"Sarah"}
@@ -116,11 +116,11 @@ curl localhost:4545/healthz               # ok
 
 The page is a single file with inline CSS and JS, no CDN, and the system font stack. It follows the system light/dark setting.
 
-- **Live**: feed cards with a type icon and color, a "High risk" tag (risk >= 0.7), the explanation, the app and URL, time-ago, a screenshot thumbnail that opens full screen on tap, and a pill showing what Lookout did.
+- **Live**: feed cards with a type icon and color, a "High risk" tag (risk >= 0.7), the explanation, the app and URL, time-ago, a screenshot thumbnail that opens full screen on tap, and a pill showing what Scout did.
 - **Approvals**: pending payments at the top, each with the amount, payee, method (gift card, wire and crypto are highlighted), a note field and big Deny / Approve buttons. Decided payments are listed below.
 - **This week**: the headline, stat tiles, a stacked bar chart for each day, and a breakdown.
 - **Live updates**: EventSource with automatic reconnect and a full resync after an outage. The header dot is green when connected and amber while reconnecting.
-- **Alerts**: `scam_alert`, `remote_access` and `payment_pause` show a slide-down banner, play a WebAudio chime and call `navigator.vibrate`. The tab title shows an unread count, e.g. `(2) Lookout · Mom`. Opens on the Approvals tab when something is pending. Deep links: `#live`, `#approvals`, `#week`.
+- **Alerts**: `scam_alert`, `remote_access` and `payment_pause` show a slide-down banner, play a WebAudio chime and call `navigator.vibrate`. The tab title shows an unread count, e.g. `(2) Scout · Mom`. Opens on the Approvals tab when something is pending. Deep links: `#live`, `#approvals`, `#week`.
 
 ## Decisions / notes
 

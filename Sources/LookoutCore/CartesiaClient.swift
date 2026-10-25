@@ -2,7 +2,7 @@ import Foundation
 import CryptoKit
 
 /// Cartesia Sonic text-to-speech over raw HTTP (POST /tts/bytes → WAV).
-/// Clips are cached on disk by (voice, settings, text), so the fixed lines Lookout says during a scam
+/// Clips are cached on disk by (voice, settings, text), so the fixed lines Scout says during a scam
 /// interrupt can be generated ahead of time and still play instantly if the network drops.
 public final class CartesiaClient: @unchecked Sendable {
     public enum ClientError: Error, LocalizedError {

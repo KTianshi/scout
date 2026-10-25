@@ -2,7 +2,7 @@ import AppKit
 import WebKit
 import LookoutCore
 
-/// Lookout's own little browser window for demo scenarios and fixture mode.
+/// Scout's own little browser window for demo scenarios and fixture mode.
 /// Reading the DOM directly gives exact text and element positions with no TCC permissions,
 /// so the demo works even before Screen Recording / Accessibility are granted.
 @MainActor
@@ -26,7 +26,7 @@ final class DemoBrowser: NSObject, WKNavigationDelegate, NSWindowDelegate {
         web.navigationDelegate = self
         window.delegate = self
         window.contentView = web
-        window.title = "Lookout Demo Browser"
+        window.title = "Scout Demo Browser"
         window.isReleasedWhenClosed = false
         if visible {
             window.center()
@@ -38,7 +38,7 @@ final class DemoBrowser: NSObject, WKNavigationDelegate, NSWindowDelegate {
     }
 
     func show() {
-        // Float above other apps so the demo page is reliably "the screen" Lookout points at.
+        // Float above other apps so the demo page is reliably "the screen" Scout points at.
         window.level = .floating
         window.makeKeyAndOrderFront(nil)
         window.orderFrontRegardless()
@@ -112,7 +112,7 @@ final class DemoBrowser: NSObject, WKNavigationDelegate, NSWindowDelegate {
         let ctx = ScreenContext(
             text: ignore ? "" : o["text"] as? String ?? "",
             url: o["url"] as? String,
-            appName: o["app"] as? String ?? "Lookout Demo Browser",
+            appName: o["app"] as? String ?? "Scout Demo Browser",
             windowTitle: o["title"] as? String,
             runningApps: runningApps,
             sensitiveFields: o["sensitive"] as? [String] ?? []

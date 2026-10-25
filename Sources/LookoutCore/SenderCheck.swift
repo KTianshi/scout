@@ -1,7 +1,7 @@
 import Foundation
 
 /// Result of checking a suspicious message's SENDER with CRS Fraud Finder (via the family server).
-/// Only scammer-side identifiers are checked, never anything about the person Lookout protects.
+/// Only scammer-side identifiers are checked, never anything about the person Scout protects.
 public struct SenderCheck: Sendable, Equatable {
     public enum Verdict: String, Sendable { case high, medium, low, unknown }
     public var email: String

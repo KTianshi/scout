@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Lookout family dashboard server. Zero dependencies.
+// Scout family dashboard server. Zero dependencies.
 // Run: node family/server.js   (PORT=4545, HOST=127.0.0.1 by default)
 'use strict';
 
@@ -104,15 +104,15 @@ function smsConfigured() {
 function smsText(ev) {
   const elder = config().elderName;
   const prefix = {
-    scam_alert: `Lookout: possible scam on ${elder}'s Mac.`,
-    remote_access: `Lookout: someone tried to remote into ${elder}'s Mac.`,
-    payment_pause: `Lookout: ${elder} started a payment that needs your OK.`,
-    help: `Lookout: ${elder} asked for help.`,
-    info: `Lookout:`,
-  }[ev.type] || 'Lookout:';
+    scam_alert: `Scout: possible scam on ${elder}'s Mac.`,
+    remote_access: `Scout: someone tried to remote into ${elder}'s Mac.`,
+    payment_pause: `Scout: ${elder} started a payment that needs your OK.`,
+    help: `Scout: ${elder} asked for help.`,
+    info: `Scout:`,
+  }[ev.type] || 'Scout:';
   let body = `${prefix} ${ev.title}`;
   if (ev.action && ev.type !== 'payment_pause') body += ` (${ev.action})`;
-  if (ev.type === 'payment_pause') body += ' Open Lookout to approve or deny.';
+  if (ev.type === 'payment_pause') body += ' Open Scout to approve or deny.';
   const pub = process.env.PUBLIC_URL;
   if (pub) body += ` ${pub}`;
   return body.slice(0, 320);
@@ -209,7 +209,7 @@ function defaultTitle(type) {
     remote_access: 'Remote access attempt blocked',
     payment_pause: 'Payment paused for approval',
     help: 'Asked for help',
-    info: 'Update from Lookout',
+    info: 'Update from Scout',
   }[type];
 }
 
@@ -320,7 +320,7 @@ function summary() {
     const parts = [];
     if (scamsStopped) parts.push(`stopped ${plural(scamsStopped, 'scam attempt')}`);
     if (payments.paused) parts.push(`paused ${plural(payments.paused, 'payment')}`);
-    headline = `${tone} Lookout ${parts.join(' and ')}.`;
+    headline = `${tone} Scout ${parts.join(' and ')}.`;
   }
   if (payments.pending) headline += ` ${plural(payments.pending, 'payment')} still waiting on you.`;
 
@@ -347,15 +347,15 @@ function seedDemo() {
     return Math.min(d.getTime(), now - 60000);
   };
   const o = { silent: true };
-  addEvent({ type: 'info', ts: at(6, 9, 5), title: 'Lookout is watching', explanation: 'Protection was turned on and is running quietly in the background.' }, o);
+  addEvent({ type: 'info', ts: at(6, 9, 5), title: 'Scout is watching', explanation: 'Protection was turned on and is running quietly in the background.' }, o);
   addEvent({ type: 'scam_alert', ts: at(6, 14, 22), risk: 0.93, app: 'Safari', url: 'http://apple-support-alert.help/fix', title: 'Fake "virus detected" pop-up', explanation: 'A web page pretended to be Apple and told her to call a phone number. Real Apple warnings never ask you to call.', action: 'Closed the tab and showed a calm warning' }, o);
-  addEvent({ type: 'help', ts: at(5, 11, 40), app: 'Mail', title: 'Asked: "Is this email from my bank real?"', explanation: 'Lookout explained the email was a real statement from Chase and nothing needed to be done.' }, o);
+  addEvent({ type: 'help', ts: at(5, 11, 40), app: 'Mail', title: 'Asked: "Is this email from my bank real?"', explanation: 'Scout explained the email was a real statement from Chase and nothing needed to be done.' }, o);
   addEvent({ type: 'info', ts: at(4, 16, 10), app: 'Messages', title: 'Checked a text about a package', explanation: 'A delivery text looked fine — it came from a USPS short code and had no links.' }, o);
-  addEvent({ type: 'remote_access', ts: at(3, 10, 3), risk: 0.97, app: 'AnyDesk', title: 'Someone tried to take control of the Mac', explanation: 'A caller claiming to be from "Microsoft" asked her to install AnyDesk. Lookout recognised the remote-control app and blocked it.', action: 'Closed AnyDesk' }, o);
+  addEvent({ type: 'remote_access', ts: at(3, 10, 3), risk: 0.97, app: 'AnyDesk', title: 'Someone tried to take control of the Mac', explanation: 'A caller claiming to be from "Microsoft" asked her to install AnyDesk. Scout recognised the remote-control app and blocked it.', action: 'Closed AnyDesk' }, o);
   const ap1 = addApproval({ ts: at(3, 10, 9), title: '$500 in Target gift cards', explanation: 'Right after the remote-access attempt, she started buying gift cards online. Scammers often ask for gift cards because they cannot be traced.', amount: 500, payee: 'Target.com gift cards', method: 'gift card', risk: 0.95 }, o);
   ap1.status = 'denied'; ap1.decidedAt = at(3, 10, 12); ap1.note = 'Mom, this is a scam — I\'ll call you now. Love, Sarah';
   addEvent({ type: 'scam_alert', ts: at(2, 19, 45), risk: 0.81, app: 'Mail', title: 'Email asking to "verify" her Medicare number', explanation: 'The message came from a look-alike address and linked to a fake form. Medicare never asks for your number by email.', action: 'Hid the link and warned her' }, o);
-  addEvent({ type: 'help', ts: at(1, 15, 30), app: 'FaceTime', title: 'Asked for help joining a FaceTime call', explanation: 'Lookout walked her through answering the call from the grandkids.' }, o);
+  addEvent({ type: 'help', ts: at(1, 15, 30), app: 'FaceTime', title: 'Asked for help joining a FaceTime call', explanation: 'Scout walked her through answering the call from the grandkids.' }, o);
   const ap2 = addApproval({ ts: at(1, 12, 15), title: '$64.20 to CVS Pharmacy', explanation: 'A card payment on cvs.com for a prescription refill. Looks normal, but it was a new card on file.', amount: 64.2, payee: 'CVS Pharmacy', method: 'card', risk: 0.2 }, o);
   ap2.status = 'approved'; ap2.decidedAt = at(1, 12, 20); ap2.note = 'All good!';
   saveState();
@@ -544,7 +544,7 @@ function start({ port, host, quiet } = {}) {
       const actualPort = server.address().port;
       if (!quiet) {
         const { elderName, familyName } = config();
-        console.log(`Lookout family dashboard — watching over ${elderName} for ${familyName}`);
+        console.log(`Scout family dashboard — watching over ${elderName} for ${familyName}`);
         console.log(`  Local:   http://127.0.0.1:${actualPort}`);
         if (host === '0.0.0.0' || host === '::') {
           for (const ip of lanIPs()) console.log(`  Network: http://${ip}:${actualPort}   (open on a phone on the same Wi-Fi)`);

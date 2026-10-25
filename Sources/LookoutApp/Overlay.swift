@@ -39,15 +39,19 @@ enum BuddyMood: Equatable {
 
 /// How the buddy looks. Picked from the menu; remembered across launches.
 enum BuddyStyle: String, CaseIterable {
-    case cursor, orb, cat, bear, chick, ghost, classic
+    // Scout the dog is the mascot and the default; Hoot, Mouse and Clicken are its friends.
+    case dog, owl, mouse, chick, cursor, orb, cat, bear, ghost, classic
 
     var title: String {
         switch self {
+        case .dog: return "Scout the dog 🐶"
+        case .owl: return "Hoot the owl 🦉"
+        case .mouse: return "Mouse the mouse 🐭"
         case .cursor: return "Blue cursor"
         case .orb: return "Glowing dot"
         case .cat: return "Cat 🐱"
         case .bear: return "Bear 🐻"
-        case .chick: return "Chick 🐥"
+        case .chick: return "Clicken 🐥"
         case .ghost: return "Ghost 👻"
         case .classic: return "Smiley face"
         }
@@ -55,17 +59,23 @@ enum BuddyStyle: String, CaseIterable {
     /// Short name for the Settings tiles.
     var name: String {
         switch self {
+        case .dog: return "Scout"
+        case .owl: return "Hoot"
+        case .mouse: return "Mouse"
         case .cursor: return "Cursor"
         case .orb: return "Glow"
         case .cat: return "Cat"
         case .bear: return "Bear"
-        case .chick: return "Chick"
+        case .chick: return "Clicken"
         case .ghost: return "Ghost"
         case .classic: return "Smiley"
         }
     }
     var emoji: String? {
         switch self {
+        case .dog: return "🐶"
+        case .owl: return "🦉"
+        case .mouse: return "🐭"
         case .cat: return "🐱"
         case .bear: return "🐻"
         case .chick: return "🐥"
@@ -75,7 +85,7 @@ enum BuddyStyle: String, CaseIterable {
     }
 
     static var current: BuddyStyle {
-        get { UserDefaults.standard.string(forKey: "buddyStyle").flatMap(BuddyStyle.init) ?? .cursor }
+        get { UserDefaults.standard.string(forKey: "buddyStyle").flatMap(BuddyStyle.init) ?? .dog }
         set { UserDefaults.standard.set(newValue.rawValue, forKey: "buddyStyle") }
     }
 }
@@ -169,10 +179,11 @@ final class Overlay {
     /// While pointing or talking the buddy stays put; otherwise it rests at its home spot.
     var isPinned = false
     /// Trails the cursor like a cursor buddy, or parks in a corner (drag to move, click to ask).
-    /// Toggled from the menu and remembered; LOOKOUT_DOCK=1 forces the corner.
-    var followsCursor: Bool = ProcessInfo.processInfo.environment["LOOKOUT_DOCK"] != "1" && !UserDefaults.standard.bool(forKey: "buddyDocked") {
+    /// Rests in the corner by default; following the pointer is a choice in Settings ▸ Buddy, remembered.
+    /// LOOKOUT_DOCK=1 forces the corner.
+    var followsCursor: Bool = ProcessInfo.processInfo.environment["LOOKOUT_DOCK"] != "1" && UserDefaults.standard.bool(forKey: "buddyFollows") {
         didSet {
-            UserDefaults.standard.set(!followsCursor, forKey: "buddyDocked")
+            UserDefaults.standard.set(followsCursor, forKey: "buddyFollows")
             guard window != nil else { return }
             // The drag handle only exists in docked mode; next to the cursor it would swallow clicks.
             handle?.close()
@@ -241,12 +252,12 @@ final class Overlay {
         }
     }
 
-    /// The display Lookout is on, for screenshots (it lives on the screen with the pointer).
+    /// The display Scout is on, for screenshots (it lives on the screen with the pointer).
     var displayID: CGDirectDisplayID? {
         screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID
     }
 
-    /// Multiple monitors: when the pointer moves to another screen (and Lookout isn't busy pointing or
+    /// Multiple monitors: when the pointer moves to another screen (and Scout isn't busy pointing or
     /// talking), the overlay moves there with it, like Clicky.
     private func followPointerToItsScreen() {
         guard !isPinned, state.bubble == nil, let w = window else { return }

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Build Lookout.app (release) into build/Lookout.app and sign it.
+# Build Scout.app (release) into build/Scout.app and sign it.
 # Signs with the "Lookout Dev" identity if present (stable → macOS keeps granted permissions across rebuilds),
 # otherwise ad-hoc (permissions must be re-granted after each rebuild). Create the identity once with
 # scripts/make-signing-identity.sh.
@@ -10,10 +10,10 @@ CONFIG="${CONFIG:-release}"
 "$ROOT/scripts/swiftw" build -c "$CONFIG" --product Lookout
 BIN="$(swift build -c "$CONFIG" --show-bin-path 2>/dev/null || echo "$ROOT/.build/$CONFIG")/Lookout"
 [ -x "$BIN" ] || BIN="$ROOT/.build/arm64-apple-macosx/$CONFIG/Lookout"
-APP="$ROOT/build/Lookout.app"
+APP="$ROOT/build/Scout.app"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-cp "$BIN" "$APP/Contents/MacOS/Lookout"
+cp "$BIN" "$APP/Contents/MacOS/Scout"
 rsync -a --exclude ".DS_Store" "$ROOT/demo" "$APP/Contents/Resources/"
 mkdir -p "$APP/Contents/Resources/model" && cp "$ROOT/model/playbooks.json" "$APP/Contents/Resources/model/"
 # App icon, drawn by the app itself (AppIconView).
@@ -32,10 +32,10 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>CFBundleName</key><string>Lookout</string>
-  <key>CFBundleDisplayName</key><string>Lookout</string>
-  <key>CFBundleIdentifier</key><string>com.lookout.companion</string>
-  <key>CFBundleExecutable</key><string>Lookout</string>
+  <key>CFBundleName</key><string>Scout</string>
+  <key>CFBundleDisplayName</key><string>Scout</string>
+  <key>CFBundleIdentifier</key><string>com.scout.companion</string>
+  <key>CFBundleExecutable</key><string>Scout</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>$VERSION</string>
   <key>CFBundleVersion</key><string>$VERSION</string>
@@ -43,10 +43,10 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>LSUIElement</key><false/>
   <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>NSHighResolutionCapable</key><true/>
-  <key>NSMicrophoneUsageDescription</key><string>Lookout listens while you hold Option and Space, so you can ask for help out loud.</string>
-  <key>NSSpeechRecognitionUsageDescription</key><string>Lookout turns your spoken question into text so it can help you.</string>
-  <key>NSAppleEventsUsageDescription</key><string>Lookout can close a dangerous window for you when you ask.</string>
-  <key>NSScreenCaptureUsageDescription</key><string>Lookout looks at your screen to spot scams and show you where to click.</string>
+  <key>NSMicrophoneUsageDescription</key><string>Scout listens while you hold your talk keys, so you can ask for help out loud.</string>
+  <key>NSSpeechRecognitionUsageDescription</key><string>Scout turns your spoken question into text so it can help you.</string>
+  <key>NSAppleEventsUsageDescription</key><string>Scout can close a dangerous window for you when you ask.</string>
+  <key>NSScreenCaptureUsageDescription</key><string>Scout looks at your screen to spot scams and show you where to click.</string>
   <key>NSAppTransportSecurity</key><dict><key>NSAllowsLocalNetworking</key><true/></dict>
 </dict>
 </plist>
