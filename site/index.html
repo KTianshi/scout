@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Scout</title>
+<meta name="description" content="A helper for your computer that shows you where to click and warns you about scams.">
+<meta property="og:title" content="Scout">
+<meta property="og:description" content="A helper for your computer that shows you where to click and warns you about scams.">
+<link rel="icon" href="img/dog-base.png">
+<style>
+  /* Colors from the app's Classic look (Sources/ScoutApp/ClassicLook.swift) */
+  :root {
+    --face: #ece9d8; --blue: #0b3fa8; --select: #316ac5; --border: #7f9db9;
+    --ink: #000; --ink-2: #3c3c3c;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; }
+  body {
+    font: 15px/1.5 Tahoma, Verdana, "Segoe UI", sans-serif; color: var(--ink);
+    background: #5a9be6;
+    min-height: 100vh; display: flex; flex-direction: column;
+  }
+  .pixel { image-rendering: pixelated; image-rendering: crisp-edges; }
+
+  /* Sky and hill, like the setup window's banner */
+  .desk { position: relative; flex: 1; display: grid; place-items: center; padding: 40px 16px 72px; overflow: hidden;
+          background: linear-gradient(#3f8ced, #bfe0ff 70%); }
+  .desk::after { content: ""; position: absolute; left: -30%; right: -50%; bottom: -38vh; height: 70vh; border-radius: 50%;
+                 background: linear-gradient(#7dc45a, #4d9a2e); z-index: 0; }
+
+  .win { position: relative; z-index: 1; width: 100%; max-width: 560px; background: var(--face);
+         border: 1px solid #0831d9; border-radius: 8px 8px 0 0; box-shadow: 0 10px 40px rgba(0, 20, 80, .35); }
+  .title { display: flex; align-items: center; gap: 7px; height: 30px; padding: 0 5px 0 8px; border-radius: 7px 7px 0 0;
+           color: #fff; font-weight: bold; font-size: 13.5px; text-shadow: 1px 1px #0f1089;
+           background: linear-gradient(#0997ff, #0053ee 9%, #0050ee 45%, #06f 70%, #0055e5 92%, #0047d0); }
+  .title img { width: 16px; height: 16px; }
+  .title span { flex: 1; }
+  .tb { width: 21px; height: 21px; border: 1px solid #fff; border-radius: 3px; display: grid; place-items: center;
+        background: linear-gradient(#3c8cff, #1660e8); font: bold 11px/1 Tahoma, sans-serif; font-style: normal; }
+  .tb.x { background: linear-gradient(#e97a5a, #c9381c); }
+
+  .body { padding: 26px 28px 22px; }
+  .head { display: flex; gap: 20px; align-items: center; margin-bottom: 18px; }
+  .head img { width: 88px; height: 88px; flex: none; }
+  h1 { font-size: 23px; line-height: 1.25; margin: 0; color: var(--blue); }
+  p { margin: 0 0 14px; color: var(--ink-2); }
+
+  .go { display: inline-block; margin: 6px 0 4px; padding: 9px 26px; border-radius: 14px; border: 1px solid #2b7a0b;
+        color: #fff; font: bold 16px Tahoma, sans-serif; text-decoration: none; text-shadow: 1px 1px #2b5e12;
+        background: linear-gradient(#80d45c, #3d9e1f); box-shadow: inset 0 1px rgba(255,255,255,.5); }
+  .go:hover { box-shadow: inset 0 0 0 2px #f8b330; }
+  .go:active { background: linear-gradient(#3d9e1f, #80d45c); transform: translateY(1px); }
+  .req { font-size: 12.5px; color: #555; margin: 4px 0 20px; }
+
+  fieldset { border: 1px solid #d0d0bf; border-radius: 4px; padding: 10px 16px 6px; margin: 0 0 14px; }
+  legend { color: var(--blue); padding: 0 5px; font-size: 13px; }
+  ul { list-style: none; margin: 0; padding: 0; }
+  li { display: flex; gap: 12px; padding: 7px 0; }
+  li img { width: 32px; height: 32px; flex: none; }
+  li b { display: block; font-size: 14.5px; }
+  li span { font-size: 13.5px; color: var(--ink-2); }
+  details { font-size: 13.5px; color: var(--ink-2); }
+  summary { cursor: pointer; color: var(--select); }
+  details ol { margin: 8px 0 0; padding-left: 20px; }
+  code { font: 12.5px Consolas, Menlo, monospace; background: #fff; border: 1px solid var(--border); padding: 0 4px; overflow-wrap: anywhere; }
+
+  .status { display: flex; justify-content: space-between; gap: 12px; padding: 4px 10px; font-size: 12px; color: #444;
+            border-top: 1px solid #d0d0bf; background: linear-gradient(#f5f4ea, var(--face)); }
+
+  .taskbar { position: fixed; left: 0; right: 0; bottom: 0; height: 34px; display: flex; align-items: center; justify-content: space-between;
+             background: linear-gradient(#3168d5, #245edb 10%, #1941a5 90%, #1a3d9c); border-top: 1px solid #0c59b9; z-index: 2; }
+  .start { height: 100%; display: flex; align-items: center; gap: 6px; padding: 0 20px 0 10px; color: #fff; font: italic bold 17px Tahoma, sans-serif;
+           text-decoration: none; text-shadow: 1px 1px #1a3d0d; border-radius: 0 12px 12px 0;
+           background: linear-gradient(#3c9f2c, #2f8b21 50%, #2a7d1c); }
+  .start img { width: 20px; height: 20px; }
+  .tray { height: 100%; display: flex; align-items: center; padding: 0 14px; color: #fff; font-size: 12.5px;
+          background: linear-gradient(#0f8ef0, #0c6fd6); border-left: 1px solid #092e8f; }
+
+  @media (max-width: 520px) {
+    .body { padding: 20px 18px 16px; }
+    .head img { width: 64px; height: 64px; }
+    h1 { font-size: 20px; }
+    .status span:last-child { display: none; }
+  }
+</style>
+</head>
+<body>
+<main class="desk">
+  <div class="win">
+    <div class="title"><img class="pixel" src="img/dog-base.png" alt=""><span>Scout</span><i class="tb">_</i><i class="tb">□</i><i class="tb x">✕</i></div>
+    <div class="body">
+      <div class="head">
+        <img class="pixel" id="dog" src="img/dog-base.png" alt="Scout the dog">
+        <h1>A helper for your computer that watches out for scams.</h1>
+      </div>
+      <p>Scout sits next to your mouse. Ask it how to do something and it points to the right button, one step at a time. If a page or message looks like a scam, it tells you before you click.</p>
+      <a class="go" href="download/Scout.zip" download>Download for Mac</a>
+      <div class="req">Free · macOS 26 · Apple silicon</div>
+
+      <fieldset>
+        <legend>What Scout does</legend>
+        <ul>
+          <li><img class="pixel" src="img/dog-talk.png" alt=""><div><b>Shows you where to click</b><span>Hold ⌥ Space or say “Hey Scout,” then ask. “How do I attach a photo?”</span></div></li>
+          <li><img class="pixel" src="img/dog-alarmed.png" alt=""><div><b>Warns you about scams</b><span>Fake virus alerts, gift-card demands, “your grandson is in jail” messages. Scout points at the problem and explains it.</span></div></li>
+          <li><img class="pixel" src="img/dog-happy.png" alt=""><div><b>Slows down risky payments</b><span>Before money or a password goes to a page that looks wrong, Scout asks you to pause.</span></div></li>
+        </ul>
+      </fieldset>
+
+      <details>
+        <summary>How to install</summary>
+        <ol>
+          <li>Unzip it and drag Scout into Applications.</li>
+          <li>The first time, right-click Scout and choose <b>Open</b>.</li>
+          <li>Allow the screen and microphone when it asks.</li>
+          <li>Add your Claude key to <code>~/.config/scout/secrets.env</code> as <code>ANTHROPIC_API_KEY=…</code></li>
+        </ol>
+      </details>
+    </div>
+    <div class="status"><span>Made at Cal Hacks 13.0</span><span>It only speaks up when it matters.</span></div>
+  </div>
+</main>
+<div class="taskbar">
+  <a class="start" href="download/Scout.zip" download><img class="pixel" src="img/dog-happy.png" alt="">start</a>
+  <div class="tray" id="clock"></div>
+</div>
+<script>
+  // The dog blinks now and then, and the tray shows the time.
+  var dog = document.getElementById('dog');
+  setInterval(function () { dog.src = 'img/dog-blink.png'; setTimeout(function () { dog.src = 'img/dog-base.png'; }, 160); }, 3800);
+  function tick() { document.getElementById('clock').textContent = new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }); }
+  tick(); setInterval(tick, 10000);
+</script>
+</body>
+</html>

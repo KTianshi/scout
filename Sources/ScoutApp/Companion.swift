@@ -870,7 +870,9 @@ final class Companion {
     /// One CRS lookup per sender address per session (the family server also caches for a day).
     func checkSenderCached(_ email: String) async -> SenderCheck? {
         if let c = senderChecks[email] { return c }
-        guard let c = await family.checkSender(email) else { return nil }
+        // Straight to CRS when this Mac has the credentials; otherwise through the family server.
+        let answer = CRSClient.isConfigured ? await CRSClient.shared.checkSender(email) : await family.checkSender(email)
+        guard let c = answer else { return nil }
         senderChecks[email] = c
         return c
     }

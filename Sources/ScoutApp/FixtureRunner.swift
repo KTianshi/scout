@@ -48,7 +48,7 @@ final class FixtureRunner {
         var verdict: ScamVerdict?
         var sender: SenderCheck?
         if let email = SenderCheck.extractSender(snap.context) {
-            sender = useModel ? await FamilyClient().checkSender(email) : nil
+            sender = !useModel ? nil : CRSClient.isConfigured ? await CRSClient.shared.checkSender(email) : await FamilyClient().checkSender(email)
             line("sender: \(email) → CRS \(sender.map { "\($0.verdict.rawValue) score=\($0.score.map(String.init) ?? "-") firstSeen=\($0.firstSeen ?? "-") (\($0.source))" } ?? "not checked (family server not running or --no-model)")")
         }
         if useModel && result.shouldConfirmWithModel {
