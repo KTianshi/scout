@@ -329,6 +329,7 @@ final class Companion {
 
     func handleUtterance(_ q: String) async {
         let lower = q.lowercased()
+        if await SelfSettings.handle(q, companion: self) { return }
         if lower.hasPrefix("type ") || lower.hasPrefix("write ") {
             let text = String(q.drop(while: { $0 != " " }).dropFirst())
             await dictate(text)
@@ -1029,7 +1030,7 @@ final class Companion {
         let field = snap.context.sensitiveFields.first ?? "payment"
         let what: String = ["gift-card": "gift card codes", "ssn": "your Social Security number", "password": "your password", "bank": "your bank details"][field] ?? "your card details"
         let reason = "This page is asking for \(what), and something about it doesn't look right."
-        payPause.show(familyName: ScoutConfig.familyName, reason: reason, onCancel: { [weak self] in
+        payPause.show(familyName: ScoutConfig.familyName, reason: reason, explanation: r.explanation, sender: r.senderCheck, onCancel: { [weak self] in
             guard let self else { return }
             self.closeFrontPage()   // "Go back" really leaves the page
             self.overlay.setMood(.happy)
