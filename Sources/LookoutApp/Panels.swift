@@ -229,7 +229,7 @@ final class SetupWindow {
     func show() {
         DebugShot.take("setup")
         if let w = window { w.makeKeyAndOrderFront(nil); NSApp.activate(ignoringOtherApps: true); return }
-        let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 440, height: 500), styleMask: [.titled, .closable, .fullSizeContentView], backing: .buffered, defer: false)
+        let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 440, height: 560), styleMask: [.titled, .closable, .fullSizeContentView], backing: .buffered, defer: false)
         w.title = "Set up Lookout"
         w.titleVisibility = .hidden
         w.titlebarAppearsTransparent = true
@@ -243,7 +243,7 @@ final class SetupWindow {
     }
 }
 
-/// Permissions, one at a time: one icon, one short sentence, one button.
+/// Permissions, one at a time: one icon, one short sentence, a picture of exactly what to turn on, one button.
 struct SetupView: View {
     var close: () -> Void = {}
     /// For rendering previews: force a step (0...2) or the finished state (3).
@@ -261,6 +261,10 @@ struct SetupView: View {
         var why: String
         var granted: Bool
         var pane: String
+        /// Turned on with a switch in System Settings (false: the Mac asks with its own pop-ups).
+        var inSettings = true
+        /// One extra line for after System Settings opens.
+        var after: String = ""
         var request: () -> Void
     }
 
@@ -269,13 +273,14 @@ struct SetupView: View {
         return [
             Step(id: "screen", icon: "eye", pixel: .eye, title: "Let me see your screen",
                  why: "So I can spot fake warnings and point to the right button.", granted: Permissions.screenRecording,
-                 pane: "Privacy_ScreenCapture", request: Permissions.requestScreenRecording),
+                 pane: "Privacy_ScreenCapture", after: "If your Mac asks, click Quit & Reopen.", request: Permissions.requestScreenRecording),
             Step(id: "ax", icon: "hand.point.up.left", pixel: .hand, title: "Let me read buttons",
                  why: "So I can point at exactly what to click.", granted: Permissions.accessibility,
-                 pane: "Privacy_Accessibility", request: Permissions.requestAccessibility),
+                 pane: "Privacy_Accessibility", after: "Type your Mac password if asked.", request: Permissions.requestAccessibility),
             Step(id: "mic", icon: "mic", pixel: .talking, title: "Let me hear you",
                  why: "Hold \(TalkShortcut.current.spoken) and just ask.", granted: Listener.micAuthorized && Listener.speechAuthorized,
-                 pane: "Privacy_Microphone", request: { Task { _ = await Listener.requestPermissions() } }),
+                 pane: "Privacy_Microphone", inSettings: !Listener.micUndecided,
+                 request: { if Listener.micUndecided { Task { _ = await Listener.requestPermissions() } } else { Permissions.openSettings("Privacy_Microphone") } }),
         ]
     }
 
@@ -296,8 +301,7 @@ struct SetupView: View {
             }
             .padding(.top, 34)
             .animation(.easeInOut(duration: 0.25), value: current?.id)
-
-            Spacer(minLength: 20)
+            .padding(.bottom, 22)
 
             if let st = current {
                 VStack(spacing: 14) {
@@ -316,6 +320,7 @@ struct SetupView: View {
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)
+                    howTo(st).padding(.top, 8)
                 }
                 .id(st.id)
                 .transition(.asymmetric(insertion: .move(edge: .trailing).combined(with: .opacity), removal: .move(edge: .leading).combined(with: .opacity)))
@@ -342,8 +347,10 @@ struct SetupView: View {
 
             VStack(spacing: 12) {
                 if let st = current {
-                    Button { st.request(); Permissions.openSettings(st.pane) } label: {
-                        Text("Allow").lfont(17, .semibold).frame(maxWidth: .infinity).padding(.vertical, 6)
+                    Button {
+                        if st.inSettings { st.request(); Permissions.openSettings(st.pane) } else { st.request() }
+                    } label: {
+                        Text(st.inSettings ? "Open System Settings" : "Allow").lfont(17, .semibold).frame(maxWidth: .infinity).padding(.vertical, 6)
                     }
                     .lookoutButton(primary: true)
                     .keyboardShortcut(.defaultAction)
@@ -360,13 +367,29 @@ struct SetupView: View {
             .padding(.bottom, 28)
         }
         .padding(.horizontal, 40)
-        .frame(width: 440, height: 500)
+        .frame(width: 440, height: 560)
         .foregroundStyle(classic ? Color.black : Color.primary)
         .background(alignment: .top) {
-            if classic { ZStack(alignment: .top) { ClassicLook.face; ClassicBanner().frame(height: 165) } }
+            if classic { ZStack(alignment: .top) { ClassicLook.face; ClassicBanner().frame(height: 108) } }
         }
         .animation(.easeInOut(duration: 0.35), value: current?.id)
         .onReceive(timer) { _ in tick += 1 }
+    }
+
+    /// Exactly what to do, as a short numbered list.
+    func howTo(_ st: Step) -> some View {
+        let lines = st.inSettings
+            ? ["Click Open System Settings below.", "Find Lookout in the list.", "Turn on the switch next to it."] + (st.after.isEmpty ? [] : [st.after])
+            : ["Click Allow below.", "Your Mac asks twice: once for the microphone, once for speech.", "Click OK or Allow both times."]
+        return VStack(alignment: .leading, spacing: 6) {
+            ForEach(Array(lines.enumerated()), id: \.offset) { i, line in
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text("\(i + 1).").lfont(15, .semibold).frame(width: 18, alignment: .trailing)
+                    Text(line).lfont(15).fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     @ViewBuilder func stepIcon(_ symbol: String, pixel: PixelIcon) -> some View {
@@ -388,3 +411,4 @@ struct SetupView: View {
         return Color.primary.opacity(0.15)
     }
 }
+

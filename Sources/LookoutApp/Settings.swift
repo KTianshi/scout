@@ -301,7 +301,7 @@ enum UIRenderer {
                 }
                 for look in [false, true] {
                     let tag = look ? "classic-" : ""
-                    for step in 0...3 { save(SetupView(previewStep: step).lookoutTheme(force: look), "\(tag)setup-\(step)", width: 440, height: 500) }
+                    for step in 0...3 { save(SetupView(previewStep: step).lookoutTheme(force: look), "\(tag)setup-\(step)", width: 440, height: 560) }
                     for p in SettingsPane.allCases { save(SettingsView(model: model, pane: p).lookoutTheme(force: look), "\(tag)settings-\(p.rawValue)", width: 720, height: 560) }
                     save(VStack(alignment: .leading, spacing: 22) { BuddyPane(model: model) }.padding(28).lookoutTheme(force: look), "\(tag)buddies", width: 560)
                 }
