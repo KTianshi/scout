@@ -38,17 +38,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func buildMenu() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let b = statusItem.button {
-            b.image = NSImage(systemSymbolName: "eye.circle.fill", accessibilityDescription: "Lookout")
+            b.image = NSImage(systemSymbolName: "eye.circle.fill", accessibilityDescription: "Scout")
             b.image?.isTemplate = true
         }
         let m = NSMenu()
-        m.addItem(item("Ask Lookout…", #selector(askTypedAction), "l"))
+        m.addItem(item("Ask Scout…", #selector(askTypedAction), "l"))
         m.addItem(item("Explain what's on screen", #selector(explainAction), "e"))
         m.addItem(.separator())
         guardianItem = item("Watching for scams", #selector(toggleGuardian), "")
         guardianItem.state = .on
         m.addItem(guardianItem)
-        visibleItem = item("Show Lookout on my screen", #selector(toggleVisible(_:)), "")
+        visibleItem = item("Show Scout on my screen", #selector(toggleVisible(_:)), "")
         visibleItem.state = companion.overlay.state.visible ? .on : .off
         m.addItem(visibleItem)
         m.addItem(item("Settings…", #selector(settingsAction), ","))
@@ -72,7 +72,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         m.addItem(item("Set up permissions…", #selector(setupAction), ""))
         m.addItem(item("Stop talking (Esc)", #selector(stopTalking), "."))
         m.addItem(.separator())
-        m.addItem(item("Quit Lookout", #selector(NSApplication.terminate(_:)), "q"))
+        m.addItem(item("Quit Scout", #selector(NSApplication.terminate(_:)), "q"))
         statusItem.menu = m
     }
 
@@ -85,7 +85,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc func askTypedAction() { askTyped() }
 
     func askTyped() {
-        // The box doesn't take focus from the app the person was using, so Lookout answers about that screen.
+        // The box doesn't take focus from the app the person was using, so Scout answers about that screen.
         let demoWasFront = NSWorkspace.shared.frontmostApplication?.processIdentifier == getpid() && companion.demoBrowser.window.isVisible
         companion.prepareForQuestion()
         askPanel.show { [weak self] q in
@@ -108,22 +108,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc func settingsAction() { companion.settings.show() }
 
-    /// Opening Lookout again (Spotlight, Launchpad, Finder) while it's running, or clicking its Dock icon.
+    /// Opening Scout again (Spotlight, Launchpad, Finder) while it's running, or clicking its Dock icon.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         companion.settings.show()
         return false
     }
 
-    /// The app menu shown while Lookout is in front (it has a Dock icon).
+    /// The app menu shown while Scout is in front (it has a Dock icon).
     func buildMainMenu() {
         let main = NSMenu()
         let appItem = NSMenuItem()
         let am = NSMenu()
         am.addItem(item("Settings…", #selector(settingsAction), ","))
-        am.addItem(item("Ask Lookout…", #selector(askTypedAction), "l"))
+        am.addItem(item("Ask Scout…", #selector(askTypedAction), "l"))
         am.addItem(.separator())
-        am.addItem(NSMenuItem(title: "Hide Lookout", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h"))
-        am.addItem(NSMenuItem(title: "Quit Lookout", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+        am.addItem(NSMenuItem(title: "Hide Scout", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h"))
+        am.addItem(NSMenuItem(title: "Quit Scout", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
         appItem.submenu = am
         main.addItem(appItem)
         // Standard Edit menu so ⌘C/⌘V work in text fields (names in Settings, the Ask box).

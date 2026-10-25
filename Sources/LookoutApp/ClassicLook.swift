@@ -16,7 +16,7 @@ enum ClassicLook {
 
     /// The classic look has no dark mode, so its windows use the light title bar too.
     @MainActor static func applyWindowAppearance(_ on: Bool) {
-        for w in NSApp.windows where w.title == "Lookout Settings" || w.title == "Set up Lookout" {
+        for w in NSApp.windows where w.title == "Scout Settings" || w.title == "Set up Scout" {
             w.appearance = on ? NSAppearance(named: .aqua) : nil
         }
     }

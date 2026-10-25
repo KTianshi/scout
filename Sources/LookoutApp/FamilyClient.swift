@@ -2,7 +2,7 @@ import Foundation
 import LookoutCore
 
 enum Log {
-    /// Logs go to stderr and ~/Library/Application Support/Lookout/lookout.log. Never log keys or screen text.
+    /// Logs go to stderr and ~/Library/Application Support/Lookout/lookout.log (folder name kept from before the rename to Scout). Never log keys or screen text.
     static let dir: URL = {
         let d = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Lookout", isDirectory: true)
         try? FileManager.default.createDirectory(at: d, withIntermediateDirectories: true)

@@ -1,4 +1,6 @@
-# Lookout
+# Scout
+
+_Formerly "Lookout": the code modules (`LookoutCore`, `LookoutApp`), the bundle id `com.lookout.companion`, `~/.config/lookout/secrets.env` and the log folder keep the old name so permissions, settings and keys carry over._
 
 A friendly animated companion that lives on an older adult's Mac screen. It can see the screen, listen, talk and point at things. It does two jobs:
 
@@ -17,31 +19,31 @@ scripts/swiftw build
 scripts/swiftw test
 
 # 2. The Mac app
-scripts/bundle.sh                     # → build/Lookout.app (signed, with app icon)
-cp -R build/Lookout.app /Applications/ && open /Applications/Lookout.app --args --demo   # opens the demo browser too
+scripts/bundle.sh                     # → build/Scout.app (signed, with app icon)
+cp -R build/Scout.app /Applications/ && open /Applications/Scout.app --args --demo   # opens the demo browser too
 ```
 
 Put your key in `~/.config/lookout/secrets.env` (or export it):
 
 ```
 ANTHROPIC_API_KEY=sk-ant-...
-CARTESIA_API_KEY=sk_car_...           # Lookout's voice (Sonic). The voice and speed are picked in Settings.
+CARTESIA_API_KEY=sk_car_...           # Scout's voice (Sonic). The voice and speed are picked in Settings.
 ```
 
 The family features (alerts to the family app, "check with Sarah first" approvals) are off. `LOOKOUT_FAMILY=1` turns them back on, with `ELDER_NAME`, `FAMILY_NAME` and `node family/server.js`.
 
-Without a key, Lookout still runs the on-device scam detector and hard rules, and help mode falls back to pointing at the demo page's marked target.
+Without a key, Scout still runs the on-device scam detector and hard rules, and help mode falls back to pointing at the demo page's marked target.
 
 ## Using it
 
-- **Ask:** hold the talk keys (⌃⌥ Space by default), talk, let go. Or the Ask box: menu 👁 ▸ *Ask Lookout…* (⌘L), or click the buddy when it rests in a corner. Optional: turn on *Say "Hey Lookout"* for hands-free (on-device until the wake word).
-- **Next step:** ask "what next?" By default Lookout watches for your click and gives the next step on its own, like someone watching over your shoulder; turn off *Walk me through it automatically* (Settings ▸ Talking) for one step per question.
+- **Ask:** hold the talk keys (⌃⌥ Space by default), talk, let go. Or the Ask box: menu 👁 ▸ *Ask Scout…* (⌘L), or click the buddy when it rests in a corner. Optional: turn on *Say "Hey Scout"* for hands-free (on-device until the wake word).
+- **Next step:** ask "what next?" By default Scout watches for your click and gives the next step on its own, like someone watching over your shoulder; turn off *Walk me through it automatically* (Settings ▸ Talking) for one step per question.
 - **Stop:** Esc, hold the talk keys to talk over it, or switch apps.
 - **Explain:** say "What does this letter mean?", or menu ▸ *Explain what's on screen*.
 - **Dictation:** say "type …" with a text box focused (needs Accessibility).
 - **Protection** runs by itself every 3 seconds (Settings ▸ Safety).
 - **Settings:** click the Dock icon. Voice (six Cartesia voices, speed), buddy look (glowing orb, cat, bear, chick, ghost, smiley), show/hide, follow the pointer, talk keys, hands-free, deep check.
-- **Demo:** menu ▸ *Demo* opens any scenario in Lookout's own demo browser.
+- **Demo:** menu ▸ *Demo* opens any scenario in Scout's own demo browser.
 
 ## Architecture
 
@@ -62,14 +64,14 @@ Package.swift
                    avoids the target and fades under the pointer
     Settings       Liquid Glass settings window (voice, buddy, talking, safety); AskPanel: Spotlight-style ask box
     ScreenObserver ScreenCaptureKit snapshot + Accessibility tree of the frontmost window (text, elements, URL, secure fields)
-    DemoBrowser    Lookout's own WebKit window; reads text + exact element rects from the DOM (no permissions needed)
+    DemoBrowser    Scout's own WebKit window; reads text + exact element rects from the DOM (no permissions needed)
     Companion      help (one fresh step per question, streamed pointing and speech, conversation memory), guardian loop
                    with deep check, interrupts, remote-access shield, pause-before-pay, dictation, wake word
     Voice          SpeechOutput protocol → Cartesia Sonic (CartesiaClient: /tts/bytes, on-disk clip cache, scam lines prewarmed so they play
-                   instantly and offline) with AVSpeechSynthesizer fallback; push-to-talk and "Hey Lookout" → Apple Speech
+                   instantly and offline) with AVSpeechSynthesizer fallback; push-to-talk and "Hey Scout" → Apple Speech
     Panels         clickable action card, full-screen "Let's slow down" pause, permission setup window
     FamilyClient   events + approval requests to the family server (off unless LOOKOUT_FAMILY=1)
-    FixtureRunner  `Lookout --fixture page.html` runs the whole pipeline headless
+    FixtureRunner  `Scout --fixture page.html` runs the whole pipeline headless
   LookoutBench  `lookout-bench`: precision / recall / false alarms over bench/fixtures.jsonl
 family/         zero-dependency Node server + one mobile-first page (only used with LOOKOUT_FAMILY=1)
 demo/           10 local scenario pages (6 scams, 4 safe lookalikes) + launcher
@@ -108,20 +110,20 @@ The on-device number is low by design: the playbook engine wants corroboration a
 ## Testing without permissions
 
 ```bash
-.build/debug/Lookout --say "Hello" [--prewarm]                                              # voice check (prints which engine spoke)
-.build/debug/Lookout --fixture demo/scenarios/tech-support.html            # signals → risk → Claude → speech → point
-.build/debug/Lookout --fixture demo/scenarios/email-attach.html --ask "How do I attach this PDF?"
-.build/debug/Lookout --fixture screenshot.png --text "screen text…" --apps "AnyDesk,Safari"
+.build/debug/Scout --say "Hello" [--prewarm]                                              # voice check (prints which engine spoke)
+.build/debug/Scout --fixture demo/scenarios/tech-support.html            # signals → risk → Claude → speech → point
+.build/debug/Scout --fixture demo/scenarios/email-attach.html --ask "How do I attach this PDF?"
+.build/debug/Scout --fixture screenshot.png --text "screen text…" --apps "AnyDesk,Safari"
 .build/debug/lookout-bench --demo demo/scenarios [--model | --model-all] [--verbose]
 ```
 
-Useful environment switches: `LOOKOUT_MUTE=1` (no audio), `LOOKOUT_MODEL`, `LOOKOUT_CONFIRM_THRESHOLD`, `LOOKOUT_FAMILY_URL`, `LOOKOUT_DEBUG_SHOTS=1` (saves images of Lookout's *own* windows to `~/Library/Application Support/Lookout/shots/`), `LOOKOUT_ONBOARD=1` (replay onboarding), and the test-only `LOOKOUT_TEST_AUTOCLICK` and `LOOKOUT_TERMINATE_ONLY_DEMO`.
+Useful environment switches: `LOOKOUT_MUTE=1` (no audio), `LOOKOUT_MODEL`, `LOOKOUT_CONFIRM_THRESHOLD`, `LOOKOUT_FAMILY_URL`, `LOOKOUT_DEBUG_SHOTS=1` (saves images of Scout's *own* windows to `~/Library/Application Support/Lookout/shots/`), `LOOKOUT_ONBOARD=1` (replay onboarding), and the test-only `LOOKOUT_TEST_AUTOCLICK` and `LOOKOUT_TERMINATE_ONLY_DEMO`.
 
 ## Privacy
 
-- Screenshots and screen text are sent to the Claude API for help requests and scam confirmation, and screen text for the deep check (Settings ▸ Safety turns it off). Nothing is written to disk. The exception is `LOOKOUT_DEBUG_SHOTS`, which saves only Lookout's own windows, under `~/Library/Application Support/Lookout/`.
+- Screenshots and screen text are sent to the Claude API for help requests and scam confirmation, and screen text for the deep check (Settings ▸ Safety turns it off). Nothing is written to disk. The exception is `LOOKOUT_DEBUG_SHOTS`, which saves only Scout's own windows, under `~/Library/Application Support/Lookout/`.
 - The log (`~/Library/Application Support/Lookout/lookout.log`) records decisions and spoken text, never API keys.
-- Voice input is on-device (Apple Speech). With "Hey Lookout" on, the microphone listens locally for the wake word; nothing is sent until it hears it.
+- Voice input is on-device (Apple Speech). With "Hey Scout" on, the microphone listens locally for the wake word; nothing is sent until it hears it.
 
 ## Build notes
 

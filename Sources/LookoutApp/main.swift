@@ -1,14 +1,14 @@
 import AppKit
 import LookoutCore
 
-// Lookout
-//   Lookout                          normal menu-bar companion
-//   Lookout --say "text" [--prewarm]  voice check (Cartesia, falls back to the system voice)
-//   Lookout --demo [scenario.html]   companion + demo browser window
-//   Lookout --render-icon out.png    write the app icon (used by scripts/bundle.sh)
-//   Lookout --ask-box                companion with the Ask box open
-//   Lookout --settings               companion with the Settings window open
-//   Lookout --fixture <file.html|.png> [--text "..."|--text-file f] [--apps "AnyDesk,Safari"]
+// Scout
+//   Scout                          normal menu-bar companion
+//   Scout --say "text" [--prewarm]  voice check (Cartesia, falls back to the system voice)
+//   Scout --demo [scenario.html]   companion + demo browser window
+//   Scout --render-icon out.png    write the app icon (used by scripts/bundle.sh)
+//   Scout --ask-box                companion with the Ask box open
+//   Scout --settings               companion with the Settings window open
+//   Scout --fixture <file.html|.png> [--text "..."|--text-file f] [--apps "AnyDesk,Safari"]
 //           [--ask "question"] [--no-model] [--json]
 //                                    headless end-to-end run (no TCC needed): signals → risk → Claude → speech text → points
 
@@ -33,7 +33,7 @@ if let dir = opt("--render-ui") {
     try? png.write(to: URL(fileURLWithPath: out))
     exit(0)
 } else if let line = opt("--say") {
-    // Voice check: Lookout --say "Hello"   (add --prewarm to cache the standard scam lines)
+    // Voice check: Scout --say "Hello"   (add --prewarm to cache the standard scam lines)
     app.setActivationPolicy(.accessory)
     let voice = CartesiaSpeech()
     Task { @MainActor in

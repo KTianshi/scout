@@ -18,7 +18,7 @@ struct Snapshot {
     /// Maps image pixels → top-left global display points.
     var imageToScreen: CGAffineTransform = .identity
     var elements: [UIElementInfo] = []
-    /// When the snapshot came from Lookout's own demo browser, threat rects are known exactly.
+    /// When the snapshot came from Scout's own demo browser, threat rects are known exactly.
     var knownThreatRects: [String: CGRect] = [:]
     var knownTargetRects: [String: CGRect] = [:]
     var isFixture = false
@@ -93,7 +93,7 @@ enum Permissions {
 @MainActor
 final class ScreenObserver {
     /// Live snapshot of the main display + frontmost window. Missing permissions degrade gracefully.
-    /// The display to capture (where Lookout is); nil means the main display.
+    /// The display to capture (where Scout is); nil means the main display.
     var displayID: CGDirectDisplayID?
 
     func snapshot(includeImage: Bool, fast: Bool = false) async -> Snapshot {
@@ -120,7 +120,7 @@ final class ScreenObserver {
         return snap
     }
 
-    /// ScreenCaptureKit screenshot of the main display without Lookout's own windows.
+    /// ScreenCaptureKit screenshot of the main display without Scout's own windows.
     func captureMainDisplay() async -> (ClaudeClient.Image, CGAffineTransform)? {
         do {
             let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)

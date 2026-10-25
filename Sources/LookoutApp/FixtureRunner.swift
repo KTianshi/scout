@@ -1,7 +1,7 @@
 import AppKit
 import LookoutCore
 
-/// Runs the whole pipeline on a file instead of the live screen and prints what Lookout would do.
+/// Runs the whole pipeline on a file instead of the live screen and prints what Scout would do.
 @MainActor
 final class FixtureRunner {
     let path: String
@@ -39,7 +39,7 @@ final class FixtureRunner {
         }
         if let text, url.pathExtension.lowercased().hasPrefix("htm") { snap.context.text += "\n" + text }
 
-        line("== Lookout fixture: \(url.lastPathComponent)\(label.map { " (label: \($0))" } ?? "")")
+        line("== Scout fixture: \(url.lastPathComponent)\(label.map { " (label: \($0))" } ?? "")")
         line("url=\(snap.context.url ?? "-") app=\(snap.context.appName ?? "-") sensitive=\(snap.context.sensitiveFields) image=\(snap.image.map { "\($0.width)x\($0.height)" } ?? "none") elements=\(snap.elements.count)")
         let pipeline = ScamPipeline()
         var result = pipeline.evaluate(snap.context)

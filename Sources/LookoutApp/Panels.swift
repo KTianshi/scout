@@ -230,7 +230,7 @@ final class SetupWindow {
         DebugShot.take("setup")
         if let w = window { w.makeKeyAndOrderFront(nil); NSApp.activate(ignoringOtherApps: true); return }
         let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 440, height: 560), styleMask: [.titled, .closable, .fullSizeContentView], backing: .buffered, defer: false)
-        w.title = "Set up Lookout"
+        w.title = "Set up Scout"
         w.titleVisibility = .hidden
         w.titlebarAppearsTransparent = true
         w.isMovableByWindowBackground = true
@@ -335,7 +335,7 @@ struct SetupView: View {
                     Text(skipped.isEmpty ? "You're all set" : "Ready when you are")
                         .lfont(24, .semibold)
                         .foregroundStyle(classic ? ClassicLook.blue : .primary)
-                    Text(skipped.isEmpty ? "I'll stay in the corner of your screen." : "You can finish this later from the Lookout menu.")
+                    Text(skipped.isEmpty ? "I'll stay in the corner of your screen." : "You can finish this later from the Scout menu.")
                         .lfont(17)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
@@ -379,7 +379,7 @@ struct SetupView: View {
     /// Exactly what to do, as a short numbered list.
     func howTo(_ st: Step) -> some View {
         let lines = st.inSettings
-            ? ["Click Open System Settings below.", "Find Lookout in the list.", "Turn on the switch next to it."] + (st.after.isEmpty ? [] : [st.after])
+            ? ["Click Open System Settings below.", "Find Scout in the list.", "Turn on the switch next to it."] + (st.after.isEmpty ? [] : [st.after])
             : ["Click Allow below.", "Your Mac asks twice: once for the microphone, once for speech.", "Click OK or Allow both times."]
         return VStack(alignment: .leading, spacing: 6) {
             ForEach(Array(lines.enumerated()), id: \.offset) { i, line in

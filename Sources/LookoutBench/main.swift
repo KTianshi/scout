@@ -125,7 +125,7 @@ func pct(_ a: Int, _ b: Int) -> String { b == 0 ? "  n/a" : String(format: "%5.1
 var out = ""
 func say(_ s: String = "") { print(s); out += s + "\n" }
 
-say(useModel ? "# Lookout benchmark (heuristics + Claude text confirmation, \(LookoutConfig.model))" : "# Lookout benchmark (on-device heuristics only, no model)")
+say(useModel ? "# Scout benchmark (heuristics + Claude text confirmation, \(LookoutConfig.model))" : "# Scout benchmark (on-device heuristics only, no model)")
 say()
 say("Fixtures: \(fixturesPath) · split: \(splitFilter) · alarm = policy action ≥ interrupt")
 say()
