@@ -336,6 +336,8 @@ final class Overlay {
     }
 
     private static let tagPhrases = ["right here!", "this one!", "over here!", "click this!", "here it is!"]
+    /// When pointing at a threat (a scam link, a fake phone number), the tag warns instead of inviting a click.
+    private static let warningPhrases = ["don't click!", "careful!", "not this one!"]
     private var tagTask: Task<Void, Never>?
 
     /// Clicky's pointer tag: pops in small and springs up, then types a short phrase with a natural rhythm.
@@ -343,7 +345,7 @@ final class Overlay {
     private func typeTag() {
         tagTask?.cancel()
         guard state.pointing else { return }
-        let phrase = Self.tagPhrases.randomElement() ?? "right here!"
+        let phrase = (state.mood == .alarmed ? Self.warningPhrases : Self.tagPhrases).randomElement() ?? "careful!"
         // Arrived: nose back to the resting pointer angle so it points at the target (Clicky's -35°).
         withAnimation(.easeInOut(duration: 0.3)) { state.rotation = -35 }
         state.tag = ""

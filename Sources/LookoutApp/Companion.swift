@@ -837,14 +837,14 @@ final class Companion {
                     clearedPages[page] = Date()
                     Log.info("guardian: page cleared by Claude for 10 min")
                     confirmInFlight = false
-                    if !busy { overlay.setMood(.idle) }
+                    if !busy && !card.isShowing { overlay.setMood(.idle) }   // a warning card still up keeps the buddy amber
                     return
                 }
             } else if claude.isConfigured {
                 Log.info("claude check unavailable; deciding with on-device evidence\(sender != nil ? " and CRS" : "")")
             }
             confirmInFlight = false
-            if !busy { overlay.setMood(.idle) }
+            if !busy && !card.isShowing { overlay.setMood(.idle) }   // a warning card still up keeps the buddy amber
         }
         await act(on: result, verdict: verdict, snap: full)
     }
