@@ -35,7 +35,7 @@ function loadSecretsFile(file) {
   }
 }
 
-const DATA_DIR = process.env.LOOKOUT_DATA_DIR || path.join(ROOT, 'data');
+const DATA_DIR = process.env.SCOUT_DATA_DIR || path.join(ROOT, 'data');
 const STATE_FILE = path.join(DATA_DIR, 'state.json');
 const MAX_EVENTS = 500;
 const MAX_APPROVALS = 200;
@@ -98,7 +98,7 @@ setInterval(() => {
 // ---------- SMS ----------
 function smsConfigured() {
   const e = process.env;
-  return !!(e.TWILIO_ACCOUNT_SID && e.TWILIO_AUTH_TOKEN && e.TWILIO_FROM && e.FAMILY_PHONE && e.LOOKOUT_SMS_ENABLED === '1');
+  return !!(e.TWILIO_ACCOUNT_SID && e.TWILIO_AUTH_TOKEN && e.TWILIO_FROM && e.FAMILY_PHONE && e.SCOUT_SMS_ENABLED === '1');
 }
 
 function smsText(ev) {
@@ -563,8 +563,11 @@ function start({ port, host, quiet } = {}) {
 module.exports = { start, notify };
 
 if (require.main === module) {
-  const loaded = loadSecretsFile(path.join(os.homedir(), '.config', 'lookout', 'secrets.env'));
-  if (loaded.length) console.log(`[config] loaded ${loaded.length} value(s) from ~/.config/lookout/secrets.env (${loaded.join(', ')})`);
+  // ~/.config/scout/secrets.env, or ~/.config/lookout/ from before the rename.
+  let secretsPath = path.join(os.homedir(), '.config', 'scout', 'secrets.env');
+  if (!fs.existsSync(secretsPath)) secretsPath = path.join(os.homedir(), '.config', 'lookout', 'secrets.env');
+  const loaded = loadSecretsFile(secretsPath);
+  if (loaded.length) console.log(`[config] loaded ${loaded.length} value(s) from ~/.config/scout/secrets.env (${loaded.join(', ')})`);
   const envPort = parseInt(process.env.PORT, 10);
   const port = Number.isInteger(envPort) && envPort >= 0 ? envPort : 4545;
   const host = process.env.HOST || '127.0.0.1';

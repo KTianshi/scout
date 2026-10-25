@@ -1,6 +1,6 @@
-# Lookout benchmark fixtures
+# Scout benchmark fixtures
 
-`fixtures.jsonl` is a hand-labeled evaluation set for Lookout's scam detector. Each line is one simulated screen snapshot: the visible text roughly as an accessibility tree or OCR dump would read it, including window titles, sender lines, address bar text and button labels. Some lines also have the address-bar URL and the running or frontmost apps.
+`fixtures.jsonl` is a hand-labeled evaluation set for Scout's scam detector. Each line is one simulated screen snapshot: the visible text roughly as an accessibility tree or OCR dump would read it, including window titles, sender lines, address bar text and button labels. Some lines also have the address-bar URL and the running or frontmost apps.
 
 The examples were written separately from the detector code and **without looking at it**, so they don't follow any particular rule set or keyword list.
 

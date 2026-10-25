@@ -24,9 +24,9 @@ Reproduce:
 
 ```bash
 scripts/swiftw build
-.build/debug/lookout-bench --demo demo/scenarios            # heuristics
-.build/debug/lookout-bench --model                          # + Claude (needs ANTHROPIC_API_KEY)
-LOOKOUT_CONFIRM_THRESHOLD=0.025 .build/debug/lookout-bench --model
+.build/debug/scout-bench --demo demo/scenarios            # heuristics
+.build/debug/scout-bench --model                          # + Claude (needs ANTHROPIC_API_KEY)
+SCOUT_CONFIRM_THRESHOLD=0.025 .build/debug/scout-bench --model
 ```
 
 Full per-fixture reports: `RESULTS-heuristics.md`, `RESULTS-model.md`, `RESULTS-model-lowthreshold.md`.

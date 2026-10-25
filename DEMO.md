@@ -5,7 +5,7 @@
 ## Before you go on stage (10 min)
 
 1. Charge everything, turn the Mac volume up, and turn on Do Not Disturb (no notification pop-ups during the demo).
-2. Make sure `~/.config/lookout/secrets.env` has `ANTHROPIC_API_KEY` and `CARTESIA_API_KEY`, and that Screen Recording, Accessibility, Microphone and Speech Recognition are allowed for Scout (Settings ▸ Safety ▸ *Check permissions…*).
+2. Make sure `~/.config/scout/secrets.env` has `ANTHROPIC_API_KEY` and `CARTESIA_API_KEY`, and that Screen Recording, Accessibility, Microphone and Speech Recognition are allowed for Scout (Settings ▸ Safety ▸ *Check permissions…*).
 3. Launch Scout with the demo browser:
    ```bash
    open /Applications/Scout.app --args --demo
@@ -31,7 +31,7 @@
 ## If something goes wrong
 
 - **The buddy doesn't react to a scam page within about 8 s:** click inside the demo browser so it is in front.
-- **No voice:** check the volume. `LOOKOUT_MUTE` must not be set.
+- **No voice:** check the volume. `SCOUT_MUTE` must not be set.
 - **Pause screen stuck:** "Go back", or the small "I'm sure — continue anyway" link (tap twice).
 - **Need a reset between runs:** press Esc (or menu ▸ *Stop talking*).
 - **Replay the first-run introduction:** `defaults delete com.scout.companion onboarded`, then relaunch.

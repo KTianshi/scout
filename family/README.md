@@ -22,16 +22,16 @@ For the demo: `curl -X POST localhost:4545/api/demo/seed` fills the past week wi
 | `HOST` | `127.0.0.1` | Bind address; `0.0.0.0` exposes it on the LAN |
 | `ELDER_NAME` | `Mom` | Person being protected ("Watching over Mom") |
 | `FAMILY_NAME` | `Sarah` | Family member using the dashboard |
-| `LOOKOUT_DATA_DIR` | `family/data` | Where `state.json` lives (gitignored) |
+| `SCOUT_DATA_DIR` | `family/data` | Where `state.json` lives (gitignored) |
 | `PUBLIC_URL` | unset | When set, it is appended to SMS texts as a link |
 | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM`, `FAMILY_PHONE` | unset | Twilio credentials and numbers |
-| `LOOKOUT_SMS_ENABLED` | unset | Must be `1` to send real SMS, even when all the Twilio vars are set |
+| `SCOUT_SMS_ENABLED` | unset | Must be `1` to send real SMS, even when all the Twilio vars are set |
 
-The server also reads `~/.config/lookout/secrets.env` (simple `KEY=VALUE` lines; `#` comments, optional quotes and `export` are allowed). Real environment variables take precedence over the file. Only key **names** are logged, never values.
+The server also reads `~/.config/scout/secrets.env` (simple `KEY=VALUE` lines; `#` comments, optional quotes and `export` are allowed). Real environment variables take precedence over the file. Only key **names** are logged, never values.
 
 ## SMS
 
-`notify(event)` runs for `scam_alert`, `remote_access`, `payment_pause` and `help` events. It sends a text only when all four Twilio vars are set **and** `LOOKOUT_SMS_ENABLED=1`. It POSTs to `https://api.twilio.com/2010-04-01/Accounts/{SID}/Messages.json` using the built-in `https` module. Otherwise it only logs:
+`notify(event)` runs for `scam_alert`, `remote_access`, `payment_pause` and `help` events. It sends a text only when all four Twilio vars are set **and** `SCOUT_SMS_ENABLED=1`. It POSTs to `https://api.twilio.com/2010-04-01/Accounts/{SID}/Messages.json` using the built-in `https` module. Otherwise it only logs:
 
 ```
 [sms:mock] would text family: "Scout: someone tried to remote into Mom's Mac. ... (Closed AnyDesk)"
@@ -142,4 +142,4 @@ The page is a single file with inline CSS and JS, no CDN, and the system font st
 - `sentence`: plain-language text the buddy can say
 - `source`: `crs` or `mock`
 
-Credentials come from `CRS_USERNAME` / `CRS_PASSWORD` (env or `~/.config/lookout/secrets.env`) and are never logged. Results are cached for 24 h per address. Without credentials, or when `CRS_MOCK=1` is set or CRS is unreachable, a mock answer marked `source: "mock"` is returned. `GET /api/crs/status` reports whether CRS is configured.
+Credentials come from `CRS_USERNAME` / `CRS_PASSWORD` (env or `~/.config/scout/secrets.env`) and are never logged. Results are cached for 24 h per address. Without credentials, or when `CRS_MOCK=1` is set or CRS is unreachable, a mock answer marked `source: "mock"` is returned. `GET /api/crs/status` reports whether CRS is configured.

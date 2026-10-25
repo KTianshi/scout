@@ -8,8 +8,8 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
-const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lookout-family-test-'));
-const env = { ...process.env, PORT: '0', HOST: '127.0.0.1', LOOKOUT_DATA_DIR: dataDir, LOOKOUT_SMS_ENABLED: '0', ELDER_NAME: 'Grandma', FAMILY_NAME: 'Sam' };
+const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'scout-family-test-'));
+const env = { ...process.env, PORT: '0', HOST: '127.0.0.1', SCOUT_DATA_DIR: dataDir, SCOUT_SMS_ENABLED: '0', ELDER_NAME: 'Grandma', FAMILY_NAME: 'Sam' };
 for (const k of ['TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_FROM', 'FAMILY_PHONE']) delete env[k];
 
 const child = spawn(process.execPath, [path.join(__dirname, 'server.js')], { env, stdio: ['ignore', 'pipe', 'pipe'] });

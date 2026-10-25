@@ -22,7 +22,7 @@
 
 Every number in the file has a one-line "why".
 
-## The engine (`lookout_detect/engine.py`, mirrored in Swift `LookoutCore/Playbook/`)
+## The engine (`scout_detect/engine.py`, mirrored in Swift `ScoutCore/Playbook/`)
 
 Forward filtering in log space, one step per observation. After each step it reports:
 - **P(scam)** = posterior mass on scam states; **P(type)** per playbook; and the **stage posterior** within the most likely playbook.
@@ -56,9 +56,9 @@ When a screen is already suspicious (risk ≥ 0.10), Scout reads the **sender's 
 3. **Hard rules** ("gift cards are never payment for a bill") now supply explanations only. On held-out data they fired on gift shopping and on articles about scams.
 4. **Policy thresholds:** a nudge needs P ≈ 0.33 and an interrupt P ≈ 0.58. They were 0.09 and 0.29, which reacted to too many ordinary screens. Payment fields or an active remote-control app lower them.
 
-## Evaluation (`lookout_detect/eval.py`, results in `eval/`)
+## Evaluation (`scout_detect/eval.py`, results in `eval/`)
 
-Sessions are sequences of screens (text, URL, running apps, sensitive fields, time). **Every screen goes through the app's own Swift extractor** (`lookout-signals`), so extractor misses count against the detectors. Three sources:
+Sessions are sequences of screens (text, URL, running apps, sensitive fields, time). **Every screen goes through the app's own Swift extractor** (`scout-signals`), so extractor misses count against the detectors. Three sources:
 - **Scripted** (`scripts_gen.py`): hand-written templates with noise: skipped and out-of-order steps, everyday screens in between, abandoned scams. They are *not* sampled from the HMM, which would make the evaluation circular. Seed 7 was used for tuning; seed 99 is held out.
 - **Red-team A and B** (`redteam.py`): sessions Claude wrote for each scam type and each benign look-alike. Claude never saw our model or event list.
   - **A** was used once, for model selection: it revealed that hard rules and the old detector caused most false alarms.
@@ -103,10 +103,10 @@ Learning on my own templates overfits them. Learning on Claude-written sessions 
 
 ```bash
 python3 -m venv .venv && .venv/bin/pip install numpy pytest matplotlib anthropic
-.venv/bin/python -m pytest lookout_detect/tests            # engine tests
+.venv/bin/python -m pytest scout_detect/tests            # engine tests
 scripts/swiftw test                                         # Swift tests incl. parity
-.venv/bin/python -m lookout_detect.scripts_gen --seed 99 --out eval/sessions_scripted_test.jsonl
-.venv/bin/python -m lookout_detect.redteam --per-kind 12 --offset 100 --tag B --out eval/sessions_redteam_B.jsonl   # needs ANTHROPIC_API_KEY
-.venv/bin/python -m lookout_detect.eval eval/sessions_scripted_test.jsonl eval/sessions_redteam.jsonl eval/sessions_redteam_B.jsonl --out eval/final --tag final
-.venv/bin/python -m lookout_detect.learn eval/sessions_redteam.jsonl --out model/playbooks_learned_redteamA.json
+.venv/bin/python -m scout_detect.scripts_gen --seed 99 --out eval/sessions_scripted_test.jsonl
+.venv/bin/python -m scout_detect.redteam --per-kind 12 --offset 100 --tag B --out eval/sessions_redteam_B.jsonl   # needs ANTHROPIC_API_KEY
+.venv/bin/python -m scout_detect.eval eval/sessions_scripted_test.jsonl eval/sessions_redteam.jsonl eval/sessions_redteam_B.jsonl --out eval/final --tag final
+.venv/bin/python -m scout_detect.learn eval/sessions_redteam.jsonl --out model/playbooks_learned_redteamA.json
 ```

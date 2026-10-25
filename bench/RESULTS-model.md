@@ -1,4 +1,4 @@
-# Lookout benchmark (heuristics + Claude text confirmation, claude-sonnet-5-5)
+# Scout benchmark (heuristics + Claude text confirmation, claude-sonnet-5-5)
 
 Fixtures: bench/fixtures.jsonl · split: all · alarm = policy action ≥ interrupt
 

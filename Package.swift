@@ -2,19 +2,19 @@
 import PackageDescription
 
 let package = Package(
-    name: "Lookout",
+    name: "Scout",
     platforms: [.macOS(.v14)],
     products: [
-        .executable(name: "Lookout", targets: ["LookoutApp"]),
-        .executable(name: "lookout-bench", targets: ["LookoutBench"]),
-        .executable(name: "lookout-signals", targets: ["LookoutSignals"]),
-        .library(name: "LookoutCore", targets: ["LookoutCore"]),
+        .executable(name: "Scout", targets: ["ScoutApp"]),
+        .executable(name: "scout-bench", targets: ["ScoutBench"]),
+        .executable(name: "scout-signals", targets: ["ScoutSignals"]),
+        .library(name: "ScoutCore", targets: ["ScoutCore"]),
     ],
     targets: [
-        .target(name: "LookoutCore"),
+        .target(name: "ScoutCore"),
         .executableTarget(
-            name: "LookoutApp",
-            dependencies: ["LookoutCore"],
+            name: "ScoutApp",
+            dependencies: ["ScoutCore"],
             linkerSettings: [
                 .linkedFramework("AppKit"),
                 .linkedFramework("ScreenCaptureKit"),
@@ -24,9 +24,9 @@ let package = Package(
                 .linkedFramework("Carbon"),
             ]
         ),
-        .executableTarget(name: "LookoutBench", dependencies: ["LookoutCore"]),
-        .executableTarget(name: "LookoutSignals", dependencies: ["LookoutCore"]),
-        .testTarget(name: "LookoutCoreTests", dependencies: ["LookoutCore"]),
+        .executableTarget(name: "ScoutBench", dependencies: ["ScoutCore"]),
+        .executableTarget(name: "ScoutSignals", dependencies: ["ScoutCore"]),
+        .testTarget(name: "ScoutCoreTests", dependencies: ["ScoutCore"]),
     ],
     swiftLanguageVersions: [.v5]
 )

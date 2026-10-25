@@ -30,7 +30,7 @@ SWIFT
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
 <key>CFBundleName</key><string>AnyDesk (Demo)</string>
-<key>CFBundleIdentifier</key><string>com.lookout.demo.anydesk</string>
+<key>CFBundleIdentifier</key><string>com.scout.demo.anydesk</string>
 <key>CFBundleExecutable</key><string>FakeRemote</string>
 <key>CFBundlePackageType</key><string>APPL</string>
 </dict></plist>

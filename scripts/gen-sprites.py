@@ -9,7 +9,7 @@ Each buddy's base drawing is generated first; every expression is then an edit o
 character, eyes closed"), so the frames stay consistent. Gemini can't return transparency, so it draws on
 solid magenta, which is keyed out. Each drawn block becomes one real pixel, keeping the exact colors.
 
-Needs GEMINI_API_KEY in the environment or in ~/.config/lookout/secrets.env. The key is never printed.
+Needs GEMINI_API_KEY in the environment or in ~/.config/scout/secrets.env. The key is never printed.
 Raw images go to build/sprites-raw/; finished sprites to Resources/sprites/<buddy>-<face>.png.
 """
 import argparse, base64, json, os, ssl, sys, urllib.error, urllib.request
@@ -51,13 +51,15 @@ FACES = {
 def api_key():
     k = os.environ.get("GEMINI_API_KEY")
     if not k:
-        f = Path.home() / ".config" / "lookout" / "secrets.env"
+        f = Path.home() / ".config" / "scout" / "secrets.env"
+        if not f.exists():  # from before the rename
+            f = Path.home() / ".config" / "lookout" / "secrets.env"
         if f.exists():
             for line in f.read_text().splitlines():
                 if line.strip().startswith("GEMINI_API_KEY="):
                     k = line.split("=", 1)[1].strip().strip('"').strip("'")
     if not k:
-        sys.exit("No GEMINI_API_KEY (set it, or add GEMINI_API_KEY=... to ~/.config/lookout/secrets.env).")
+        sys.exit("No GEMINI_API_KEY (set it, or add GEMINI_API_KEY=... to ~/.config/scout/secrets.env).")
     return k
 
 

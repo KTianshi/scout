@@ -375,7 +375,7 @@ section[hidden] { display: none; }
 
   // ----- Sound -----
   var audioCtx = null, soundOn = false;
-  try { soundOn = localStorage.getItem('lookout.sound') !== 'off'; } catch (e) { soundOn = true; }
+  try { soundOn = localStorage.getItem('scout.sound') !== 'off'; } catch (e) { soundOn = true; }
   function unlockAudio() {
     if (!soundOn) return;
     try {
@@ -408,7 +408,7 @@ section[hidden] { display: none; }
   $('soundBtn').addEventListener('click', function () {
     if (audioReady()) { soundOn = false; }
     else { soundOn = true; unlockAudio(); setTimeout(chime, 50); }
-    try { localStorage.setItem('lookout.sound', soundOn ? 'on' : 'off'); } catch (e) {}
+    try { localStorage.setItem('scout.sound', soundOn ? 'on' : 'off'); } catch (e) {}
     renderSoundBtn();
   });
 
