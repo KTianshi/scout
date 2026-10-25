@@ -93,6 +93,8 @@ final class BuddyState: ObservableObject {
     @Published var bubbleAnchor: CGPoint = .zero
     @Published var pointing: Bool = false
     @Published var highlight: CGRect? = nil
+    /// What the buddy is pointing at: not drawn, but the bubble is kept off it.
+    var avoid: CGRect? = nil
     /// Off hides the resting buddy; it still appears to warn or answer.
     @Published var visible: Bool = !UserDefaults.standard.bool(forKey: "buddyHidden") {
         didSet { UserDefaults.standard.set(!visible, forKey: "buddyHidden") }
@@ -116,7 +118,7 @@ final class BuddyState: ObservableObject {
         // Rough height: ~30 characters per line at 19 pt, plus title and padding.
         let chars = CGFloat((bubble ?? "").count)
         let h: CGFloat = max(70, ceil(chars / 30) * 27 + (bubbleTitle == nil ? 34 : 60))
-        let avoid = (highlight ?? CGRect(x: p.x - 30, y: p.y - 30, width: 60, height: 60)).insetBy(dx: -14, dy: -14)
+        let avoid = (avoid ?? highlight ?? CGRect(x: p.x - 30, y: p.y - 30, width: 60, height: 60)).insetBy(dx: -14, dy: -14)
         let gap: CGFloat = 36
         let candidates = [
             CGPoint(x: p.x + gap + w / 2, y: p.y + h / 2 + 14),   // right, below
@@ -315,8 +317,8 @@ final class Overlay {
         if let h = highlight { body = CGPoint(x: min(h.maxX, p.x + 140) + 26, y: h.maxY + 26) }
         if state.style == .cursor {
             // Like Clicky: the triangle's tip lands right at the target (8 right, 12 below).
+            // The tip sits up-left of the triangle's center, so this puts the nose on the target point.
             body = CGPoint(x: p.x + 8, y: p.y + 12)
-            if let h = highlight { body = CGPoint(x: min(h.maxX, p.x + 60) + 6, y: h.maxY + 8) }
         }
         let clamped = CGPoint(
             x: min(max(body.x, 30), screen.frame.width - 30),
@@ -324,9 +326,11 @@ final class Overlay {
         )
         state.bubbleAnchor = clamped
         state.tag = ""
+        // No box around the target (it read as "wrong place" when the box and the control didn't line up):
+        // like Clicky, the cursor's nose is the pointer. The rect is kept only so the bubble stays clear of it.
+        state.avoid = highlight
         withAnimation(.easeOut(duration: 0.25)) {
             state.pointing = true
-            state.highlight = highlight
         }
         flyArc(to: clamped) { [weak self] in self?.typeTag() }
     }
@@ -425,6 +429,7 @@ final class Overlay {
             state.pointing = false
             state.highlight = nil
         }
+        state.avoid = nil
         // Like Clicky: fly back to the pointer in an arc instead of jumping, then follow again.
         if wasPointing, followsCursor {
             flyArc(to: cursorTarget()) { [weak self] in self?.isPinned = false }

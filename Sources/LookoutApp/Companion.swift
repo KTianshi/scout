@@ -779,7 +779,8 @@ final class Companion {
         if willConfirm || willSweep {
             confirmInFlight = true
             lastConfirmedFingerprint = fp
-            if willSweep { lastSweepAt = Date() } else { overlay.setMood(.thinking) }
+            // Background check: don't turn the buddy into a spinner while it's pointing or talking in a help answer.
+            if willSweep { lastSweepAt = Date() } else if !busy { overlay.setMood(.thinking) }
             if willConfirm { full = await snapshot(includeImage: claude.isConfigured) }
             let summary = result.summary
             let ctx = full.context, image = full.image
