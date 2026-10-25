@@ -22,7 +22,11 @@ let app = NSApplication.shared
 
 MainActor.assumeIsolated {
 
-if let out = opt("--render-icon") {
+if let dir = opt("--render-ui") {
+    app.setActivationPolicy(.accessory)
+    UIRenderer.run(dir: dir, companion: Companion())
+    exit(0)
+} else if let out = opt("--render-icon") {
     // Build step: scripts/bundle.sh turns this PNG into AppIcon.icns.
     guard let img = AppIconView.image(), let tiff = img.tiffRepresentation,
           let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]) else { exit(1) }

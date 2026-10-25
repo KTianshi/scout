@@ -82,8 +82,8 @@ final class Companion {
         let hello = missing
             ? "Hi, I'm Lookout. I need a couple of permissions before I can see your screen. I've opened a window to help."
             : "Hi, I'm Lookout. Hold \(TalkShortcut.current.spoken) any time to ask me something."
-        overlay.say(hello)
-        if missing && !demoBrowser.window.isVisible { setup.show() }
+        // With the setup window open, say it but don't draw a bubble over the window's button.
+        if missing { setup.show() } else { overlay.say(hello) }
         await speech.speak(hello)
         try? await Task.sleep(nanoseconds: 1_500_000_000)
         if !busy { overlay.reset() }
