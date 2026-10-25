@@ -30,7 +30,7 @@ Forward filtering in log space, one step per observation. After each step it rep
 - **An exact evidence ledger** of log Bayes factors per flag, e.g. `REMOTE_ACCESS_STARTED +3.4`, plus a "time passes" term. The prior log-odds plus every ledger entry equals the current log-odds exactly (tested). Family alerts show the top entries: "Why: surprise refund/invoice +4.2 · remote-control app +3.1".
 - **Parity:** the Swift port matches the Python reference to 1e-9 on exported vectors (`model/parity_vectors.json`, Swift `PlaybookParityTests`).
 
-## CRS: checking the scammer, not grandma (`family/crs.js`, `SenderCheck.swift`)
+## CRS: checking the scammer, not the person it protects (`family/crs.js`, `SenderCheck.swift`)
 
 When a screen is already suspicious (risk ≥ 0.10), Scout reads the **sender's email address** from it (a `mailto:` address or a "From:" line). It sends that address to **CRS Fraud Finder** (AtData email risk, CRS sandbox) through the family server, which holds the CRS keys. This runs in parallel with the Claude check.
 - **The result is evidence, not a verdict.** It enters the playbook model as `CRS_SENDER_HIGH_RISK`, which, like Claude's flag, only counts on screens where the check actually ran.

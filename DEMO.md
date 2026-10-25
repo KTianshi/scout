@@ -1,11 +1,11 @@
 # Scout: demo plan
 
-**The story in one line:** a patient grandkid who's always there. Scout sits next to the pointer, shows you where to click, and stops scams before money leaves.
+**The story in one line:** a patient companion who's always there. Scout sits next to the pointer, shows you where to click, and stops scams before money leaves.
 
 **The three things every judge should leave remembering:**
 1. **It works in any app.** Scout reads the real screen, with no setup and nothing scripted for a particular app.
 2. **It speaks up without being asked.** People being scammed don't ask for help, so Scout doesn't wait.
-3. **It checks the scammer, not grandma.** Claude reads the screen, CRS checks who sent it, and an explainable playbook model makes the call.
+3. **It checks the scammer, not you.** Claude reads the screen, CRS checks who sent it, and an explainable playbook model makes the call.
 
 ---
 
@@ -31,8 +31,8 @@
 | Time | Do | Say |
 |---|---|---|
 | **0:00** | Scout the dog resting by the pointer. | "Our grandparents are sharp, but computers get in their way, and scammers know it. Americans over 60 lost 352 million dollars to AI-powered scams last year. Meet Scout." |
-| **0:15 · Help in a real app** | Gmail draft in Chrome. Hold ⌥ Space: *"How do I attach a photo?"* | Scout flies to the paperclip and says one step. **Click it.** Scout notices and gives the next step on its own. "No setup. It's reading the real screen, like a grandkid looking over your shoulder." |
-| **0:50 · The scam email (CRS)** | Demo launcher ▸ **2** (IRS gift cards). **Don't touch anything.** | Within about 5 s Scout says: *"I checked who sent this. That email address first appeared today and is rated very high risk."* The screen pauses. Point at **"The sender is high risk · CRS CHECKED"** on the card. "We check the scammer, never grandma. Only the sender's address leaves the Mac." |
+| **0:15 · Help in a real app** | Gmail draft in Chrome. Hold ⌥ Space: *"How do I attach a photo?"* | Scout flies to the paperclip and says one step. **Click it.** Scout notices and gives the next step on its own. "No setup. It's reading the real screen, like a patient companion looking over your shoulder." |
+| **0:50 · The scam email (CRS)** | Demo launcher ▸ **2** (IRS gift cards). **Don't touch anything.** | Within about 5 s Scout says: *"I checked who sent this. That email address first appeared today and is rated very high risk."* The screen pauses. Point at **"The sender is high risk · CRS CHECKED"** on the card. "We check the scammer, never you. Only the sender's address leaves the Mac." |
 | **1:25** | Click **Go back to safety**. | "No lecture, no lockout. The choice stays hers." |
 | **1:35 · No red flags** | Switch to the TextEdit message. | No links, no gift cards, just a friendly "soldier" who needs a small fee. Scout warns: *"Real soldiers never charge leave fees."* "Keyword filters miss this. Claude reads it like a person would." |
 | **2:05 · How it decides** | Settings ▸ Safety, or a slide. | "Scams follow playbooks: pop-up, phone call, remote access, gift cards. Each step alone is innocent; the sequence isn't. Kyle built a hidden Markov model over those playbooks. Claude and CRS are witnesses; the model is the judge. On our 154-screen benchmark: 79 of 79 scams caught, zero false alarms." |
@@ -62,7 +62,7 @@ Record at 1080p or higher with system audio, so Scout's real voice is in it. Use
 |---|---|---|
 | **0:00–0:10** | A phone buzzing: "Grandma 📞". Cut to a cursor hovering, lost, over Gmail. | VO: "Every one of us has gotten this call. *How do I attach the photo again?*" |
 | **0:10–0:18** | Text: **Americans 60+ lost 352 million dollars to AI-powered scams in 2025.** | VO: "And when it isn't a question, it's a scam." |
-| **0:18–0:25** | Scout the dog pops in next to the pointer. Title: **Scout**. | VO: "So we built Scout: a patient grandkid who's always there." |
+| **0:18–0:25** | Scout the dog pops in next to the pointer. Title: **Scout**. | VO: "So we built Scout: a patient companion who's always there." |
 | **0:25–0:55 · Helps** | Real Gmail. Hold ⌥ Space, ask, Scout flies to the paperclip, the click, the next step, *"Perfect. You're all set."* | Scout's real audio. Caption: *Any app · no setup*. |
 | **0:55–1:30 · Protects** | The IRS email opens and Scout's warning plays. The pause card appears; zoom in on **CRS CHECKED** and *created today*. Click **Go back to safety**. Quick cut: fake virus pop-up, buddy on the phone number. | Scout's real audio. Caption: *Sender checked live with CRS Fraud Finder*. |
 | **1:30–1:48 · How** | Simple diagram: **Screen + buttons → Claude** · **Sender → CRS** · **Playbook model decides** · **Cartesia Sonic (voice) + Ink (hearing)**. Then: **79/79 scams caught · 0/75 false alarms**. | VO: "Claude reads the screen. CRS checks who sent it. Our playbook model makes the call, and can always say why." |
