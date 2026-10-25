@@ -19,7 +19,9 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
                          styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
         w.title = "Scout Settings"
         w.contentMinSize = NSSize(width: 640, height: 460)
-        w.contentViewController = NSHostingController(rootView: SettingsView(model: model).scoutTheme())
+        // Scout --settings <pane> opens on that pane (voice, buddy, talking, safety): for screenshots.
+        let first = SettingsPane(rawValue: UserDefaults.standard.string(forKey: "settingsPane") ?? "") ?? .voice
+        w.contentViewController = NSHostingController(rootView: SettingsView(model: model, pane: first).scoutTheme())
         w.setContentSize(NSSize(width: 720, height: 560))
         w.center()
         w.isReleasedWhenClosed = false
@@ -723,6 +725,10 @@ struct TalkingPane: View {
                 }
             }
             .settingsGroup()
+            Text(CartesiaSTT.isConfigured ? "Scout hears you with Cartesia, with Apple's speech recognition as a backup."
+                                          : "Scout hears you with Apple's speech recognition.")
+                .lfont(13).foregroundStyle(.secondary)
+                .padding(.leading, 6)
             if model.shortcutTaken {
                 Label("Another app uses these keys. Pick different ones.", systemImage: "exclamationmark.triangle.fill")
                     .lfont(14).foregroundStyle(.orange)
@@ -787,6 +793,9 @@ struct SafetyPane: View {
                 .settingsGroup()
                 .disabled(!model.guardian)
                 .opacity(model.guardian ? 1 : 0.5)
+            senderCheck
+                .settingsGroup()
+                .opacity(model.guardian ? 1 : 0.5)
         }
         if ScoutConfig.familyEnabled {
         VStack(alignment: .leading, spacing: 8) {
@@ -804,6 +813,25 @@ struct SafetyPane: View {
         }
         }
         permissionsButton
+    }
+
+    /// Not a switch: it runs whenever a suspicious message shows a sender address. Shown so people know it's there.
+    var senderCheck: some View {
+        HStack(alignment: .center, spacing: 14) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Check who sent it").lfont(16)
+                Text("When a suspicious email shows its sender, Scout asks CRS Fraud Finder how risky that address is. Only the sender's address is sent.")
+                    .lfont(13).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 12)
+            Label(CRSClient.isConfigured ? "Connected" : "Not set up", systemImage: CRSClient.isConfigured ? "checkmark.circle.fill" : "minus.circle")
+                .lfont(13, .semibold)
+                .foregroundStyle(CRSClient.isConfigured ? Color.green : Color.secondary)
+                .fixedSize()
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
     }
 
     var permissionsButton: some View {

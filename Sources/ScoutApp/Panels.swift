@@ -494,6 +494,23 @@ struct SetupView: View {
                         .lfont(17)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
+                    // How to ask, so the first question doesn't need a manual.
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack(spacing: 10) {
+                            ForEach(TalkingPane.keys(TalkShortcut.current), id: \.self) { Keycap(label: $0) }
+                            Text("Hold, ask, let go").lfont(15)
+                        }
+                        if WakeListener.enabled {
+                            HStack(spacing: 10) {
+                                Image(systemName: "waveform").lfont(15).foregroundStyle(.secondary).frame(width: 28)
+                                Text("Or just say “Hey Scout”").lfont(15)
+                            }
+                        }
+                    }
+                    .padding(16)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .settingsGroup()
+                    .padding(.top, 18)
                 }
                 .transition(.opacity)
             }

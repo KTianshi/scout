@@ -93,6 +93,7 @@ if let desc = opt("--make-buddy") {
     }
     delegate.askOnLaunch = opt("--ask")
     delegate.openSettingsOnLaunch = args.contains("--settings")
+    UserDefaults.standard.set(opt("--settings"), forKey: "settingsPane")
     delegate.openAskOnLaunch = args.contains("--ask-box")
     app.delegate = delegate
     app.run()
