@@ -30,6 +30,11 @@ final class Companion {
     private(set) var generation = 0
     private var listening = false
     private var lastAlertKey: String?
+    private var recentWarnings: [String: Date] = [:]
+    private var dismissedWarnings: [String: Date] = [:]
+    private var lastWarnedKey: String?
+    /// They dismissed the warning: that page stays quiet for 30 minutes.
+    func dismissWarning() { if let k = lastWarnedKey { dismissedWarnings[k] = Date() } }
     private var lastAlertAt = Date.distantPast
     /// Pages Claude confidently called safe, and when. The guardian stays quiet there for a while.
     private var clearedPages: [String: Date] = [:]
@@ -84,7 +89,9 @@ final class Companion {
             : "Hi, I'm Lookout. Hold \(TalkShortcut.current.spoken) any time to ask me something."
         overlay.say(hello)
         if missing && !demoBrowser.window.isVisible { setup.show() }
-        await speech.speak(hello)
+        // Only speak up when something is needed (permissions). Every other launch is silent: a voice out of
+        // nowhere after a restart is startling, especially for an older person.
+        if missing { await speech.speak(hello) } else { try? await Task.sleep(nanoseconds: 3_000_000_000) }
         try? await Task.sleep(nanoseconds: 1_500_000_000)
         if !busy { overlay.reset() }
     }
@@ -854,7 +861,16 @@ final class Companion {
             // Only real warnings (interrupt and above) reach the person.
             return
         case .interrupt, .blockAndAlert:
-            if key == lastAlertKey, Date().timeIntervalSince(lastAlertAt) < 90 { return }
+            // One warning per page, then quiet for 10 minutes (30 once they've dismissed it). Also keyed by what
+            // would be said: Gmail's address changes between the inbox and the open message, and the same email
+            // warned three times in four minutes.
+            let now = Date()
+            if let t = dismissedWarnings[key], now.timeIntervalSince(t) < 1800 { return }
+            if let t = recentWarnings[key], now.timeIntervalSince(t) < 600 { return }
+            if let t = recentWarnings[r.spoken], now.timeIntervalSince(t) < 600 { return }
+            recentWarnings[key] = now
+            recentWarnings[r.spoken] = now
+            lastWarnedKey = key
             lastAlertKey = key
             lastAlertAt = Date()
             let paymentRisk = !snap.context.sensitiveFields.isEmpty && r.probability >= 0.3
@@ -897,10 +913,10 @@ final class Companion {
         let canClose = demoInFront || Self.isBrowser(NSWorkspace.shared.frontmostApplication)
         // Only offer to close in a browser: ⌘W anywhere else closes whatever window is in front.
         let buttons: [ActionCard.Button] = canClose ? [
-            .init(title: "Close it for me", primary: true) { [weak self] in Log.info("user: close it"); self?.closeThreat() },
-            .init(title: "I'm OK, thanks", primary: false) { [weak self] in Log.info("user: I'm OK"); self?.overlay.reset() },
+            .init(title: "Close it for me", primary: true) { [weak self] in Log.info("user: close it"); self?.dismissWarning(); self?.closeThreat() },
+            .init(title: "I'm OK, thanks", primary: false) { [weak self] in Log.info("user: I'm OK"); self?.dismissWarning(); self?.overlay.reset() },
         ] : [
-            .init(title: "Got it", primary: true) { [weak self] in Log.info("user: got it"); self?.overlay.reset() },
+            .init(title: "Got it", primary: true) { [weak self] in Log.info("user: got it"); self?.dismissWarning(); self?.overlay.reset() },
         ]
         card.show(title: "Let's be careful", message: "You're safe. Nothing has happened yet." + (LookoutConfig.familyEnabled ? " \(LookoutConfig.familyName) has been told." : ""), alarmed: true, buttons: buttons, near: buddyScreenPoint)
         Task {
@@ -912,6 +928,8 @@ final class Companion {
                                     action: "Lookout interrupted and explained the warning signs"))
         }
         DebugShot.take("interrupt")
+        // Let the buddy and the card appear first, then speak: a calmer start than a voice out of nowhere.
+        try? await Task.sleep(nanoseconds: 800_000_000)
         await speech.speak(spoken)
     }
 
