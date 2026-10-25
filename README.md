@@ -89,6 +89,10 @@ bench/          154 labeled fixtures (dev/test split) + results
 
 Scams are modelled as sequences of stages (pop-up → call → remote access → bank → payment) in one hidden Markov model with benign look-alike states (family remote help, gift shopping, banking, paying people, reading about scams). `model/playbooks.json` holds every parameter with a one-line justification; the Python reference (`lookout_detect/`) and the Swift engine (`LookoutCore/Playbook/`) read it and agree to 1e-9. Claude's findings enter only as evidence. On 680 held-out sessions it alarms on 1.1% of benign sessions vs 10.3% for the previous detector, at 96.7% recall.
 
+### CRS sender check
+
+On suspicious screens, the sender's email address is checked with **CRS Fraud Finder** via the family server (`POST /api/crs/check-sender`; set `CRS_USERNAME` / `CRS_PASSWORD` in `~/.config/lookout/secrets.env`). A high-risk result becomes evidence in the playbook model and a line in the buddy's warning ("that email address first appeared today and is rated very high risk"). Only the scammer's address is ever sent. See `DETECTION.md`.
+
 ### Benchmark (see `bench/RESULTS.md`)
 
 All 154 single-screen fixtures (79 scams, 75 benign look-alikes), current playbook engine:

@@ -57,15 +57,19 @@ public final class PlaybookModel: @unchecked Sendable {
 
         var states: [String] = [], isScam: [Bool] = [], playbookOf: [String?] = [], stageIndex: [Int] = []
         var Q: [[Double]] = [], start: [Double] = [], hints: [String] = []
-        func emitRow(_ emit: [String: Any], _ def: Double) -> [Double] {
+        let eventDefaults = cfg["event_defaults"] as? [String: Any] ?? [:]
+        func emitRow(_ emit: [String: Any], _ def: Double, kind: String) -> [Double] {
             var q = Array(repeating: def, count: E)
+            for (k, v) in eventDefaults {
+                if let i = events.firstIndex(of: k), let d = (v as? [String: Any])?[kind] as? NSNumber { q[i] = d.doubleValue }
+            }
             for (k, v) in emit { if let i = events.firstIndex(of: k), let d = (v as? NSNumber)?.doubleValue { q[i] = d } }
             return q.map { min(max($0, floor), 1 - floor) }
         }
         for name in benignOrder {
             let s = benignCfg[name] ?? [:]
             states.append(name); isScam.append(false); playbookOf.append(nil); stageIndex.append(-1); hints.append("")
-            Q.append(emitRow(s["emit"] as? [String: Any] ?? [:], benignDefault))
+            Q.append(emitRow(s["emit"] as? [String: Any] ?? [:], benignDefault, kind: "benign"))
             start.append((s["start"] as? NSNumber)?.doubleValue ?? 0)
         }
         var labels: [String: String] = [:]
@@ -75,7 +79,7 @@ public final class PlaybookModel: @unchecked Sendable {
             for (i, st) in (spec["stages"] as? [[String: Any]] ?? []).enumerated() {
                 states.append("\(pb):\(st["name"] as? String ?? "\(i)")"); isScam.append(true); playbookOf.append(pb); stageIndex.append(i)
                 hints.append(st["hint"] as? String ?? "")
-                Q.append(emitRow(st["emit"] as? [String: Any] ?? [:], scamDefault))
+                Q.append(emitRow(st["emit"] as? [String: Any] ?? [:], scamDefault, kind: "scam"))
                 start.append(0)
             }
         }

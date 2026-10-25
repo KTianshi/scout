@@ -23,7 +23,7 @@ private func loadModel() throws -> PlaybookModel {
             for step in seq["steps"] as! [[String: Any]] {
                 let o = step["obs"] as! [String: Any]
                 let events = Set((o["events"] as! [String]).compactMap(PlaybookEvent.init(rawValue:)))
-                let s = eng.observe(PlaybookObservation(t: o["t"] as! Double, events: events, modelRan: o["model_ran"] as! Bool, source: o["source"] as! String))
+                let s = eng.observe(PlaybookObservation(t: o["t"] as! Double, events: events, modelRan: o["model_ran"] as! Bool, crsChecked: o["crs_checked"] as? Bool ?? false, source: o["source"] as! String))
                 #expect(abs(s.pScam - (step["p_scam"] as! Double)) < 1e-9, "\(name) p_scam")
                 #expect(abs(s.logOdds - (step["log_odds"] as! Double)) < 1e-9, "\(name) log_odds")
                 #expect(abs(s.logLikelihood - (step["log_likelihood"] as! Double)) < 1e-9, "\(name) loglik")
@@ -77,5 +77,26 @@ private func loadModel() throws -> PlaybookModel {
     @Test func eventOrderMatchesModel() throws {
         let model = try loadModel()
         #expect(model.Q.first?.count == PlaybookEvent.allCases.count)
+    }
+}
+
+@Suite struct SenderCheckTests {
+    @Test func extractsSender() {
+        #expect(SenderCheck.extractSender(ScreenContext(text: "x", url: "mailto:notice@irs-gov-payments.co")) == "notice@irs-gov-payments.co")
+        #expect(SenderCheck.extractSender(ScreenContext(text: "Inbox\nFrom: IRS Department of Treasury <Notice@IRS-gov-payments.co>\nSubject: Final notice")) == "notice@irs-gov-payments.co")
+        #expect(SenderCheck.extractSender(ScreenContext(text: "Call us or email help@example.com")) == nil)
+    }
+
+    @Test func onlyRealCRSAnswersCount() throws {
+        let pipeline = ScamPipeline()
+        let ctx = ScreenContext(text: "From: IRS <notice@irs-gov-payments.co>\nFINAL NOTICE. Respond immediately to avoid suspension.", url: "mailto:notice@irs-gov-payments.co")
+        let high = SenderCheck(email: "notice@irs-gov-payments.co", verdict: .high, score: 100, firstSeen: "2026-10-24", newToday: true, sentence: "I checked who sent this.", source: "crs")
+        let mock = SenderCheck(email: "notice@irs-gov-payments.co", verdict: .high, score: 100, firstSeen: nil, newToday: true, sentence: "x", source: "mock")
+        let withCRS = ScamPipeline().applyChecks(verdict: nil, sender: high, ctx: ctx)
+        let withMock = ScamPipeline().applyChecks(verdict: nil, sender: mock, ctx: ctx)
+        let without = pipeline.commit(ctx)
+        #expect((withCRS.playbook?.pScam ?? 0) > (without.playbook?.pScam ?? 0))
+        #expect(abs((withMock.playbook?.pScam ?? 0) - (without.playbook?.pScam ?? 0)) < 1e-12)
+        #expect(withCRS.spoken.contains("I checked who sent this."))
     }
 }

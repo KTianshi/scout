@@ -30,6 +30,22 @@ Forward filtering in log space, one step per observation. After each step it rep
 - **An exact evidence ledger** of log Bayes factors per flag, e.g. `REMOTE_ACCESS_STARTED +3.4`, plus a "time passes" term. The prior log-odds plus every ledger entry equals the current log-odds exactly (tested). Family alerts show the top entries: "Why: surprise refund/invoice +4.2 · remote-control app +3.1".
 - **Parity:** the Swift port matches the Python reference to 1e-9 on exported vectors (`model/parity_vectors.json`, Swift `PlaybookParityTests`).
 
+## CRS: checking the scammer, not grandma (`family/crs.js`, `SenderCheck.swift`)
+
+When a screen is already suspicious (risk ≥ 0.10), Lookout reads the **sender's email address** from it (a `mailto:` address or a "From:" line). It sends that address to **CRS Fraud Finder** (AtData email risk, CRS sandbox) through the family server, which holds the CRS keys. This runs in parallel with the Claude check.
+- **The result is evidence, not a verdict.** It enters the playbook model as `CRS_SENDER_HIGH_RISK`, which, like Claude's flag, only counts on screens where the check actually ran.
+- **Calibration** (sandbox):
+  - `auto-confirm@amazon.com` scores **0/100**, domain risk 1/10, first seen 2006.
+  - `notice@irs-gov-payments.co` and `billing@norton-renewals.info` score **100/100**, domain risk 10/10, first seen the same day.
+  - P(high | scam) = 0.8, since some scammers use free mail; P(high | benign) = 0.04. One CRS answer can therefore move the odds by at most about 3 nats.
+- **The buddy says:** "I checked who sent this. That email address first appeared today and is rated very high risk." The family approval card shows the score.
+- **Responsible data:**
+  - Only the scam message's sender address is sent, never anything about the person Lookout protects.
+  - It runs only on suspicious screens, with one lookup per address per day (cached).
+  - Credentials stay on the family server.
+  - Without credentials a clearly-labelled mock answer is used, and mock answers never change the score.
+- **Not covered by the session evaluation:** every non-test CRS lookup is a billable call to their data supplier, so the evaluation numbers below are without CRS.
+
 ## What the app acts on (`ScamPipeline`)
 
 1. **The playbook HMM decides.**

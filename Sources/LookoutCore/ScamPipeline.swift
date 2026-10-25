@@ -15,6 +15,8 @@ public final class ScamPipeline: @unchecked Sendable {
         public var shouldConfirmWithModel: Bool
         /// Playbook HMM state after this screen (nil if the model file was not found).
         public var playbook: PlaybookState?
+        /// CRS Fraud Finder check of the message's sender, if one ran for this screen.
+        public var senderCheck: SenderCheck?
 
         /// What the policy acts on. The playbook HMM's risk, plus the evidence-memory detector's risk (which
         /// covers scam types without a playbook: crypto, phishing, prizes...) unless the HMM recognises a
@@ -58,7 +60,10 @@ public final class ScamPipeline: @unchecked Sendable {
             return pb.pScam
         }
         public var action: Action { decision.action }
-        public var spoken: String { [explanation, advice].filter { !$0.isEmpty }.joined(separator: " ") }
+        public var spoken: String {
+            let crs = senderCheck?.isHighRisk == true ? senderCheck?.sentence : nil
+            return [explanation, crs ?? "", advice].filter { !$0.isEmpty }.joined(separator: " ")
+        }
 
         public var summary: String {
             let ev = assessment.activeEvidence.prefix(6).map { "\($0.kind.rawValue)(\(String(format: "%.1f", $0.weight)): \($0.evidence))" }
@@ -101,13 +106,17 @@ public final class ScamPipeline: @unchecked Sendable {
 
     /// Feed one screen to the playbook HMM if its evidence changed (the same screen re-read every few
     /// seconds is one observation, not many).
-    func playbookStep(_ ctx: ScreenContext, signals: [Signal], at now: Date, verdict: ScamVerdict?, commit: Bool) -> PlaybookState? {
+    func playbookStep(_ ctx: ScreenContext, signals: [Signal], at now: Date, verdict: ScamVerdict?, sender: SenderCheck? = nil, commit: Bool) -> PlaybookState? {
         guard let playbook else { return nil }
         var events = PlaybookEvents.extract(ctx, signals: signals)
         if verdict?.isScam == true { events.insert(.CLAUDE_FLAG) }
-        let obs = PlaybookObservation(t: now.timeIntervalSince1970, events: events, modelRan: verdict != nil, source: verdict != nil ? "screen+claude" : "screen")
+        // CRS answers are evidence like Claude's: they only count on screens where the check actually ran.
+        let crsChecked = sender?.countsAsEvidence == true
+        if sender?.isHighRisk == true { events.insert(.CRS_SENDER_HIGH_RISK) }
+        let source = ["screen", verdict != nil ? "claude" : nil, crsChecked ? "crs" : nil].compactMap { $0 }.joined(separator: "+")
+        let obs = PlaybookObservation(t: now.timeIntervalSince1970, events: events, modelRan: verdict != nil, crsChecked: crsChecked, source: source)
         var h = Hasher()
-        h.combine(events); h.combine(ctx.fingerprint); h.combine(verdict != nil)
+        h.combine(events); h.combine(ctx.fingerprint); h.combine(verdict != nil); h.combine(crsChecked)
         let key = h.finalize()
         if !commit { return playbook.peek(obs) }
         if key == lastPlaybookKey { return playbook.state() }
@@ -116,18 +125,27 @@ public final class ScamPipeline: @unchecked Sendable {
     }
 
     /// Record a previewed screen in the playbook HMM without model evidence (no Claude check happened).
-    public func commit(_ ctx: ScreenContext, at now: Date = Date()) -> Result {
+    public func commit(_ ctx: ScreenContext, at now: Date = Date(), sender: SenderCheck? = nil) -> Result {
         let signals = ScamSignals.analyze(ctx)
-        let pb = playbookStep(ctx, signals: signals, at: now, verdict: nil, commit: true)
-        return decide(ctx: ctx, assessment: engine.assess(currentScreen: signals, at: now), playbook: pb)
+        let pb = playbookStep(ctx, signals: signals, at: now, verdict: nil, sender: sender, commit: true)
+        var r = decide(ctx: ctx, assessment: engine.assess(currentScreen: signals, at: now), playbook: pb)
+        r.senderCheck = sender
+        return r
     }
 
-    public func applyModelVerdict(_ v: ScamVerdict, ctx: ScreenContext, at now: Date = Date()) -> Result {
+    /// Commit a suspicious screen together with whichever outside checks ran (Claude, CRS, or both).
+    public func applyChecks(verdict: ScamVerdict?, sender: SenderCheck?, ctx: ScreenContext, at now: Date = Date()) -> Result {
+        if let verdict { return applyModelVerdict(verdict, ctx: ctx, at: now, sender: sender) }
+        return commit(ctx, at: now, sender: sender)
+    }
+
+    public func applyModelVerdict(_ v: ScamVerdict, ctx: ScreenContext, at now: Date = Date(), sender: SenderCheck? = nil) -> Result {
         let screen = ScamSignals.analyze(ctx)
         let a = engine.ingestModelVerdict(isScam: v.isScam, confidence: v.confidence, at: now, screen: screen)
         // Claude's answer enters the playbook HMM as evidence (CLAUDE_FLAG present/absent), never as a verdict.
-        let pb = playbookStep(ctx, signals: screen, at: now, verdict: v, commit: true)
+        let pb = playbookStep(ctx, signals: screen, at: now, verdict: v, sender: sender, commit: true)
         var r = decide(ctx: ctx, assessment: a, playbook: pb)
+        r.senderCheck = sender
         // A confident "this is safe" from the model caps the reaction at a gentle nudge, unless a hard rule
         // fires or the playbook engine (which already weighed Claude's answer as evidence) still says scam.
         if !v.isScam, v.confidence >= 0.85, r.rules.isEmpty, (pb?.pScam ?? 0) < 0.5, r.decision.action > .nudge {

@@ -36,3 +36,7 @@
 - Red-team set A was used once for model selection; set B was generated afterwards as the clean held-out test.
 - Learned (Baum-Welch) parameters are not the default: gains on held-out data are within noise, and hand-set parameters stay explainable.
 - Demo mode never falls back to live screen capture.
+- CRS integration = Fraud Finder on the suspicious message's sender email (scammer-side data only); no credit pulls on the protected person, no family-permission step.
+- CRS calls go through the family server (keys stay off the protected Mac), cached 24 h per address, only on screens already at risk ≥ 0.10, in parallel with Claude.
+- CRS results are playbook evidence (CRS_SENDER_HIGH_RISK, P 0.8 scam / 0.04 benign, capped ~3 nats) and only count when the check ran; mock answers never count.
+- Outside checks (Claude, CRS) now run from risk ≥ 0.10 regardless of the visible-reaction threshold (fixes a gap introduced when thresholds were raised).

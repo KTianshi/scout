@@ -131,3 +131,15 @@ The page is a single file with inline CSS and JS, no CDN, and the system font st
 - **Approval IDs** are opaque strings (`apr_...`), not UUIDs. Deciding twice returns 409 with the existing status, so the Mac app can treat 409 as final.
 - **Sound.** Browsers block audio until the user interacts with the page, so the chime is unlocked on the first tap. The speaker button toggles it, and the choice is remembered in localStorage.
 - **SMS** goes to the family number only, and only for alert-worthy types (not `info`).
+
+
+## CRS sender check
+
+`POST /api/crs/check-sender` with `{"email": "notice@irs-gov-payments.co"}` runs CRS Fraud Finder (AtData) on a suspicious message's **sender** and returns:
+- `verdict`: `high`, `medium`, `low` or `unknown`
+- `score`: 0–100
+- `firstSeen` and `newToday`
+- `sentence`: plain-language text the buddy can say
+- `source`: `crs` or `mock`
+
+Credentials come from `CRS_USERNAME` / `CRS_PASSWORD` (env or `~/.config/lookout/secrets.env`) and are never logged. Results are cached for 24 h per address. Without credentials, or when `CRS_MOCK=1` is set or CRS is unreachable, a mock answer marked `source: "mock"` is returned. `GET /api/crs/status` reports whether CRS is configured.
