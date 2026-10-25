@@ -32,9 +32,12 @@ BUDDIES = {
     "dog": "Scout, a friendly beagle puppy: floppy brown ears, tan face, white muzzle, black nose, small pink tongue",
     "owl": "Hoot, a round gray owl: big white eyes with black pupils, ear tufts, orange beak and feet, light gray belly",
     "mouse": "Mouse, a small gray mouse: big round ears with pink insides, black eyes, pink nose, whiskers",
-    "chick": "Clicken, a round yellow baby chick: orange beak, little wings, big round black eyes each with a "
-             "clear white shine pixel, the same on both eyes",
+    "chick": "Clicken, a round yellow baby chick: orange beak and feet, little wings, black eyes",
 }
+
+# Sprites touched up by hand afterwards (Clicken: white eye shine, no smile under the beak). Skipped
+# unless named with --only, so a re-run can't overwrite the edits.
+HAND_EDITED = {"chick"}
 
 FACES = {
     "blink": "the eyes are closed (a short horizontal line for each eye)",
@@ -207,7 +210,7 @@ def main():
     ap.add_argument("--faces", action="store_true", help="only redo expressions, reusing existing base drawings")
     ap.add_argument("--reclean", action="store_true", help="no new drawings: just re-clean the saved raw images")
     args = ap.parse_args()
-    names = ["dog"] if args.test else (args.only.split(",") if args.only else list(BUDDIES))
+    names = ["dog"] if args.test else (args.only.split(",") if args.only else [b for b in BUDDIES if b not in HAND_EDITED])
     RAW.mkdir(parents=True, exist_ok=True)
     if args.reclean:
         for n in names:
