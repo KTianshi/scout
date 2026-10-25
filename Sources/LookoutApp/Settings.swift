@@ -14,12 +14,12 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         model.reload()
         DebugShot.take("settings")
         if let w = window { w.makeKeyAndOrderFront(nil); NSApp.activate(ignoringOtherApps: true); return }
-        let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 520, height: 560),
+        let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 720, height: 560),
                          styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
         w.title = "Lookout Settings"
-        w.contentMinSize = NSSize(width: 460, height: 480)
-        w.contentViewController = NSHostingController(rootView: SettingsView(model: model))
-        w.setContentSize(NSSize(width: 520, height: 560))
+        w.contentMinSize = NSSize(width: 640, height: 460)
+        w.contentViewController = NSHostingController(rootView: SettingsView(model: model).lookoutTheme())
+        w.setContentSize(NSSize(width: 720, height: 560))
         w.center()
         w.isReleasedWhenClosed = false
         w.makeKeyAndOrderFront(nil)
@@ -146,14 +146,6 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .safety: return "Safety"
         }
     }
-    var subtitle: String {
-        switch self {
-        case .voice: return "Click a voice to hear it."
-        case .buddy: return "How Lookout looks on your screen."
-        case .talking: return "How you ask Lookout for help."
-        case .safety: return "How Lookout watches out for scams."
-        }
-    }
     var icon: String {
         switch self {
         case .voice: return "waveform"
@@ -164,110 +156,117 @@ enum SettingsPane: String, CaseIterable, Identifiable {
     }
     var tint: Color {
         switch self {
-        case .voice: return Color(red: 0.36, green: 0.42, blue: 0.98)
-        case .buddy: return Color(red: 0.62, green: 0.36, blue: 0.96)
-        case .talking: return Color(red: 0.98, green: 0.45, blue: 0.35)
-        case .safety: return Color(red: 0.20, green: 0.72, blue: 0.50)
+        case .voice: return Color(red: 0.95, green: 0.50, blue: 0.20)
+        case .buddy: return Color(red: 0.20, green: 0.55, blue: 0.92)
+        case .talking: return Color(red: 0.55, green: 0.30, blue: 0.85)
+        case .safety: return Color(red: 0.25, green: 0.65, blue: 0.15)
         }
     }
 }
 
-/// Home: a short list of sections. Each opens one simple page with a back button.
+/// A sidebar of sections on the left; the chosen one (Voice to start) on the right.
 struct SettingsView: View {
     @ObservedObject var model: SettingsModel
-    @State private var path: [SettingsPane] = []
+    @State var pane: SettingsPane = .voice
+    @Environment(\.classic) private var classic
 
     var body: some View {
-        NavigationStack(path: $path) {
-            ScrollView { SettingsHome(model: model) }
-            .navigationDestination(for: SettingsPane.self) { p in SettingsPage(pane: p, model: model) }
+        HStack(spacing: 0) {
+            SettingsSidebar(model: model, pane: $pane)
+            Divider()
+            ScrollView { SettingsPageContent(pane: pane, model: model) }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(classic ? ClassicLook.face : Color(nsColor: .windowBackgroundColor))
         }
     }
 }
 
-struct SettingsHome: View {
+struct SettingsSidebar: View {
     @ObservedObject var model: SettingsModel
+    @Binding var pane: SettingsPane
+    @Environment(\.classic) private var classic
+    @AppStorage(ClassicLook.key) private var classicOn = false
 
     var body: some View {
-                VStack(alignment: .leading, spacing: 22) {
-                    HStack(spacing: 14) {
-                        BuddyView(style: model.style, mood: .idle, pointing: false, level: 0)
-                            .frame(width: 64, height: 64)
-                            .scaleEffect(0.7)
-                            .frame(width: 48, height: 48)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Lookout").font(.system(size: 22, weight: .semibold))
-                            Text("Your on-screen helper").font(.system(size: 14)).foregroundStyle(.secondary)
-                        }
-                    }
-                    VStack(spacing: 0) {
-                        ForEach(Array(SettingsPane.allCases.enumerated()), id: \.element) { i, p in
-                            if i > 0 { Divider().padding(.leading, 52) }
-                            NavigationLink(value: p) { HomeRow(pane: p, value: value(p)) }
-                                .buttonStyle(.plain)
-                        }
-                    }
-                    .settingsGroup()
-                }
-                .padding(28)
-                .frame(maxWidth: 560, alignment: .leading)
-                .frame(maxWidth: .infinity)
-    }
-
-    func value(_ p: SettingsPane) -> String {
-        switch p {
-        case .voice: return LookoutVoice.all.first { $0.id == model.voiceID }?.label ?? ""
-        case .buddy: return model.style.name
-        case .talking: return model.shortcut.symbol
-        case .safety: return model.guardian ? "On" : "Off"
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 8) {
+                BuddyView(style: model.style, mood: .idle, pointing: false, level: 0)
+                    .frame(width: 64, height: 64)
+                    .scaleEffect(0.5)
+                    .frame(width: 32, height: 32)
+                Text("Lookout").lfont(18, .semibold)
+            }
+            .padding(.leading, 4)
+            .padding(.bottom, 14)
+            ForEach(SettingsPane.allCases) { p in
+                SidebarRow(pane: p, selected: pane == p) { pane = p }
+            }
+            Spacer()
+            Toggle(isOn: $classicOn) { Text("Classic look").lfont(14) }
+                .toggleStyle(.switch)
+                .padding(.horizontal, 6)
         }
+        .foregroundStyle(classic ? Color.white : Color.primary)
+        .padding(14)
+        .frame(width: 190)
+        .frame(maxHeight: .infinity)
+        .background(classic ? AnyShapeStyle(LinearGradient(colors: [ClassicLook.paneTop, ClassicLook.paneBottom], startPoint: .top, endPoint: .bottom))
+                            : AnyShapeStyle(Color.primary.opacity(0.03)))
     }
 }
 
-struct HomeRow: View {
+struct SidebarRow: View {
     var pane: SettingsPane
-    var value: String
+    var selected: Bool
+    var action: () -> Void
+    @Environment(\.classic) private var classic
     @State private var hover = false
 
     var body: some View {
-        HStack(spacing: 14) {
-            Image(systemName: pane.icon)
-                .font(.system(size: 17))
-                .foregroundStyle(.secondary)
-                .frame(width: 24)
-            Text(pane.title).font(.system(size: 17))
-            Spacer()
-            Text(value).font(.system(size: 15)).foregroundStyle(.secondary).lineLimit(1)
-            Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(.tertiary)
+        Button(action: action) {
+            HStack(spacing: 10) {
+                if classic {
+                    Image(systemName: pane.icon)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 28, height: 28)
+                        .background(RoundedRectangle(cornerRadius: 7, style: .continuous)
+                            .fill(LinearGradient(colors: [pane.tint.opacity(0.65), pane.tint], startPoint: .top, endPoint: .bottom)))
+                        .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous).stroke(.black.opacity(0.2), lineWidth: 1))
+                } else {
+                    Image(systemName: pane.icon)
+                        .font(.system(size: 15))
+                        .foregroundStyle(selected ? Color.accentColor : .secondary)
+                        .frame(width: 22)
+                }
+                Text(pane.title).lfont(16, selected && classic ? .semibold : .regular)
+                    .foregroundStyle(classic && selected ? ClassicLook.blue : (classic ? .white : .primary))
+                Spacer()
+            }
+            .padding(.horizontal, 8)
+            .frame(height: 40)
+            .background(RoundedRectangle(cornerRadius: classic ? 5 : 8, style: .continuous).fill(background))
+            .contentShape(Rectangle())
         }
-        .padding(.horizontal, 14)
-        .frame(height: 52)
-        .background(Color.primary.opacity(hover ? 0.04 : 0))
-        .contentShape(Rectangle())
+        .buttonStyle(.plain)
         .onHover { hover = $0 }
     }
-}
 
-struct SettingsPage: View {
-    var pane: SettingsPane
-    @ObservedObject var model: SettingsModel
-
-    var body: some View {
-        ScrollView { SettingsPageContent(pane: pane, model: model) }
-            .navigationTitle(pane.title)
+    var background: Color {
+        if classic { return selected ? .white : (hover ? .white.opacity(0.2) : .clear) }
+        return selected ? Color.accentColor.opacity(0.14) : (hover ? Color.primary.opacity(0.05) : .clear)
     }
 }
 
 struct SettingsPageContent: View {
     var pane: SettingsPane
     @ObservedObject var model: SettingsModel
+    @Environment(\.classic) private var classic
 
     var body: some View {
             VStack(alignment: .leading, spacing: 22) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(pane.title).font(.system(size: 26, weight: .semibold))
-                    Text(pane.subtitle).font(.system(size: 15)).foregroundStyle(.secondary)
-                }
+                Text(pane.title).lfont(26, .semibold)
+                    .foregroundStyle(classic ? ClassicLook.blue : .primary)
                 switch pane {
                 case .voice: VoicePane(model: model)
                 case .buddy: BuddyPane(model: model)
@@ -275,6 +274,7 @@ struct SettingsPageContent: View {
                 case .safety: SafetyPane(model: model)
                 }
             }
+            .foregroundStyle(classic ? Color.black : Color.primary)
             .padding(28)
             .frame(maxWidth: 560, alignment: .leading)
             .frame(maxWidth: .infinity)
@@ -301,9 +301,11 @@ enum UIRenderer {
                           let png = rep.representation(using: .png, properties: [:]) else { return }
                     try? png.write(to: URL(fileURLWithPath: "\(dir)/\(name)-\(file).png"))
                 }
-                for step in 0...3 { save(SetupView(previewStep: step), "setup-\(step)", width: 440, height: 500) }
-                save(NavigationStack { SettingsHome(model: model) }, "settings-home", width: 520, height: 330)
-                for p in SettingsPane.allCases { save(SettingsPageContent(pane: p, model: model), "settings-\(p.rawValue)", width: 520) }
+                for look in [false, true] {
+                    let tag = look ? "classic-" : ""
+                    for step in 0...3 { save(SetupView(previewStep: step).lookoutTheme(force: look), "\(tag)setup-\(step)", width: 440, height: 500) }
+                    for p in SettingsPane.allCases { save(SettingsView(model: model, pane: p).lookoutTheme(force: look), "\(tag)settings-\(p.rawValue)", width: 720, height: 560) }
+                }
             } }
         }
         print("rendered UI to \(dir)")
@@ -326,11 +328,7 @@ extension View {
     }
 
     /// Settings groups: one quiet surface, hairline edge, no tint.
-    func settingsGroup() -> some View {
-        self.background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color(nsColor: .controlBackgroundColor)))
-            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(Color.primary.opacity(0.08), lineWidth: 0.5))
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-    }
+    func settingsGroup() -> some View { modifier(SettingsGroup()) }
 
     @ViewBuilder func frostedCard(cornerRadius: CGFloat, tint: Color?) -> some View {
         self.background(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous).fill(.regularMaterial))
@@ -338,11 +336,24 @@ extension View {
     }
 }
 
+/// Settings groups: one quiet surface with a hairline edge (white with a blue-gray edge in the classic look).
+struct SettingsGroup: ViewModifier {
+    @Environment(\.classic) private var classic
+
+    func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: classic ? 5 : 12, style: .continuous)
+        content
+            .background(shape.fill(classic ? Color.white : Color(nsColor: .controlBackgroundColor)))
+            .overlay(shape.stroke(classic ? ClassicLook.border : Color.primary.opacity(0.08), lineWidth: classic ? 1 : 0.5))
+            .clipShape(shape)
+    }
+}
+
 struct CardTitle: View {
     var text: String
     var body: some View {
         Text(text)
-            .font(.system(size: 13, weight: .medium))
+            .lfont(13, .medium)
             .foregroundStyle(.secondary)
             .padding(.leading, 4)
     }
@@ -390,14 +401,14 @@ struct VoiceRow: View {
         Button(action: action) {
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(voice.label).font(.system(size: 16))
-                    Text(voice.detail).font(.system(size: 13)).foregroundStyle(.secondary)
+                    Text(voice.label).lfont(16)
+                    Text(voice.detail).lfont(13).foregroundStyle(.secondary)
                 }
                 Spacer()
                 if selected {
-                    Image(systemName: "checkmark").font(.system(size: 15, weight: .semibold)).foregroundStyle(Color.accentColor)
+                    Image(systemName: "checkmark").lfont(15, .semibold).foregroundStyle(Color.accentColor)
                 } else if hover {
-                    Image(systemName: "play.fill").font(.system(size: 12)).foregroundStyle(.secondary)
+                    Image(systemName: "play.fill").lfont(12).foregroundStyle(.secondary)
                 }
             }
             .padding(.horizontal, 14)
@@ -419,8 +430,8 @@ struct PillButton: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 7) {
-                if let icon { Image(systemName: icon).font(.system(size: 13, weight: .semibold)) }
-                Text(title).font(.system(size: 15, weight: .semibold))
+                if let icon { Image(systemName: icon).lfont(13, .semibold) }
+                Text(title).lfont(15, .semibold)
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 11)
@@ -455,11 +466,9 @@ struct BuddyPane: View {
             CardTitle(text: "Behavior")
             VStack(spacing: 0) {
                 ToggleRow(icon: "eye.fill", tint: .blue, title: "Show Lookout on my screen",
-                          detail: model.visible ? "Your buddy is on screen." : "Hidden. Lookout still warns you and answers when you ask.",
                           isOn: Binding(get: { model.visible }, set: { model.setVisible($0) }))
                 Divider().padding(.leading, 58)
                 ToggleRow(icon: "cursorarrow.motionlines", tint: .purple, title: "Follow my pointer",
-                          detail: model.follows ? "Lookout stays next to your mouse pointer." : "Lookout waits in the corner. Drag it anywhere, or click it to ask.",
                           isOn: Binding(get: { model.follows }, set: { model.setFollows($0) }))
             }
             .settingsGroup()
@@ -480,7 +489,7 @@ struct StyleTile: View {
                     .frame(width: 64, height: 64)
                     .scaleEffect(style == .classic ? 0.6 : 0.85)
                     .frame(width: 64, height: 64)
-                Text(style.name).font(.system(size: 14, weight: .semibold))
+                Text(style.name).lfont(14, .semibold)
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 14)
@@ -499,15 +508,17 @@ struct ToggleRow: View {
     var icon: String
     var tint: Color
     var title: String
-    var detail: String
+    var detail: String? = nil
     @Binding var isOn: Bool
 
     var body: some View {
         HStack(alignment: .center, spacing: 14) {
             VStack(alignment: .leading, spacing: 3) {
-                Text(title).font(.system(size: 16))
-                Text(detail).font(.system(size: 13)).foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                Text(title).lfont(16)
+                if let detail {
+                    Text(detail).lfont(13).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
             Spacer(minLength: 12)
             Toggle("", isOn: $isOn)
@@ -535,10 +546,9 @@ struct TalkingPane: View {
                             HStack(spacing: 6) {
                                 ForEach(Self.keys(s), id: \.self) { Keycap(label: $0) }
                             }
-                            Text(s.spoken).font(.system(size: 14)).foregroundStyle(.secondary)
                             Spacer()
                             Image(systemName: model.shortcut == s ? "checkmark.circle.fill" : "circle")
-                                .font(.system(size: 22))
+                                .lfont(22)
                                 .foregroundStyle(model.shortcut == s ? Color.accentColor : Color.secondary.opacity(0.35))
                         }
                         .padding(.horizontal, 16)
@@ -550,32 +560,24 @@ struct TalkingPane: View {
             }
             .settingsGroup()
             if model.shortcutTaken {
-                Label("Another app already uses these keys. Please pick a different one.", systemImage: "exclamationmark.triangle.fill")
-                    .font(.system(size: 14)).foregroundStyle(.orange)
+                Label("Another app uses these keys. Pick different ones.", systemImage: "exclamationmark.triangle.fill")
+                    .lfont(14).foregroundStyle(.orange)
                     .padding(.leading, 6)
             }
         }
         VStack(alignment: .leading, spacing: 8) {
             CardTitle(text: "Hands-free")
             ToggleRow(icon: "waveform.badge.mic", tint: .pink, title: "Say “Hey Lookout”",
-                      detail: model.wakeWord ? "Lookout listens for its name. Your voice stays on this Mac until you say it."
-                                             : "Off. Hold the keys above to talk instead.",
+                      detail: "Your voice stays on this Mac until you say it.",
                       isOn: Binding(get: { model.wakeWord }, set: { model.setWakeWord($0) }))
                 .settingsGroup()
         }
         VStack(alignment: .leading, spacing: 8) {
             CardTitle(text: "Step by step")
             ToggleRow(icon: "figure.walk", tint: .orange, title: "Walk me through it automatically",
-                      detail: model.autoGuide ? "After you click, Lookout looks again and gives the next step on its own."
-                                              : "Lookout gives one step at a time. Say “next” when you're ready for more.",
                       isOn: Binding(get: { model.autoGuide }, set: { model.setAutoGuide($0) }))
                 .settingsGroup()
         }
-        Text("You can also type a question: click the eye icon at the top of your screen and choose “Ask Lookout…”.")
-            .font(.system(size: 14))
-            .foregroundStyle(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
-            .padding(.horizontal, 4)
     }
 
     /// "⌃⌥ Space" → ["⌃", "⌥", "Space"]
@@ -610,12 +612,10 @@ struct SafetyPane: View {
         VStack(alignment: .leading, spacing: 8) {
             CardTitle(text: "Protection")
             ToggleRow(icon: "shield.lefthalf.filled", tint: .green, title: "Watch for scams",
-                      detail: "Lookout gently stops you if something looks like a scam.",
                       isOn: Binding(get: { model.guardian }, set: { model.setGuardian($0) }))
                 .settingsGroup()
             ToggleRow(icon: "sparkle.magnifyingglass", tint: .indigo, title: "Deep check with Claude",
-                      detail: model.deepCheck ? "Claude also reads new screens to catch scams with no warning signs, like a friendly stranger asking for money. Screen text is sent to Claude."
-                                              : "Off. Only screens with warning signs are checked with Claude.",
+                      detail: "Catches scams with no warning signs. Screen text is sent to Claude.",
                       isOn: Binding(get: { model.deepCheck }, set: { model.setDeepCheck($0) }))
                 .settingsGroup()
         }
@@ -628,7 +628,7 @@ struct SafetyPane: View {
                     NameField(title: "Family helper", icon: "heart.fill", text: $model.familyName, onCommit: model.saveNames)
                 }
                 Text("Lookout tells your family helper when it stops a scam, like “\(model.familyName.isEmpty ? "Sarah" : model.familyName) has been told.”")
-                    .font(.system(size: 13)).foregroundStyle(.secondary)
+                    .lfont(13).foregroundStyle(.secondary)
             }
             .padding(16)
             .settingsGroup()
@@ -637,16 +637,11 @@ struct SafetyPane: View {
         permissionsButton
     }
 
-    @ViewBuilder var permissionsButton: some View {
-        let b = Button { model.companion.setup.show() } label: {
-            Text("Check permissions").font(.system(size: 15)).padding(.horizontal, 6)
+    var permissionsButton: some View {
+        Button { model.companion.setup.show() } label: {
+            Text("Check permissions").lfont(15).padding(.horizontal, 6)
         }
-        .controlSize(.large)
-        #if compiler(>=6.2)
-        if #available(macOS 26, *) { b.buttonStyle(.glass) } else { b.buttonStyle(.bordered) }
-        #else
-        b.buttonStyle(.bordered)
-        #endif
+        .lookoutButton(primary: false)
     }
 }
 
@@ -658,10 +653,10 @@ struct NameField: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Label(title, systemImage: icon).font(.system(size: 13, weight: .medium)).foregroundStyle(.secondary)
+            Label(title, systemImage: icon).lfont(13, .medium).foregroundStyle(.secondary)
             TextField(title, text: $text)
                 .textFieldStyle(.plain)
-                .font(.system(size: 16))
+                .lfont(16)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 10)
                 .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.primary.opacity(0.06)))

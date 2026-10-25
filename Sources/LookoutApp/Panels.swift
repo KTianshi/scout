@@ -234,7 +234,7 @@ final class SetupWindow {
         w.titleVisibility = .hidden
         w.titlebarAppearsTransparent = true
         w.isMovableByWindowBackground = true
-        w.contentView = NSHostingView(rootView: SetupView(close: { [weak w] in w?.close() }))
+        w.contentView = NSHostingView(rootView: SetupView(close: { [weak w] in w?.close() }).lookoutTheme())
         w.center()
         w.isReleasedWhenClosed = false
         w.makeKeyAndOrderFront(nil)
@@ -248,6 +248,7 @@ struct SetupView: View {
     var close: () -> Void = {}
     /// For rendering previews: force a step (0...2) or the finished state (3).
     var previewStep: Int? = nil
+    @Environment(\.classic) private var classic
     @State private var tick = 0
     @State private var skipped: Set<String> = []
     let timer = Timer.publish(every: 1.0, on: .main, in: .common).autoconnect()
@@ -300,16 +301,18 @@ struct SetupView: View {
             if let st = current {
                 VStack(spacing: 14) {
                     Image(systemName: st.icon)
-                        .font(.system(size: 30, weight: .regular))
-                        .foregroundStyle(Color.accentColor)
+                        .lfont(30, .regular)
+                        .foregroundStyle(classic ? ClassicLook.blue : Color.accentColor)
                         .frame(width: 72, height: 72)
-                        .background(Circle().fill(Color.accentColor.opacity(0.12)))
+                        .background(Circle().fill(classic ? Color.white : Color.accentColor.opacity(0.12)))
+                        .overlay(Circle().stroke(classic ? ClassicLook.blue : .clear, lineWidth: 3))
                         .padding(.bottom, 6)
                     Text(st.title)
-                        .font(.system(size: 24, weight: .semibold))
+                        .lfont(24, .semibold)
+                        .foregroundStyle(classic ? ClassicLook.blue : .primary)
                         .multilineTextAlignment(.center)
                     Text(st.why)
-                        .font(.system(size: 17))
+                        .lfont(17)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)
@@ -319,15 +322,15 @@ struct SetupView: View {
             } else {
                 VStack(spacing: 14) {
                     Image(systemName: "checkmark")
-                        .font(.system(size: 30, weight: .semibold))
+                        .lfont(30, .semibold)
                         .foregroundStyle(.green)
                         .frame(width: 72, height: 72)
                         .background(Circle().fill(Color.green.opacity(0.14)))
                         .padding(.bottom, 6)
                     Text(skipped.isEmpty ? "You're all set" : "Ready when you are")
-                        .font(.system(size: 24, weight: .semibold))
+                        .lfont(24, .semibold)
                     Text(skipped.isEmpty ? "I'll stay in the corner of your screen." : "You can finish this later from the Lookout menu.")
-                        .font(.system(size: 17))
+                        .lfont(17)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
                 }
@@ -339,21 +342,16 @@ struct SetupView: View {
             VStack(spacing: 12) {
                 if let st = current {
                     Button { st.request(); Permissions.openSettings(st.pane) } label: {
-                        Text("Allow").font(.system(size: 17, weight: .semibold)).frame(maxWidth: .infinity).padding(.vertical, 6)
+                        Text("Allow").lfont(17, .semibold).frame(maxWidth: .infinity).padding(.vertical, 6)
                     }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
+                    .lookoutButton(primary: true)
                     .keyboardShortcut(.defaultAction)
-                    Button("Not now") { withAnimation(.easeInOut(duration: 0.3)) { _ = skipped.insert(st.id) } }
-                        .buttonStyle(.plain)
-                        .font(.system(size: 15))
-                        .foregroundStyle(.secondary)
+                    notNow(st)
                 } else {
                     Button { close() } label: {
-                        Text("Done").font(.system(size: 17, weight: .semibold)).frame(maxWidth: .infinity).padding(.vertical, 6)
+                        Text("Done").lfont(17, .semibold).frame(maxWidth: .infinity).padding(.vertical, 6)
                     }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
+                    .lookoutButton(primary: true)
                     .keyboardShortcut(.defaultAction)
                 }
             }
@@ -362,8 +360,17 @@ struct SetupView: View {
         }
         .padding(.horizontal, 40)
         .frame(width: 440, height: 500)
+        .foregroundStyle(classic ? Color.black : Color.primary)
+        .background(alignment: .top) {
+            if classic { ZStack(alignment: .top) { ClassicLook.face; ClassicBanner().frame(height: 165) } }
+        }
         .animation(.easeInOut(duration: 0.35), value: current?.id)
         .onReceive(timer) { _ in tick += 1 }
+    }
+
+    @ViewBuilder func notNow(_ st: Step) -> some View {
+        let b = Button { withAnimation(.easeInOut(duration: 0.3)) { _ = skipped.insert(st.id) } } label: { Text("Not now").lfont(15) }
+        if classic { b.lookoutButton(primary: false) } else { b.buttonStyle(.plain).foregroundStyle(.secondary) }
     }
 
     func dotColor(_ st: Step) -> Color {
