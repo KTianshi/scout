@@ -3,6 +3,7 @@ import AVFoundation
 import Speech
 import Carbon.HIToolbox
 import ScoutCore
+import ObjCTry
 
 // MARK: - Speech output
 
@@ -339,10 +340,47 @@ final class HotKeys {
 
 // MARK: - Speech recognition
 
+/// Starts the microphone on a fresh engine. AVAudioEngine reports a bad tap format (the input device changed, e.g.
+/// AirPods switching into headset mode) by raising an Objective-C exception, which Swift can't catch: one unwound
+/// through Swift code and crashed Scout seconds later. A fresh engine reads the device's current format.
+enum Microphone {
+    static func start(label: String, tap: @escaping @Sendable AVAudioNodeTapBlock) -> AVAudioEngine? {
+        // Right after a device switch the first try can fail; a second fresh engine usually gets the settled format.
+        startOnce(label: label, tap: tap) ?? startOnce(label: label, tap: tap)
+    }
+
+    private static func startOnce(label: String, tap: @escaping @Sendable AVAudioNodeTapBlock) -> AVAudioEngine? {
+        let engine = AVAudioEngine()
+        var failure: String?
+        let exception = LKCatchException {
+            let input = engine.inputNode
+            let format = input.outputFormat(forBus: 0)
+            guard format.sampleRate > 0, format.channelCount > 0 else { failure = "no input device"; return }
+            input.installTap(onBus: 0, bufferSize: 1024, format: format, block: tap)
+            engine.prepare()
+            do { try engine.start() } catch { failure = "\(error)" }
+        }
+        if let why = exception ?? failure {
+            Log.info("\(label): mic didn't start: \(why)")
+            stop(engine)
+            return nil
+        }
+        return engine
+    }
+
+    static func stop(_ engine: AVAudioEngine?) {
+        guard let engine else { return }
+        _ = LKCatchException {
+            engine.stop()
+            engine.inputNode.removeTap(onBus: 0)
+        }
+    }
+}
+
 /// Streams microphone audio into Apple Speech. Shape adapted from OpenClicky's AppleSpeechTranscriptionProvider (MIT).
 @MainActor
 final class Listener {
-    private let engine = AVAudioEngine()
+    private var engine: AVAudioEngine?
     private var request: SFSpeechAudioBufferRecognitionRequest?
     private var task: SFSpeechRecognitionTask?
     private let recognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US")) ?? SFSpeechRecognizer()
@@ -378,7 +416,7 @@ final class Listener {
     var hints: [String] = []
     static let commonNames = ["Calendly", "Gmail", "Google Calendar", "Google Docs", "Google Drive", "Zoom", "FaceTime", "WhatsApp",
                               "Facebook", "Instagram", "YouTube", "Netflix", "Spotify", "Amazon", "PayPal", "Venmo", "Zelle", "iCloud",
-                              "Safari", "Chrome", "Slack", "Outlook", "Medicare", "Scout", "PDF", "Wi-Fi", "Bluetooth", "AirDrop"]
+                              "Safari", "Chrome", "Slack", "Outlook", "Medicare", "Scout", "Lookout", "PDF", "Wi-Fi", "Bluetooth", "AirDrop"]
 
     func start() throws {
         latest = ""
@@ -391,10 +429,8 @@ final class Listener {
         // as "Cally" on-device). The always-listening wake word stays on-device.
         req.requiresOnDeviceRecognition = false
         request = req
-        let input = engine.inputNode
-        let format = input.outputFormat(forBus: 0)
-        input.removeTap(onBus: 0)
-        input.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak req, weak self] buffer, _ in
+        Microphone.stop(engine)
+        engine = Microphone.start(label: "push-to-talk") { [weak req, weak self] buffer, _ in
             req?.append(buffer)
             guard let ch = buffer.floatChannelData?[0] else { return }
             var sum: Float = 0
@@ -404,8 +440,7 @@ final class Listener {
             let level = CGFloat(min(1, rms * 12))
             Task { @MainActor in self?.onLevel?(level) }
         }
-        engine.prepare()
-        try engine.start()
+        guard engine != nil else { request = nil; throw MicError.unavailable }
         task = recognizer?.recognitionTask(with: req) { [weak self] result, error in
             let text = result?.bestTranscription.formattedString
             let isFinal = result?.isFinal ?? false
@@ -419,14 +454,16 @@ final class Listener {
 
     /// Stop listening and return the final transcript (falls back to the latest partial after a short wait).
     func stop() async -> String {
-        engine.stop()
-        engine.inputNode.removeTap(onBus: 0)
+        Microphone.stop(engine)
+        engine = nil
         request?.endAudio()
         return await withCheckedContinuation { c in
             finish = c
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in self?.deliver() }
         }
     }
+
+    enum MicError: Error { case unavailable }
 
     private func deliver() {
         guard let f = finish else { return }
@@ -455,7 +492,8 @@ final class WakeListener {
     private var loggedRefusal = false
     private var loggedStart = false
 
-    private let engine = AVAudioEngine()
+    private var engine: AVAudioEngine?
+    private var deviceObserver: NSObjectProtocol?
     private let recognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
     private var task: SFSpeechRecognitionTask?
     private var watchdog: Task<Void, Never>?
@@ -464,12 +502,13 @@ final class WakeListener {
     private var transcript = ""
     private var lastChange = Date()
 
-    /// "hey scout", and how the recognizer tends to hear it.
-    static let phrases = ["hey scout", "hey scouts", "hey scott", "hey scot", "hi scout", "hi scott", "okay scout",
-                          "ok scout", "hey, scout", "hey skout", "a scout"]
+    /// "Hey Scout", and how the recognizer tends to hear it ("Scott" most of all). The old name still wakes it.
+    static let phrases = ["hey scout", "hey scott", "hey skout", "hey scouts", "hey scot", "hi scout", "hi scott",
+                          "okay scout", "ok scout", "hey, scout", "hey, scott", "a scout",
+                          "hey lookout", "hey look out", "hey lookouts", "hi lookout", "okay lookout", "ok lookout", "hey, lookout"]
     /// Said on its own at the start of an utterance ("Scout, what is this?"). Only at the start, so a sentence
-    /// that merely contains "look out" doesn't wake it.
-    static let leading = ["scout"]
+    /// that merely contains the word doesn't wake it.
+    static let leading = ["scout", "lookout"]
 
     var canRun: Bool { recognizer?.supportsOnDeviceRecognition == true && Listener.micAuthorized && Listener.speechAuthorized }
 
@@ -484,14 +523,18 @@ final class WakeListener {
         }
         // The microphone runs continuously; only the recognition request is swapped (the on-device recognizer
         // gives up after a few seconds of silence, and restarting the whole engine dropped the wake phrase).
-        let input = engine.inputNode
-        input.removeTap(onBus: 0)
         let box = feed
-        input.installTap(onBus: 0, bufferSize: 1024, format: input.outputFormat(forBus: 0)) { buffer, _ in
-            box.append(buffer)
+        guard let e = Microphone.start(label: "wake word", tap: { buffer, _ in box.append(buffer) }) else { return }
+        engine = e
+        // Switching microphones (AirPods connecting, headset mode) silently stops the engine. Stop cleanly; the
+        // supervisor in Companion starts it again on the new device.
+        deviceObserver = NotificationCenter.default.addObserver(forName: .AVAudioEngineConfigurationChange, object: e, queue: .main) { [weak self] _ in
+            Task { @MainActor in
+                guard let self, self.isRunning else { return }
+                Log.info("wake word: audio device changed, restarting")
+                self.stop()
+            }
         }
-        engine.prepare()
-        do { try engine.start() } catch { Log.info("wake word: mic didn't start: \(error)"); input.removeTap(onBus: 0); return }
         isRunning = true
         if !loggedStart { loggedStart = true; Log.info("wake word: listening on-device") }
         beginRecognition()
@@ -522,7 +565,7 @@ final class WakeListener {
         req.requiresOnDeviceRecognition = true
         req.shouldReportPartialResults = true
         req.taskHint = .dictation
-        req.contextualStrings = ["Hey Scout", "Scout"] + Listener.commonNames
+        req.contextualStrings = ["Hey Scout", "Scout", "Hey Lookout", "Lookout"] + Listener.commonNames
         feed.swap(req)
         startedAt = Date()
         transcript = ""
@@ -546,8 +589,10 @@ final class WakeListener {
         watchdog?.cancel(); watchdog = nil
         task?.cancel(); task = nil
         feed.swap(nil)
-        engine.stop()
-        engine.inputNode.removeTap(onBus: 0)
+        if let o = deviceObserver { NotificationCenter.default.removeObserver(o) }
+        deviceObserver = nil
+        Microphone.stop(engine)
+        engine = nil
         woke = nil
     }
 

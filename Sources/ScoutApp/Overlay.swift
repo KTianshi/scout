@@ -317,10 +317,9 @@ final class Overlay {
     /// Fly to a point in overlay coordinates and point at it.
     func fly(to p: CGPoint, highlight: CGRect? = nil) {
         isPinned = true
-        // The pointer tip sits up-left of the body, so park the body down-right of the target
-        // (just outside the highlighted element when we know it) so the target stays readable.
-        var body = CGPoint(x: p.x + 34, y: p.y + 34)
-        if let h = highlight { body = CGPoint(x: min(h.maxX, p.x + 140) + 26, y: h.maxY + 26) }
+        // The character itself is the pointer (no separate arrow): it lands just below-right of the target,
+        // its top-left edge touching it, and leans toward it.
+        var body = CGPoint(x: p.x + 18, y: p.y + 18)
         if state.style == .cursor {
             // Like Clicky: the triangle's tip lands right at the target (8 right, 12 below).
             // The tip sits up-left of the triangle's center, so this puts the nose on the target point.
@@ -681,9 +680,6 @@ struct OrbBuddy: View {
                     .rotationEffect(.degrees(spin ? 360 : 0))
                     .animation(.linear(duration: 1.0).repeatForever(autoreverses: false), value: spin)
             }
-            if pointing {
-                PointerTip(color: color).offset(x: -20, y: -20)
-            }
         }
         .scaleEffect(breathe ? 1.06 : 0.94)
         .onAppear {
@@ -735,9 +731,6 @@ struct EmojiBuddy: View {
             }
                 .shadow(color: .black.opacity(0.25), radius: 4, y: 2)
                 .scaleEffect(mood == .listening ? 1 + level * 0.2 : 1)
-            if pointing {
-                PointerTip(color: mood.color).offset(x: -30, y: -30)
-            }
         }
         .offset(y: bob ? -3 : 2)
         .rotationEffect(.degrees(pointing ? -8 : 0))
@@ -745,17 +738,6 @@ struct EmojiBuddy: View {
             withAnimation(.easeInOut(duration: 1.6).repeatForever(autoreverses: true)) { bob = true }
             pulse = true
         }
-    }
-}
-
-struct PointerTip: View {
-    var color: Color
-    var body: some View {
-        Triangle()
-            .fill(color)
-            .overlay(Triangle().stroke(.white, lineWidth: 2))
-            .frame(width: 18, height: 16)
-            .rotationEffect(.degrees(-45))
     }
 }
 
@@ -795,9 +777,6 @@ struct FaceBuddy: View {
                 .stroke(.white, style: StrokeStyle(lineWidth: 2.6, lineCap: .round))
                 .frame(width: 16, height: 7)
                 .offset(y: 12)
-            if pointing {
-                PointerTip(color: color).offset(x: -30, y: -30)
-            }
         }
         .offset(y: bob ? -4 : 3)
         .rotationEffect(.degrees(pointing ? -8 : 0))

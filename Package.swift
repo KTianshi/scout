@@ -12,9 +12,10 @@ let package = Package(
     ],
     targets: [
         .target(name: "ScoutCore"),
+        .target(name: "ObjCTry"),
         .executableTarget(
             name: "ScoutApp",
-            dependencies: ["ScoutCore"],
+            dependencies: ["ScoutCore", "ObjCTry"],
             linkerSettings: [
                 .linkedFramework("AppKit"),
                 .linkedFramework("ScreenCaptureKit"),
