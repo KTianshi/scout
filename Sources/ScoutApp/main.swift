@@ -1,4 +1,5 @@
 import AppKit
+import AVFoundation
 import ScoutCore
 
 // Scout
@@ -41,6 +42,23 @@ if let desc = opt("--make-buddy") {
           let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]) else { exit(1) }
     try? png.write(to: URL(fileURLWithPath: out))
     exit(0)
+} else if let file = opt("--stt-test") {
+    // Transcribe an audio file through the push-to-talk Cartesia path: Scout --stt-test question.aiff
+    app.setActivationPolicy(.accessory)
+    Task { @MainActor in
+        guard let f = try? AVAudioFile(forReading: URL(fileURLWithPath: file)),
+              let buf = AVAudioPCMBuffer(pcmFormat: f.processingFormat, frameCapacity: 4_096) else { print("can't read \(file)"); exit(1) }
+        let stt = CartesiaSTT(hints: Listener.commonNames)
+        while (try? f.read(into: buf)) != nil, buf.frameLength > 0 {
+            stt.append(buf)
+            try? await Task.sleep(nanoseconds: UInt64(Double(buf.frameLength) / f.processingFormat.sampleRate * 1e9))   // real time
+        }
+        let t = Date()
+        let text = await stt.finish()
+        print(String(format: "cartesia: %@  (%.2f s after the audio ended)", text ?? "(nothing)", Date().timeIntervalSince(t)))
+        exit(text == nil ? 1 : 0)
+    }
+    app.run()
 } else if let line = opt("--say") {
     // Voice check: Scout --say "Hello"   (add --prewarm to cache the standard scam lines)
     app.setActivationPolicy(.accessory)
@@ -75,6 +93,7 @@ if let desc = opt("--make-buddy") {
     }
     delegate.askOnLaunch = opt("--ask")
     delegate.openSettingsOnLaunch = args.contains("--settings")
+    UserDefaults.standard.set(opt("--settings"), forKey: "settingsPane")
     delegate.openAskOnLaunch = args.contains("--ask-box")
     app.delegate = delegate
     app.run()

@@ -6,7 +6,8 @@ import ScoutCore
 @MainActor
 final class SettingsWindow: NSObject, NSWindowDelegate {
     private var window: NSWindow?
-    private let model: SettingsModel
+    /// Also used by voice commands ("Hey Scout, talk slower"), so both paths apply a change the same way.
+    let model: SettingsModel
 
     init(companion: Companion) { model = SettingsModel(companion: companion) }
 
@@ -18,7 +19,9 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
                          styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
         w.title = "Scout Settings"
         w.contentMinSize = NSSize(width: 640, height: 460)
-        w.contentViewController = NSHostingController(rootView: SettingsView(model: model).scoutTheme())
+        // Scout --settings <pane> opens on that pane (voice, buddy, talking, safety): for screenshots.
+        let first = SettingsPane(rawValue: UserDefaults.standard.string(forKey: "settingsPane") ?? "") ?? .voice
+        w.contentViewController = NSHostingController(rootView: SettingsView(model: model, pane: first).scoutTheme())
         w.setContentSize(NSSize(width: 720, height: 560))
         w.center()
         w.isReleasedWhenClosed = false
@@ -59,18 +62,19 @@ final class SettingsModel: ObservableObject {
 
     var cartesia: CartesiaSpeech? { companion.speech as? CartesiaSpeech }
 
-    func pickVoice(_ v: ScoutVoice) {
+    /// `sample: false` when the caller speaks its own confirmation (a voice command).
+    func pickVoice(_ v: ScoutVoice, sample: Bool = true) {
         voiceID = v.id
         ScoutVoice.current = v
         cartesia?.client.voiceID = v.id
-        sample()
+        if sample { self.sample() } else { rewarm() }
     }
 
-    func pickSpeed(_ s: VoiceSpeed) {
+    func pickSpeed(_ s: VoiceSpeed, sample: Bool = true) {
         speed = s
         VoiceSpeed.current = s
         cartesia?.rate = s.rate
-        sample()
+        if sample { self.sample() }
     }
 
     private func sample() {
@@ -78,9 +82,14 @@ final class SettingsModel: ObservableObject {
         c.stop()
         Task {
             await c.speak("Hi, I'm Scout. This is how I'll sound.")
-            // Re-cache the warning lines in the new voice so they still play instantly.
-            _ = await c.client.prewarm(CartesiaSpeech.standardLines())
+            rewarm()
         }
+    }
+
+    /// Re-cache the warning lines in the new voice so they still play instantly.
+    private func rewarm() {
+        guard let c = cartesia else { return }
+        Task { _ = await c.client.prewarm(CartesiaSpeech.standardLines()) }
     }
 
     func pickStyle(_ s: BuddyStyle) {
@@ -312,6 +321,19 @@ enum UIRenderer {
                     save(VStack(alignment: .leading, spacing: 22) { BuddyPane(model: model) }.padding(28).scoutTheme(force: look), "\(tag)buddies", width: 560)
                 }
             } }
+        }
+        // The pause-before-you-pay screen, with the IRS demo's reasons (CRS sender result included).
+        let pause = PayPauseModel()
+        pause.status = .selfPause
+        pause.reason = "This page is asking for gift card codes, and something about it doesn't look right."
+        pause.explanation = "The IRS never asks for gift cards or threatens arrest by email."
+        pause.sender = SenderCheck(email: "notice@irs-gov-payments.co", verdict: .high, score: 100, firstSeen: "2026-10-24", newToday: true, sentence: "", source: "crs")
+        let pr = ImageRenderer(content: PayPauseView(model: pause).frame(width: 1280, height: 860)
+            .background(LinearGradient(colors: [Color(white: 0.55), Color(white: 0.35)], startPoint: .top, endPoint: .bottom)))
+        pr.scale = 1
+        if let img = pr.nsImage, let tiff = img.tiffRepresentation, let rep = NSBitmapImageRep(data: tiff),
+           let png = rep.representation(using: .png, properties: [:]) {
+            try? png.write(to: URL(fileURLWithPath: "\(dir)/paypause.png"))
         }
         // Every buddy expression, for checking the animation frames.
         for icon in [PixelIcon.dog, .owl, .mouse, .chick] {
@@ -703,6 +725,10 @@ struct TalkingPane: View {
                 }
             }
             .settingsGroup()
+            Text(CartesiaSTT.isConfigured ? "Scout hears you with Cartesia, with Apple's speech recognition as a backup."
+                                          : "Scout hears you with Apple's speech recognition.")
+                .lfont(13).foregroundStyle(.secondary)
+                .padding(.leading, 6)
             if model.shortcutTaken {
                 Label("Another app uses these keys. Pick different ones.", systemImage: "exclamationmark.triangle.fill")
                     .lfont(14).foregroundStyle(.orange)
@@ -767,6 +793,9 @@ struct SafetyPane: View {
                 .settingsGroup()
                 .disabled(!model.guardian)
                 .opacity(model.guardian ? 1 : 0.5)
+            senderCheck
+                .settingsGroup()
+                .opacity(model.guardian ? 1 : 0.5)
         }
         if ScoutConfig.familyEnabled {
         VStack(alignment: .leading, spacing: 8) {
@@ -784,6 +813,25 @@ struct SafetyPane: View {
         }
         }
         permissionsButton
+    }
+
+    /// Not a switch: it runs whenever a suspicious message shows a sender address. Shown so people know it's there.
+    var senderCheck: some View {
+        HStack(alignment: .center, spacing: 14) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Check who sent it").lfont(16)
+                Text("When a suspicious email shows its sender, Scout asks CRS Fraud Finder how risky that address is. Only the sender's address is sent.")
+                    .lfont(13).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 12)
+            Label(CRSClient.isConfigured ? "Connected" : "Not set up", systemImage: CRSClient.isConfigured ? "checkmark.circle.fill" : "minus.circle")
+                .lfont(13, .semibold)
+                .foregroundStyle(CRSClient.isConfigured ? Color.green : Color.secondary)
+                .fixedSize()
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
     }
 
     var permissionsButton: some View {

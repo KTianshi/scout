@@ -205,13 +205,23 @@ struct ScoutVoice: Equatable {
     let label: String
     let detail: String
 
+    /// Lower-pitched voices ("use a deeper voice"), and words a person might use to ask for this one.
+    var lower = false
+    var keywords: [String] = []
+
     static let all: [ScoutVoice] = [
-        .init(id: "f786b574-daa5-4673-aa0c-cbe3e8534c02", label: "Clear and friendly", detail: "Higher voice"),
-        .init(id: "db6b0ed5-d5d3-463d-ae85-518a07d3c2b4", label: "Warm and bright", detail: "Higher voice, American"),
-        .init(id: "9626c31c-bec5-4cca-baa8-f8ba9e84c8bc", label: "Calm and reassuring", detail: "Higher voice"),
-        .init(id: "47c38ca4-5f35-497b-b1a3-415245fb35e1", label: "Crisp and clear", detail: "Lower voice"),
-        .init(id: "0ad65e7f-006c-47cf-bd31-52279d487913", label: "Kind and gentle", detail: "Lower, older voice"),
-        .init(id: "b24f41fd-00a3-4cd8-992a-a0c9f13f3ef1", label: "Calm and British", detail: "Lower voice"),
+        .init(id: "2a12b36c-7f9b-4c3a-9f7a-72731b15323a", label: "Bright and caring", detail: "Higher voice", keywords: ["bright", "caring"]),
+        .init(id: "ae823354-f9be-4aef-8543-f569644136b4", label: "Warm and motherly", detail: "Higher, calm voice", keywords: ["motherly", "mom", "warm"]),
+        .init(id: "273f9ef7-9fc2-4def-88bb-ab108c6249ca", label: "Soft and gentle", detail: "Higher voice", keywords: ["soft", "gentle", "quiet"]),
+        .init(id: "d7bf7d75-64b7-4c1e-86c0-79d647366587", label: "Kind and comforting", detail: "Higher voice", keywords: ["kind", "comforting"]),
+        .init(id: "d1d9c946-7cfc-4378-85a4-07d09827cb7e", label: "Warm Southern", detail: "Higher voice, Southern", keywords: ["southern", "country"]),
+        .init(id: "d79d2b77-9192-4e10-9407-5d43ca034803", label: "Friendly Irish", detail: "Higher voice, Irish", keywords: ["irish"]),
+        .init(id: "7d444628-dd13-442b-b687-71a6baf0c07e", label: "Gentle and reassuring", detail: "Lower voice", lower: true, keywords: ["reassuring"]),
+        .init(id: "bd89603f-0efb-4721-a0c8-d10b3642acc3", label: "Easygoing helper", detail: "Lower voice", lower: true, keywords: ["easygoing", "relaxed", "casual"]),
+        .init(id: "0ad65e7f-006c-47cf-bd31-52279d487913", label: "Warm and fatherly", detail: "Lower, older voice", lower: true, keywords: ["fatherly", "dad"]),
+        .init(id: "c99d36f3-5ffd-4253-803a-535c1bc9c306", label: "Grandfatherly", detail: "Lower, elderly voice", lower: true, keywords: ["grandfather", "grandpa", "old", "older", "elderly"]),
+        .init(id: "68fb6747-b6ea-4c44-a18e-4e29921424d3", label: "Deep and steady", detail: "Deep voice", lower: true, keywords: ["deep", "deeper", "steady"]),
+        .init(id: "3d5ce2fb-e56c-42f0-9ed9-4662484063b4", label: "Warm British", detail: "Lower voice, British", lower: true, keywords: ["british", "english", "uk"]),
     ]
 
     static var current: ScoutVoice {
@@ -418,8 +428,25 @@ final class Listener {
                               "Facebook", "Instagram", "YouTube", "Netflix", "Spotify", "Amazon", "PayPal", "Venmo", "Zelle", "iCloud",
                               "Safari", "Chrome", "Slack", "Outlook", "Medicare", "Scout", "Lookout", "PDF", "Wi-Fi", "Bluetooth", "AirDrop"]
 
+    /// Cartesia Ink transcription, fed from the same tap; Apple Speech below is the backup (see CartesiaSTT).
+    private var stt: CartesiaSTT?
+    /// Once Cartesia is producing words, its partials are the ones shown.
+    private var cartesiaHeard = false
+
     func start() throws {
         latest = ""
+        cartesiaHeard = false
+        stt?.cancel()
+        stt = nil
+        if CartesiaSTT.isConfigured {
+            let s = CartesiaSTT(hints: Self.commonNames + hints)
+            s.onPartial = { [weak self] text in
+                guard let self else { return }
+                self.cartesiaHeard = true
+                self.onPartial?(text)
+            }
+            stt = s
+        }
         let req = SFSpeechAudioBufferRecognitionRequest()
         req.contextualStrings = Array(Set(Self.commonNames + hints)).prefix(100).map { $0 }
         req.shouldReportPartialResults = true
@@ -430,8 +457,10 @@ final class Listener {
         req.requiresOnDeviceRecognition = false
         request = req
         Microphone.stop(engine)
+        let cartesia = stt
         engine = Microphone.start(label: "push-to-talk") { [weak req, weak self] buffer, _ in
             req?.append(buffer)
+            cartesia?.append(buffer)
             guard let ch = buffer.floatChannelData?[0] else { return }
             var sum: Float = 0
             let n = Int(buffer.frameLength)
@@ -446,7 +475,7 @@ final class Listener {
             let isFinal = result?.isFinal ?? false
             Task { @MainActor in
                 guard let self else { return }
-                if let text { self.latest = text; self.onPartial?(text) }
+                if let text { self.latest = text; if !self.cartesiaHeard { self.onPartial?(text) } }
                 if isFinal || error != nil { self.deliver() }
             }
         }
@@ -457,6 +486,15 @@ final class Listener {
         Microphone.stop(engine)
         engine = nil
         request?.endAudio()
+        let cartesia = stt
+        stt = nil
+        // Cartesia answers about 0.1 s after release; Apple is only waited for when Cartesia had nothing.
+        if let cartesia, let text = await cartesia.finish(), !text.isEmpty {
+            task?.cancel()
+            task = nil
+            return text
+        }
+        if cartesia != nil { Log.info("heard via Apple Speech (Cartesia had nothing)") }
         return await withCheckedContinuation { c in
             finish = c
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in self?.deliver() }
