@@ -12,9 +12,10 @@ let package = Package(
     ],
     targets: [
         .target(name: "LookoutCore"),
+        .target(name: "ObjCTry"),
         .executableTarget(
             name: "LookoutApp",
-            dependencies: ["LookoutCore"],
+            dependencies: ["LookoutCore", "ObjCTry"],
             linkerSettings: [
                 .linkedFramework("AppKit"),
                 .linkedFramework("ScreenCaptureKit"),
