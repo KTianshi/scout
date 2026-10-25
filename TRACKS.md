@@ -62,9 +62,11 @@ Ordered by how strong our fit is. Each section has a paragraph ready to paste in
 
 Opt in on Devpost and fill out MLH's form. Nothing to build.
 
-## Maybe: [MLH] Best Use of Gemini API
+## 10. [MLH] Best Use of Gemini API
 
-"Make your own buddy" (Settings ▸ Buddy) draws a custom pixel-art buddy with Nano Banana (`gemini-3-pro-image`). **Only enter this if Kyle can demo it live:** it needs `GEMINI_API_KEY` with billing on, and there's no key on Akhil's laptop.
+> Scout's buddy is a character people get attached to, so anyone can make their own. In Settings ▸ Buddy, describe one ("a friendly orange tabby cat") or add a photo of a pet, and Nano Banana (`gemini-3-pro-image`) draws it as pixel art, then draws five more expressions from that first drawing (blink, talking, looking, happy, worried) so it stays the same character. Scout cleans each drawing into a crisp sprite and the new buddy flies around, talks and looks worried during scam warnings like the built-in ones. It takes about a minute.
+
+**On the day:** `GEMINI_API_KEY` is in secrets.env on Akhil's laptop (tested: a full buddy in 78 s). Demo it last, or show a buddy made beforehand, since it takes a minute.
 
 ## Skip
 
@@ -79,4 +81,4 @@ Solana, Convex, Visa, Coinbase x402, Snowflake, Vultr and the rest. Bolting them
 - [ ] Try-it links: **https://heyscout.club** and the GitHub repo.
 - [ ] Gallery: the pause card with CRS CHECKED, the buddy pointing in Gmail, the Settings ▸ Safety pane, the playbook diagram, the benchmark numbers.
 - [ ] In "How we built it", credit Farza's open-source **Clicky** (MIT) for the pointing-cursor animation.
-- [ ] Select every track above (1–9) in Devpost's prize list. Video link before 9:00 AM.
+- [ ] Select every track above (1–10) in Devpost's prize list. Video link before 9:00 AM.
