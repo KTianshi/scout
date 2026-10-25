@@ -30,6 +30,11 @@ final class Companion {
     private(set) var generation = 0
     private var listening = false
     private var lastAlertKey: String?
+    private var recentWarnings: [String: Date] = [:]
+    private var dismissedWarnings: [String: Date] = [:]
+    private var lastWarnedKey: String?
+    /// They dismissed the warning: that page stays quiet for 30 minutes.
+    func dismissWarning() { if let k = lastWarnedKey { dismissedWarnings[k] = Date() } }
     private var lastAlertAt = Date.distantPast
     /// Pages Claude confidently called safe, and when. The guardian stays quiet there for a while.
     private var clearedPages: [String: Date] = [:]
@@ -84,7 +89,9 @@ final class Companion {
             : "Hi, I'm Lookout. Hold \(TalkShortcut.current.spoken) any time to ask me something."
         overlay.say(hello)
         if missing && !demoBrowser.window.isVisible { setup.show() }
-        await speech.speak(hello)
+        // Only speak up when something is needed (permissions). Every other launch is silent: a voice out of
+        // nowhere after a restart is startling, especially for an older person.
+        if missing { await speech.speak(hello) } else { try? await Task.sleep(nanoseconds: 3_000_000_000) }
         try? await Task.sleep(nanoseconds: 1_500_000_000)
         if !busy { overlay.reset() }
     }
@@ -333,10 +340,8 @@ final class Companion {
 
     // MARK: Help mode
 
-    /// Short, cached acknowledgments said the moment they finish a step (prewarmed in standardLines).
     /// Claude effort for a question's first answer (LOOKOUT_HELP_EFFORT overrides, for measuring).
     static var firstStepEffort: String { ProcessInfo.processInfo.environment["LOOKOUT_HELP_EFFORT"] ?? "medium" }
-    static let acks = ["Okay.", "Nice.", "Got it.", "Perfect."]
     static let allSet = "Perfect. You're all set."
 
     /// The guide's turn in `turns`, so its prompt shows the other turns as history.
@@ -378,6 +383,7 @@ final class Companion {
             // Stream: fly as soon as the point arrives, speak each sentence as it completes.
             let speaker = SentenceQueue(speech: speech) { [weak self] in self?.generation == gen }
             var watcher: ActionWatcher?
+            var actedEarly = false   // they did the step while Lookout was still explaining it
             var reply = "", spokenUpTo = 0, pointed = false
             var tFirst: TimeInterval?
             let title = "Step \(stepNo)"
@@ -387,6 +393,7 @@ final class Companion {
                                                      image: snap.image, maxTokens: 600, effort: stepNo == 1 ? Self.firstStepEffort : "low") {
                     if Task.isCancelled || generation != gen { speaker.cancel(); interrupter?.stop(); watcher?.stop(); return }
                     if spokenUpTo == 0, interrupter?.sawClick == true { superseded = true; break }
+                    if let w = watcher, w.ready() { actedEarly = true; break }
                     reply += delta
                     if tFirst == nil { tFirst = Date().timeIntervalSince(t0) }
                     let body = reply.replacingOccurrences(of: "[DONE]", with: "", options: .caseInsensitive)
@@ -438,8 +445,31 @@ final class Companion {
             updateTurn(turn, step: text, finished: done)
             given.append(text)
             let w8 = watcher ?? ActionWatcher()
-            await speaker.finish()
+            // Finish talking, unless they do the step first: then stop mid-sentence and move on, so nobody waits
+            // through a long explanation of something they've already done.
+            if !actedEarly {
+                var finishedTalking = false
+                let talk = Task { @MainActor in await speaker.finish(); finishedTalking = true }
+                while !finishedTalking && !Task.isCancelled && generation == gen {
+                    if w8.ready() { actedEarly = true; break }
+                    try? await Task.sleep(nanoseconds: 50_000_000)
+                }
+                if actedEarly { talk.cancel() }
+            }
+            if actedEarly {
+                speaker.cancel()
+                speech.stop()
+                Log.info("guide: step done while still talking; moving on")
+            }
             if Task.isCancelled || generation != gen { w8.stop(); return }
+            if done && actedEarly {
+                w8.stop()
+                overlay.release()
+                overlay.setMood(.happy)
+                overlay.say(Self.allSet, title: nil)
+                await speech.speak(Self.allSet)
+                break
+            }
             if done {
                 // The last step still needs doing ("click Send"): wait for it, then close like a person would.
                 if pointed, GuideMode.automatic {
@@ -473,7 +503,7 @@ final class Companion {
             overlay.setMood(.idle)
             // Stays true until the next step starts talking: the step they just did may open another app.
             guideWaiting = true
-            let action = await w8.wait(timeout: 90)
+            let action = actedEarly ? w8.currentAction() : await w8.wait(timeout: 90)
             if Task.isCancelled || generation != gen { guideWaiting = false; return }
             guard let action else {
                 guideWaiting = false
@@ -482,10 +512,8 @@ final class Companion {
                 break
             }
             lastAction = action
-            // Like a person watching over their shoulder: a quick "okay" while looking at what changed.
+            // Straight on to the next step (no "nice"/"got it" filler: it read as a pause, not a person).
             overlay.setMood(.thinking)
-            let ack = Self.acks[stepNo % Self.acks.count]
-            Task { await speech.speak(ack) }
         }
         let summary = given.joined(separator: " ")
         Task { await family.send(.init(type: "help", title: "Helped with: \(question.prefix(80))", explanation: String(summary.prefix(300)), app: nil)) }
@@ -779,7 +807,8 @@ final class Companion {
         if willConfirm || willSweep {
             confirmInFlight = true
             lastConfirmedFingerprint = fp
-            if willSweep { lastSweepAt = Date() } else { overlay.setMood(.thinking) }
+            // Background check: don't turn the buddy into a spinner while it's pointing or talking in a help answer.
+            if willSweep { lastSweepAt = Date() } else if !busy { overlay.setMood(.thinking) }
             if willConfirm { full = await snapshot(includeImage: claude.isConfigured) }
             let summary = result.summary
             let ctx = full.context, image = full.image
@@ -853,7 +882,16 @@ final class Companion {
             // Only real warnings (interrupt and above) reach the person.
             return
         case .interrupt, .blockAndAlert:
-            if key == lastAlertKey, Date().timeIntervalSince(lastAlertAt) < 90 { return }
+            // One warning per page, then quiet for 10 minutes (30 once they've dismissed it). Also keyed by what
+            // would be said: Gmail's address changes between the inbox and the open message, and the same email
+            // warned three times in four minutes.
+            let now = Date()
+            if let t = dismissedWarnings[key], now.timeIntervalSince(t) < 1800 { return }
+            if let t = recentWarnings[key], now.timeIntervalSince(t) < 600 { return }
+            if let t = recentWarnings[r.spoken], now.timeIntervalSince(t) < 600 { return }
+            recentWarnings[key] = now
+            recentWarnings[r.spoken] = now
+            lastWarnedKey = key
             lastAlertKey = key
             lastAlertAt = Date()
             let paymentRisk = !snap.context.sensitiveFields.isEmpty && r.probability >= 0.3
@@ -896,10 +934,10 @@ final class Companion {
         let canClose = demoInFront || Self.isBrowser(NSWorkspace.shared.frontmostApplication)
         // Only offer to close in a browser: ⌘W anywhere else closes whatever window is in front.
         let buttons: [ActionCard.Button] = canClose ? [
-            .init(title: "Close it for me", primary: true) { [weak self] in Log.info("user: close it"); self?.closeThreat() },
-            .init(title: "I'm OK, thanks", primary: false) { [weak self] in Log.info("user: I'm OK"); self?.overlay.reset() },
+            .init(title: "Close it for me", primary: true) { [weak self] in Log.info("user: close it"); self?.dismissWarning(); self?.closeThreat() },
+            .init(title: "I'm OK, thanks", primary: false) { [weak self] in Log.info("user: I'm OK"); self?.dismissWarning(); self?.overlay.reset() },
         ] : [
-            .init(title: "Got it", primary: true) { [weak self] in Log.info("user: got it"); self?.overlay.reset() },
+            .init(title: "Got it", primary: true) { [weak self] in Log.info("user: got it"); self?.dismissWarning(); self?.overlay.reset() },
         ]
         card.show(title: "Let's be careful", message: "You're safe. Nothing has happened yet." + (LookoutConfig.familyEnabled ? " \(LookoutConfig.familyName) has been told." : ""), alarmed: true, buttons: buttons, near: buddyScreenPoint)
         Task {
@@ -911,6 +949,8 @@ final class Companion {
                                     action: "Lookout interrupted and explained the warning signs"))
         }
         DebugShot.take("interrupt")
+        // Let the buddy and the card appear first, then speak: a calmer start than a voice out of nowhere.
+        try? await Task.sleep(nanoseconds: 800_000_000)
         await speech.speak(spoken)
     }
 
@@ -1041,12 +1081,13 @@ final class Companion {
         let nc = NSWorkspace.shared.notificationCenter
         nc.addObserver(forName: NSWorkspace.didLaunchApplicationNotification, object: nil, queue: .main) { [weak self] n in
             guard let app = n.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication else { return }
-            MainActor.assumeIsolated { self?.checkRemote(app) }
+            Task { @MainActor in self?.checkRemote(app) }
         }
         nc.addObserver(forName: NSWorkspace.didTerminateApplicationNotification, object: nil, queue: .main) { [weak self] n in
             guard let app = n.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication else { return }
-            MainActor.assumeIsolated {
-                if self?.knownRemoteApps.remove(app.processIdentifier) != nil {
+            let pid = app.processIdentifier
+            Task { @MainActor in
+                if self?.knownRemoteApps.remove(pid) != nil {
                     self?.pipeline.engine.forget([.remoteAccessAppRunning])
                 }
             }
@@ -1158,6 +1199,15 @@ final class Companion {
 
 /// "Seems stuck": same window, screen not changing, and repeated clicks for a while.
 @MainActor
+/// "Need a hand?" when someone seems stuck. Off by default: it guessed wrong too often (waiting for a
+/// verification code looks like being stuck). Settings ▸ Buddy turns it on.
+enum StuckHelp {
+    nonisolated static var enabled: Bool {
+        get { UserDefaults.standard.bool(forKey: "stuckHelp") }
+        set { UserDefaults.standard.set(newValue, forKey: "stuckHelp") }
+    }
+}
+
 final class StuckDetector {
     private var clicks: [Date] = []
     private var sameSince = Date()
@@ -1172,7 +1222,8 @@ final class StuckDetector {
     func start(onStuck: @escaping () -> Void) {
         self.onStuck = onStuck
         monitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown]) { [weak self] _ in
-            MainActor.assumeIsolated { self?.clicks.append(Date()) }
+            // (Not MainActor.assumeIsolated: that check crashed the follow timer.)
+            Task { @MainActor in self?.clicks.append(Date()) }
         }
     }
 
@@ -1184,6 +1235,7 @@ final class StuckDetector {
             return
         }
         clicks.removeAll { now.timeIntervalSince($0) > window }
+        guard StuckHelp.enabled else { clicks.removeAll(); return }
         if now.timeIntervalSince(sameSince) >= window, clicks.count >= minClicks, now.timeIntervalSince(lastOffer) > 180 {
             lastOffer = now
             clicks.removeAll()
@@ -1313,20 +1365,32 @@ final class ActionWatcher {
         return "\(app.processIdentifier)|\(title)|\(extraWindowKey?() ?? "")"
     }
 
-    /// Returns once they've clicked (and the screen had a moment to update) or finished typing (2 s pause).
+    /// True once they've done something and the screen had a moment to update: a click (0.35 s ago, not
+    /// followed by typing), a pause after typing (1.3 s), or a new window, tab or app (Enter submitted a form).
+    func ready() -> Bool {
+        if let k = lastKey, Date().timeIntervalSince(k) > 1.3 { return true }
+        if let c = lastClick, lastKey.map({ $0 < c.at }) ?? true, Date().timeIntervalSince(c.at) > 0.35 { return true }
+        // (An Accessibility round-trip, so at most twice a second: a slow app must not stall the overlay.)
+        if windowChangedAt == nil, Date().timeIntervalSince(lastWindowCheck) >= 0.5 {
+            lastWindowCheck = Date()
+            if Self.frontWindowKey() != startWindow { windowChangedAt = Date() }
+        }
+        if let w = windowChangedAt, Date().timeIntervalSince(w) > 0.4 { return true }
+        return false
+    }
+
+    /// What they've done so far (for when Lookout noticed it while still talking).
+    func currentAction() -> Action {
+        stop()
+        return Action(click: lastClick?.point, typed: keys)
+    }
+
+    /// Returns once ready(), or nil after the timeout with nothing done.
     func wait(timeout: TimeInterval) async -> Action? {
         let start = Date()
         while !Task.isCancelled && Date().timeIntervalSince(start) < timeout {
-            if let k = lastKey, Date().timeIntervalSince(k) > 1.3 { break }
-            if let c = lastClick, lastKey.map({ $0 < c.at }) ?? true, Date().timeIntervalSince(c.at) > 0.5 { break }
-            // A new window, tab or app (Enter submitted a form, a link opened) counts too.
-            // (An Accessibility round-trip, so at most twice a second: a slow app must not stall the overlay.)
-            if windowChangedAt == nil, Date().timeIntervalSince(lastWindowCheck) >= 0.5 {
-                lastWindowCheck = Date()
-                if Self.frontWindowKey() != startWindow { windowChangedAt = Date() }
-            }
-            if let w = windowChangedAt, Date().timeIntervalSince(w) > 0.6 { break }
-            try? await Task.sleep(nanoseconds: 120_000_000)
+            if ready() { break }
+            try? await Task.sleep(nanoseconds: 100_000_000)
         }
         stop()
         guard !Task.isCancelled, lastClick != nil || lastKey != nil || windowChangedAt != nil else { return nil }
