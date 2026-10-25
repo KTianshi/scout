@@ -1,21 +1,23 @@
 #!/bin/bash
 # Build Scout.app (release) into build/Scout.app and sign it.
-# Signs with the "Lookout Dev" identity if present (stable → macOS keeps granted permissions across rebuilds),
+# Signs with the "Scout Dev" identity if present (stable → macOS keeps granted permissions across rebuilds),
 # otherwise ad-hoc (permissions must be re-granted after each rebuild). Create the identity once with
 # scripts/make-signing-identity.sh.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 CONFIG="${CONFIG:-release}"
-"$ROOT/scripts/swiftw" build -c "$CONFIG" --product Lookout
-BIN="$(swift build -c "$CONFIG" --show-bin-path 2>/dev/null || echo "$ROOT/.build/$CONFIG")/Lookout"
-[ -x "$BIN" ] || BIN="$ROOT/.build/arm64-apple-macosx/$CONFIG/Lookout"
+"$ROOT/scripts/swiftw" build -c "$CONFIG" --product Scout
+BIN="$(swift build -c "$CONFIG" --show-bin-path 2>/dev/null || echo "$ROOT/.build/$CONFIG")/Scout"
+[ -x "$BIN" ] || BIN="$ROOT/.build/arm64-apple-macosx/$CONFIG/Scout"
 APP="$ROOT/build/Scout.app"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-cp "$BIN" "$APP/Contents/MacOS/Lookout"
+cp "$BIN" "$APP/Contents/MacOS/Scout"
 rsync -a --exclude ".DS_Store" "$ROOT/demo" "$APP/Contents/Resources/"
 mkdir -p "$APP/Contents/Resources/model" && cp "$ROOT/model/playbooks.json" "$APP/Contents/Resources/model/"
+# Buddy drawings (scripts/gen-sprites.py); the large previews stay out of the app.
+[ -d "$ROOT/Resources/sprites" ] && rsync -a --exclude "*@preview.png" --exclude ".DS_Store" "$ROOT/Resources/sprites" "$APP/Contents/Resources/"
 # App icon, drawn by the app itself (AppIconView).
 ICONSET="$(mktemp -d)/AppIcon.iconset"
 mkdir -p "$ICONSET"
@@ -34,8 +36,8 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 <dict>
   <key>CFBundleName</key><string>Scout</string>
   <key>CFBundleDisplayName</key><string>Scout</string>
-  <key>CFBundleIdentifier</key><string>com.lookout.companion</string>
-  <key>CFBundleExecutable</key><string>Lookout</string>
+  <key>CFBundleIdentifier</key><string>com.scout.companion</string>
+  <key>CFBundleExecutable</key><string>Scout</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>$VERSION</string>
   <key>CFBundleVersion</key><string>$VERSION</string>
@@ -43,7 +45,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>LSUIElement</key><false/>
   <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>NSHighResolutionCapable</key><true/>
-  <key>NSMicrophoneUsageDescription</key><string>Scout listens while you hold Option and Space, so you can ask for help out loud.</string>
+  <key>NSMicrophoneUsageDescription</key><string>Scout listens while you hold your talk keys, so you can ask for help out loud.</string>
   <key>NSSpeechRecognitionUsageDescription</key><string>Scout turns your spoken question into text so it can help you.</string>
   <key>NSAppleEventsUsageDescription</key><string>Scout can close a dangerous window for you when you ask.</string>
   <key>NSScreenCaptureUsageDescription</key><string>Scout looks at your screen to spot scams and show you where to click.</string>
@@ -52,7 +54,11 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 </plist>
 PLIST
 xattr -cr "$APP"
-IDENTITY="${LOOKOUT_SIGN_IDENTITY:-Lookout Dev}"
+IDENTITY="${SCOUT_SIGN_IDENTITY:-Scout Dev}"
+# An identity made before the rename keeps working (macOS keeps permissions only while the identity stays the same).
+if ! security find-identity -v -p codesigning 2>/dev/null | grep -q "\"$IDENTITY\"" && security find-identity -v -p codesigning 2>/dev/null | grep -q '"Lookout Dev"'; then
+  IDENTITY="Lookout Dev"
+fi
 # Fall back to an Xcode "Apple Development" certificate if there is one (also stable across rebuilds).
 if ! security find-identity -v -p codesigning 2>/dev/null | grep -q "\"$IDENTITY\""; then
   DEV="$(security find-identity -v -p codesigning 2>/dev/null | sed -n 's/.*"\(Apple Development:[^"]*\)".*/\1/p' | head -1)"

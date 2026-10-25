@@ -1,6 +1,6 @@
-# Lookout's scam detector: scams as playbooks
+# Scout's scam detector: scams as playbooks
 
-**Idea.** Scams follow a playbook of stages. A fake tech-support scam goes pop-up → phone call → remote access → bank → gift cards. Any single step is ambiguous: families really do use AnyDesk to help, and people really do buy gift cards as presents. The *sequence* is not ambiguous. Lookout models each scam type as a hidden sequence of stages, and an explainable probabilistic engine (not the LLM) decides whether a scam is in progress.
+**Idea.** Scams follow a playbook of stages. A fake tech-support scam goes pop-up → phone call → remote access → bank → gift cards. Any single step is ambiguous: families really do use AnyDesk to help, and people really do buy gift cards as presents. The *sequence* is not ambiguous. Scout models each scam type as a hidden sequence of stages, and an explainable probabilistic engine (not the LLM) decides whether a scam is in progress.
 
 ## The model (`model/playbooks.json`, one editable file)
 
@@ -22,7 +22,7 @@
 
 Every number in the file has a one-line "why".
 
-## The engine (`lookout_detect/engine.py`, mirrored in Swift `LookoutCore/Playbook/`)
+## The engine (`scout_detect/engine.py`, mirrored in Swift `ScoutCore/Playbook/`)
 
 Forward filtering in log space, one step per observation. After each step it reports:
 - **P(scam)** = posterior mass on scam states; **P(type)** per playbook; and the **stage posterior** within the most likely playbook.
@@ -32,7 +32,7 @@ Forward filtering in log space, one step per observation. After each step it rep
 
 ## CRS: checking the scammer, not grandma (`family/crs.js`, `SenderCheck.swift`)
 
-When a screen is already suspicious (risk ≥ 0.10), Lookout reads the **sender's email address** from it (a `mailto:` address or a "From:" line). It sends that address to **CRS Fraud Finder** (AtData email risk, CRS sandbox) through the family server, which holds the CRS keys. This runs in parallel with the Claude check.
+When a screen is already suspicious (risk ≥ 0.10), Scout reads the **sender's email address** from it (a `mailto:` address or a "From:" line). It sends that address to **CRS Fraud Finder** (AtData email risk, CRS sandbox) through the family server, which holds the CRS keys. This runs in parallel with the Claude check.
 - **The result is evidence, not a verdict.** It enters the playbook model as `CRS_SENDER_HIGH_RISK`, which, like Claude's flag, only counts on screens where the check actually ran.
 - **Calibration** (sandbox):
   - `auto-confirm@amazon.com` scores **0/100**, domain risk 1/10, first seen 2006.
@@ -40,7 +40,7 @@ When a screen is already suspicious (risk ≥ 0.10), Lookout reads the **sender'
   - P(high | scam) = 0.8, since some scammers use free mail; P(high | benign) = 0.04. One CRS answer can therefore move the odds by at most about 3 nats.
 - **The buddy says:** "I checked who sent this. That email address first appeared today and is rated very high risk." The family approval card shows the score.
 - **Responsible data:**
-  - Only the scam message's sender address is sent, never anything about the person Lookout protects.
+  - Only the scam message's sender address is sent, never anything about the person Scout protects.
   - It runs only on suspicious screens, with one lookup per address per day (cached).
   - Credentials stay on the family server.
   - Without credentials a clearly-labelled mock answer is used, and mock answers never change the score.
@@ -56,9 +56,9 @@ When a screen is already suspicious (risk ≥ 0.10), Lookout reads the **sender'
 3. **Hard rules** ("gift cards are never payment for a bill") now supply explanations only. On held-out data they fired on gift shopping and on articles about scams.
 4. **Policy thresholds:** a nudge needs P ≈ 0.33 and an interrupt P ≈ 0.58. They were 0.09 and 0.29, which reacted to too many ordinary screens. Payment fields or an active remote-control app lower them.
 
-## Evaluation (`lookout_detect/eval.py`, results in `eval/`)
+## Evaluation (`scout_detect/eval.py`, results in `eval/`)
 
-Sessions are sequences of screens (text, URL, running apps, sensitive fields, time). **Every screen goes through the app's own Swift extractor** (`lookout-signals`), so extractor misses count against the detectors. Three sources:
+Sessions are sequences of screens (text, URL, running apps, sensitive fields, time). **Every screen goes through the app's own Swift extractor** (`scout-signals`), so extractor misses count against the detectors. Three sources:
 - **Scripted** (`scripts_gen.py`): hand-written templates with noise: skipped and out-of-order steps, everyday screens in between, abandoned scams. They are *not* sampled from the HMM, which would make the evaluation circular. Seed 7 was used for tuning; seed 99 is held out.
 - **Red-team A and B** (`redteam.py`): sessions Claude wrote for each scam type and each benign look-alike. Claude never saw our model or event list.
   - **A** was used once, for model selection: it revealed that hard rules and the old detector caused most false alarms.
@@ -103,10 +103,10 @@ Learning on my own templates overfits them. Learning on Claude-written sessions 
 
 ```bash
 python3 -m venv .venv && .venv/bin/pip install numpy pytest matplotlib anthropic
-.venv/bin/python -m pytest lookout_detect/tests            # engine tests
+.venv/bin/python -m pytest scout_detect/tests            # engine tests
 scripts/swiftw test                                         # Swift tests incl. parity
-.venv/bin/python -m lookout_detect.scripts_gen --seed 99 --out eval/sessions_scripted_test.jsonl
-.venv/bin/python -m lookout_detect.redteam --per-kind 12 --offset 100 --tag B --out eval/sessions_redteam_B.jsonl   # needs ANTHROPIC_API_KEY
-.venv/bin/python -m lookout_detect.eval eval/sessions_scripted_test.jsonl eval/sessions_redteam.jsonl eval/sessions_redteam_B.jsonl --out eval/final --tag final
-.venv/bin/python -m lookout_detect.learn eval/sessions_redteam.jsonl --out model/playbooks_learned_redteamA.json
+.venv/bin/python -m scout_detect.scripts_gen --seed 99 --out eval/sessions_scripted_test.jsonl
+.venv/bin/python -m scout_detect.redteam --per-kind 12 --offset 100 --tag B --out eval/sessions_redteam_B.jsonl   # needs ANTHROPIC_API_KEY
+.venv/bin/python -m scout_detect.eval eval/sessions_scripted_test.jsonl eval/sessions_redteam.jsonl eval/sessions_redteam_B.jsonl --out eval/final --tag final
+.venv/bin/python -m scout_detect.learn eval/sessions_redteam.jsonl --out model/playbooks_learned_redteamA.json
 ```

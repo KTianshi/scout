@@ -7,7 +7,7 @@
 <meta name="theme-color" content="#16191b" media="(prefers-color-scheme: dark)">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<title>Lookout</title>
+<title>Scout</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='15' fill='%232f6f62'/%3E%3Cpath d='M16 7l7 3v5c0 5-3 8.5-7 10-4-1.5-7-5-7-10v-5z' fill='%23fff'/%3E%3C/svg%3E">
 <style>
 :root {
@@ -309,7 +309,7 @@ section[hidden] { display: none; }
 <div class="banner" id="banner" role="alert" aria-live="assertive">
   <div class="b-icon" id="bIcon"></div>
   <div class="b-body">
-    <div class="b-kicker" id="bKicker">Lookout alert</div>
+    <div class="b-kicker" id="bKicker">Scout alert</div>
     <div class="b-title" id="bTitle"></div>
     <div class="b-cta"><button id="bView" type="button">View</button><button class="ghost" id="bDismiss" type="button">Dismiss</button></div>
   </div>
@@ -319,7 +319,7 @@ section[hidden] { display: none; }
   <section id="tab-live" role="tabpanel"><div class="feed" id="feed"></div></section>
   <section id="tab-approvals" role="tabpanel" hidden><div id="approvals"></div></section>
   <section id="tab-week" role="tabpanel" hidden><div id="week"></div></section>
-  <div class="foot" id="foot">Lookout · keeping an eye out, so you don't have to</div>
+  <div class="foot" id="foot">Scout · keeping an eye out, so you don't have to</div>
 </main>
 
 <div class="lightbox" id="lightbox" role="dialog" aria-modal="true" aria-label="Screenshot"><button class="close" aria-label="Close" type="button">×</button><img id="lbImg" alt="Screenshot from the Mac"></div>
@@ -375,7 +375,7 @@ section[hidden] { display: none; }
 
   // ----- Sound -----
   var audioCtx = null, soundOn = false;
-  try { soundOn = localStorage.getItem('lookout.sound') !== 'off'; } catch (e) { soundOn = true; }
+  try { soundOn = localStorage.getItem('scout.sound') !== 'off'; } catch (e) { soundOn = true; }
   function unlockAudio() {
     if (!soundOn) return;
     try {
@@ -408,7 +408,7 @@ section[hidden] { display: none; }
   $('soundBtn').addEventListener('click', function () {
     if (audioReady()) { soundOn = false; }
     else { soundOn = true; unlockAudio(); setTimeout(chime, 50); }
-    try { localStorage.setItem('lookout.sound', soundOn ? 'on' : 'off'); } catch (e) {}
+    try { localStorage.setItem('scout.sound', soundOn ? 'on' : 'off'); } catch (e) {}
     renderSoundBtn();
   });
 
@@ -416,7 +416,7 @@ section[hidden] { display: none; }
   function updateTitle() {
     var pending = state.approvals.filter(function (a) { return a.status === 'pending'; }).length;
     var n = state.unread;
-    document.title = (n ? '(' + n + ') ' : '') + 'Lookout · ' + state.config.elderName;
+    document.title = (n ? '(' + n + ') ' : '') + 'Scout · ' + state.config.elderName;
     var lb = $('liveBadge'); lb.hidden = !n; lb.textContent = n;
     var ab = $('apBadge'); ab.hidden = !pending; ab.textContent = pending;
   }
@@ -464,7 +464,7 @@ section[hidden] { display: none; }
   function renderFeed(freshId) {
     var el = $('feed');
     if (!state.events.length) {
-      el.innerHTML = emptyHTML('sun', 'All quiet so far', "Lookout is keeping an eye on " + state.config.elderName + "'s Mac. If anything looks off, you'll see it here right away.");
+      el.innerHTML = emptyHTML('sun', 'All quiet so far', "Scout is keeping an eye on " + state.config.elderName + "'s Mac. If anything looks off, you'll see it here right away.");
       return;
     }
     el.innerHTML = state.events.map(cardHTML).join('');
@@ -498,7 +498,7 @@ section[hidden] { display: none; }
           '<div class="ap-hint">The payment stays paused until you decide.</div></div>';
       }).join('');
     } else {
-      html += emptyHTML('shield', 'Nothing waiting on you', "If " + state.config.elderName + " starts a risky payment, Lookout will pause it and ask you here first.");
+      html += emptyHTML('shield', 'Nothing waiting on you', "If " + state.config.elderName + " starts a risky payment, Scout will pause it and ask you here first.");
     }
     if (decided.length) {
       html += '<div class="sec-title">Decided</div>';
@@ -572,7 +572,7 @@ section[hidden] { display: none; }
     var b = $('banner');
     b.className = 'banner ' + ev.type;
     $('bIcon').innerHTML = ICONS[ev.type] || ICONS.info;
-    $('bKicker').textContent = ev.type === 'payment_pause' ? 'Needs your OK' : (ev.type === 'remote_access' ? 'Lookout blocked this' : 'Lookout stopped a scam');
+    $('bKicker').textContent = ev.type === 'payment_pause' ? 'Needs your OK' : (ev.type === 'remote_access' ? 'Scout blocked this' : 'Scout stopped a scam');
     $('bTitle').textContent = ev.title;
     bannerTarget = ev.type === 'payment_pause' ? 'approvals' : 'live';
     $('bView').textContent = ev.type === 'payment_pause' ? 'Review' : 'View';
@@ -653,7 +653,7 @@ section[hidden] { display: none; }
 
   getJSON('/api/config').then(function (c) { state.config = c; }).catch(function () {}).then(function () {
     $('hTitle').textContent = 'Watching over ' + state.config.elderName;
-    $('foot').textContent = 'Lookout · keeping an eye out for ' + state.config.elderName + ', so you can relax, ' + state.config.familyName + '.';
+    $('foot').textContent = 'Scout · keeping an eye out for ' + state.config.elderName + ', so you can relax, ' + state.config.familyName + '.';
     renderSoundBtn();
     var initial = (location.hash || '').slice(1);
     setTab(['live', 'approvals', 'week'].indexOf(initial) >= 0 ? initial : 'live');

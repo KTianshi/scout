@@ -1,7 +1,5 @@
 # Scout
 
-_Formerly "Lookout": the code modules (`LookoutCore`, `LookoutApp`), the bundle id `com.lookout.companion`, `~/.config/lookout/secrets.env` and the log folder keep the old name so permissions, settings and keys carry over._
-
 A friendly animated companion that lives on an older adult's Mac screen. It can see the screen, listen, talk and point at things. It does two jobs:
 
 1. **Help, in any app.** Spoken help with everyday tasks: "How do I attach this PDF?", "What does this letter mean?", "What is Slack?" Each answer comes from a fresh look at the screen; the buddy flies to the right button and rings it. Ask "what next?" and it looks again, remembering the conversation.
@@ -23,14 +21,15 @@ scripts/bundle.sh                     # → build/Scout.app (signed, with app ic
 cp -R build/Scout.app /Applications/ && open /Applications/Scout.app --args --demo   # opens the demo browser too
 ```
 
-Put your key in `~/.config/lookout/secrets.env` (or export it):
+Put your key in `~/.config/scout/secrets.env` (or export it):
 
 ```
 ANTHROPIC_API_KEY=sk-ant-...
 CARTESIA_API_KEY=sk_car_...           # Scout's voice (Sonic). The voice and speed are picked in Settings.
+GEMINI_API_KEY=...                    # optional: "Make your own buddy" draws custom buddies with Nano Banana (needs billing on).
 ```
 
-The family features (alerts to the family app, "check with Sarah first" approvals) are off. `LOOKOUT_FAMILY=1` turns them back on, with `ELDER_NAME`, `FAMILY_NAME` and `node family/server.js`.
+The family features (alerts to the family app, "check with Sarah first" approvals) are off. `SCOUT_FAMILY=1` turns them back on, with `ELDER_NAME`, `FAMILY_NAME` and `node family/server.js`.
 
 Without a key, Scout still runs the on-device scam detector and hard rules, and help mode falls back to pointing at the demo page's marked target.
 
@@ -49,7 +48,7 @@ Without a key, Scout still runs the on-device scam detector and hard rules, and 
 
 ```
 Package.swift
-  LookoutCore   pure logic, no permissions needed, unit-tested (Swift Testing)
+  ScoutCore   pure logic, no permissions needed, unit-tested (Swift Testing)
     ScamSignals    on-device heuristics over screen text + URL + running apps → log-odds signals
     Domains        lookalike / typosquat / punycode / official-domain checks
     RiskEngine     per-signal-kind evidence memory with a 120 s half-life → P(scam in progress)
@@ -59,7 +58,7 @@ Package.swift
     PointTags      [STEP:n] / [POINT:x,y:label] parsing (pattern from OpenClicky)
     Prompts        help, scam confirmation (JSON schema), letter explainer
     ClaudeClient   raw-HTTP Messages API client (streaming, vision, structured outputs, refusal fallbacks)
-  LookoutApp    AppKit + SwiftUI menu-bar app
+  ScoutApp    AppKit + SwiftUI menu-bar app
     Overlay        transparent click-through panel (floats over full-screen apps); buddy styles, fly-to-point, bubble that
                    avoids the target and fades under the pointer
     Settings       Liquid Glass settings window (voice, buddy, talking, safety); AskPanel: Spotlight-style ask box
@@ -70,10 +69,10 @@ Package.swift
     Voice          SpeechOutput protocol → Cartesia Sonic (CartesiaClient: /tts/bytes, on-disk clip cache, scam lines prewarmed so they play
                    instantly and offline) with AVSpeechSynthesizer fallback; push-to-talk and "Hey Scout" → Apple Speech
     Panels         clickable action card, full-screen "Let's slow down" pause, permission setup window
-    FamilyClient   events + approval requests to the family server (off unless LOOKOUT_FAMILY=1)
+    FamilyClient   events + approval requests to the family server (off unless SCOUT_FAMILY=1)
     FixtureRunner  `Scout --fixture page.html` runs the whole pipeline headless
-  LookoutBench  `lookout-bench`: precision / recall / false alarms over bench/fixtures.jsonl
-family/         zero-dependency Node server + one mobile-first page (only used with LOOKOUT_FAMILY=1)
+  ScoutBench  `scout-bench`: precision / recall / false alarms over bench/fixtures.jsonl
+family/         zero-dependency Node server + one mobile-first page (only used with SCOUT_FAMILY=1)
 demo/           10 local scenario pages (6 scams, 4 safe lookalikes) + launcher
 bench/          154 labeled fixtures (dev/test split) + results
 ```
@@ -89,11 +88,11 @@ bench/          154 labeled fixtures (dev/test split) + results
 
 ### Scam playbook engine (see `DETECTION.md`)
 
-Scams are modelled as sequences of stages (pop-up → call → remote access → bank → payment) in one hidden Markov model with benign look-alike states (family remote help, gift shopping, banking, paying people, reading about scams). `model/playbooks.json` holds every parameter with a one-line justification; the Python reference (`lookout_detect/`) and the Swift engine (`LookoutCore/Playbook/`) read it and agree to 1e-9. Claude's findings enter only as evidence. On 680 held-out sessions it alarms on 1.1% of benign sessions vs 10.3% for the previous detector, at 96.7% recall.
+Scams are modelled as sequences of stages (pop-up → call → remote access → bank → payment) in one hidden Markov model with benign look-alike states (family remote help, gift shopping, banking, paying people, reading about scams). `model/playbooks.json` holds every parameter with a one-line justification; the Python reference (`scout_detect/`) and the Swift engine (`ScoutCore/Playbook/`) read it and agree to 1e-9. Claude's findings enter only as evidence. On 680 held-out sessions it alarms on 1.1% of benign sessions vs 10.3% for the previous detector, at 96.7% recall.
 
 ### CRS sender check
 
-On suspicious screens, the sender's email address is checked with **CRS Fraud Finder** via the family server (`POST /api/crs/check-sender`; set `CRS_USERNAME` / `CRS_PASSWORD` in `~/.config/lookout/secrets.env`). A high-risk result becomes evidence in the playbook model and a line in the buddy's warning ("that email address first appeared today and is rated very high risk"). Only the scammer's address is ever sent. See `DETECTION.md`.
+On suspicious screens, the sender's email address is checked with **CRS Fraud Finder** via the family server (`POST /api/crs/check-sender`; set `CRS_USERNAME` / `CRS_PASSWORD` in `~/.config/scout/secrets.env`). A high-risk result becomes evidence in the playbook model and a line in the buddy's warning ("that email address first appeared today and is rated very high risk"). Only the scammer's address is ever sent. See `DETECTION.md`.
 
 ### Benchmark (see `bench/RESULTS.md`)
 
@@ -105,7 +104,7 @@ All 154 single-screen fixtures (79 scams, 75 benign look-alikes), current playbo
 | + Claude confirmation of flagged screens | 93.7% | 1 / 75 |
 | **+ deep check (Claude reads every screen)** | **100%** | **0 / 75** |
 
-The on-device number is low by design: the playbook engine wants corroboration across screens before it alarms (see `DETECTION.md`; on 680 multi-screen sessions it catches 96.7%). `lookout-bench --model-all` reproduces the last row.
+The on-device number is low by design: the playbook engine wants corroboration across screens before it alarms (see `DETECTION.md`; on 680 multi-screen sessions it catches 96.7%). `scout-bench --model-all` reproduces the last row.
 
 ## Testing without permissions
 
@@ -114,15 +113,15 @@ The on-device number is low by design: the playbook engine wants corroboration a
 .build/debug/Scout --fixture demo/scenarios/tech-support.html            # signals → risk → Claude → speech → point
 .build/debug/Scout --fixture demo/scenarios/email-attach.html --ask "How do I attach this PDF?"
 .build/debug/Scout --fixture screenshot.png --text "screen text…" --apps "AnyDesk,Safari"
-.build/debug/lookout-bench --demo demo/scenarios [--model | --model-all] [--verbose]
+.build/debug/scout-bench --demo demo/scenarios [--model | --model-all] [--verbose]
 ```
 
-Useful environment switches: `LOOKOUT_MUTE=1` (no audio), `LOOKOUT_MODEL`, `LOOKOUT_CONFIRM_THRESHOLD`, `LOOKOUT_FAMILY_URL`, `LOOKOUT_DEBUG_SHOTS=1` (saves images of Scout's *own* windows to `~/Library/Application Support/Lookout/shots/`), `LOOKOUT_ONBOARD=1` (replay onboarding), and the test-only `LOOKOUT_TEST_AUTOCLICK` and `LOOKOUT_TERMINATE_ONLY_DEMO`.
+Useful environment switches: `SCOUT_MUTE=1` (no audio), `SCOUT_MODEL`, `SCOUT_CONFIRM_THRESHOLD`, `SCOUT_FAMILY_URL`, `SCOUT_DEBUG_SHOTS=1` (saves images of Scout's *own* windows to `~/Library/Application Support/Scout/shots/`), `SCOUT_ONBOARD=1` (replay onboarding), and the test-only `SCOUT_TEST_AUTOCLICK` and `SCOUT_TERMINATE_ONLY_DEMO`.
 
 ## Privacy
 
-- Screenshots and screen text are sent to the Claude API for help requests and scam confirmation, and screen text for the deep check (Settings ▸ Safety turns it off). Nothing is written to disk. The exception is `LOOKOUT_DEBUG_SHOTS`, which saves only Scout's own windows, under `~/Library/Application Support/Lookout/`.
-- The log (`~/Library/Application Support/Lookout/lookout.log`) records decisions and spoken text, never API keys.
+- Screenshots and screen text are sent to the Claude API for help requests and scam confirmation, and screen text for the deep check (Settings ▸ Safety turns it off). Nothing is written to disk. The exception is `SCOUT_DEBUG_SHOTS`, which saves only Scout's own windows, under `~/Library/Application Support/Scout/`.
+- The log (`~/Library/Application Support/Scout/scout.log`) records decisions and spoken text, never API keys.
 - Voice input is on-device (Apple Speech). With "Hey Scout" on, the microphone listens locally for the wake word; nothing is sent until it hears it.
 
 ## Build notes

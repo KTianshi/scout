@@ -1,6 +1,6 @@
 {
  "version": 1,
- "about": "LEARNED by lookout_detect/learn.py (MAP Baum-Welch on emissions, Beta prior centred on the hand-set values). Lookout scam playbook model. One combined HMM: benign states (idle + look-alike activities) plus one branch of stages per scam playbook. Each observation is a SET of evidence flags seen together; each flag is an independent Bernoulli given the hidden state. Edit numbers here; Python (lookout_detect) and Swift (LookoutCore/Playbook) both read this file.",
+ "about": "LEARNED by scout_detect/learn.py (MAP Baum-Welch on emissions, Beta prior centred on the hand-set values). Scout scam playbook model. One combined HMM: benign states (idle + look-alike activities) plus one branch of stages per scam playbook. Each observation is a SET of evidence flags seen together; each flag is an independent Bernoulli given the hidden state. Edit numbers here; Python (scout_detect) and Swift (ScoutCore/Playbook) both read this file.",
  "events": [
   "URGENT_LANGUAGE",
   "PHONE_NUMBER_IN_POPUP",

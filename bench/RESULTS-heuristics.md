@@ -1,4 +1,4 @@
-# Lookout benchmark (on-device heuristics only, no model)
+# Scout benchmark (on-device heuristics only, no model)
 
 Fixtures: bench/fixtures.jsonl · split: all · alarm = policy action ≥ interrupt
 

@@ -1,7 +1,7 @@
 // CRS Credit API client (sandbox): checks the SENDER of a suspicious message with CRS Fraud Finder
-// (AtData email risk). Only scammer-side identifiers are ever sent; nothing about the person Lookout protects.
+// (AtData email risk). Only scammer-side identifiers are ever sent; nothing about the person Scout protects.
 //
-// Credentials: CRS_USERNAME / CRS_PASSWORD (env or ~/.config/lookout/secrets.env). Never logged.
+// Credentials: CRS_USERNAME / CRS_PASSWORD (env or ~/.config/scout/secrets.env). Never logged.
 // Without credentials, or if CRS is unreachable, a clearly-labelled mock answer is returned so demos keep working.
 'use strict';
 
