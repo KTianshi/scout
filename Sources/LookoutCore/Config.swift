@@ -13,8 +13,22 @@ public enum LookoutConfig {
     public static var familyServer: URL {
         URL(string: Secrets.shared["LOOKOUT_FAMILY_URL"] ?? "http://127.0.0.1:4545")!
     }
-    public static var elderName: String { Secrets.shared["ELDER_NAME"] ?? "Mom" }
-    public static var familyName: String { Secrets.shared["FAMILY_NAME"] ?? "Sarah" }
+    /// Family features (alerts to the family app, "check with Sarah first" approvals, family wording).
+    /// Off for now: it felt infantilizing. Turn back on with LOOKOUT_FAMILY=1 in secrets.env.
+    public static var familyEnabled: Bool { Secrets.shared["LOOKOUT_FAMILY"] == "1" }
+
+    /// Names come from Settings first, then secrets.env, then demo defaults.
+    public static var elderName: String { saved("elderName") ?? Secrets.shared["ELDER_NAME"] ?? "Mom" }
+    public static var familyName: String { saved("familyName") ?? Secrets.shared["FAMILY_NAME"] ?? "Sarah" }
+
+    public static func setNames(elder: String, family: String) {
+        UserDefaults.standard.set(elder.trimmingCharacters(in: .whitespaces), forKey: "elderName")
+        UserDefaults.standard.set(family.trimmingCharacters(in: .whitespaces), forKey: "familyName")
+    }
+
+    private static func saved(_ key: String) -> String? {
+        UserDefaults.standard.string(forKey: key).flatMap { $0.isEmpty ? nil : $0 }
+    }
 
     /// Probability above which the guardian asks Claude to confirm.
     /// Override with LOOKOUT_CONFIRM_THRESHOLD (e.g. 0.03 to ask Claude about nearly every screen with any signal).
@@ -24,7 +38,8 @@ public enum LookoutConfig {
     /// Seconds between guardian passes.
     public static let guardianInterval: TimeInterval = 3
     /// Longest edge of screenshots sent to the model.
-    public static let screenshotMaxEdge: CGFloat = 1440
+    /// About 1080p-class: sharp enough for small toolbar icons, within the model's 2576 px limit.
+    public static let screenshotMaxEdge: CGFloat = 1920
 }
 
 /// Loads secrets from the environment, then ~/.config/lookout/secrets.env (KEY=VALUE lines).

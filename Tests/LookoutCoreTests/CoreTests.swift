@@ -245,3 +245,30 @@ import Testing
         #expect(r.action <= .nudge)
     }
 }
+
+@Suite struct CartesiaTests {
+    func client(_ dir: URL) -> CartesiaClient {
+        CartesiaClient(apiKey: nil, model: "sonic-3.6", voiceID: "v1", speed: 0.9, emotion: "calm", cacheDir: dir)
+    }
+
+    @Test func requestBody() throws {
+        let b = client(FileManager.default.temporaryDirectory).body("Hello")
+        #expect(b["model_id"] as? String == "sonic-3.6")
+        #expect(b["voice"] as? String == "v1")
+        let fmt = try #require(b["output_format"] as? [String: Any])
+        #expect(fmt["container"] as? String == "wav")
+        let gen = try #require(b["generation_config"] as? [String: Any])
+        #expect(gen["speed"] as? Double == 0.9)
+        #expect(gen["emotion"] as? String == "calm")
+    }
+
+    @Test func cacheServesOfflineAndNoKeyThrows() async throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("lookout-cartesia-\(UUID().uuidString)")
+        let c = client(dir)
+        await #expect(throws: CartesiaClient.ClientError.self) { try await c.wav("Hi") }
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        try Data([1, 2, 3]).write(to: c.cacheURL(for: "Hi"))
+        #expect(try await c.wav("Hi") == Data([1, 2, 3]))
+        #expect(c.cacheURL(for: "Hi") != c.cacheURL(for: "Hi!"))
+    }
+}

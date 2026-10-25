@@ -28,9 +28,11 @@ let verbose = args.contains("--verbose")
 let demoDir = opt("--demo")
 let markdownOut = opt("--markdown")
 
-let useModel = args.contains("--model")
+let useModel = args.contains("--model") || args.contains("--model-all")
+/// Ask Claude about every screen, not just flagged ones (what an always-on second look would see).
+let modelAll = args.contains("--model-all")
 
-struct Row { var id: String; var label: String; var category: String; var split: String; var p: Double; var action: Action; var rules: [String]; var summary: String; var difficulty: String }
+struct Row { var id: String; var label: String; var category: String; var split: String; var p: Double; var action: Action; var rules: [String]; var summary: String; var difficulty: String; var claudeScam: Bool? = nil }
 
 func run(_ ctx: ScreenContext) -> ScamPipeline.Result {
     // Fresh engine per fixture: each fixture is an independent screen.
@@ -65,11 +67,13 @@ func evaluateAll(_ items: [(Fixture, ScreenContext)]) async -> [Row] {
                 let (f, ctx) = item
                 let pipeline = ScamPipeline()
                 var r = pipeline.evaluate(ctx)
-                if useModel && client.isConfigured && r.shouldConfirmWithModel {
+                var claudeScam: Bool?
+                if useModel && client.isConfigured && (r.shouldConfirmWithModel || modelAll) {
                     for attempt in 0..<3 {
                         do {
                             let v = try await client.confirmScam(screen: ctx, image: nil, heuristicSummary: r.summary)
                             r = pipeline.applyModelVerdict(v, ctx: ctx)
+                            claudeScam = v.isScam
                             break
                         } catch {
                             if attempt == 2 { FileHandle.standardError.write("model error \(f.id): \(error.localizedDescription)\n".data(using: .utf8)!) }
@@ -77,7 +81,7 @@ func evaluateAll(_ items: [(Fixture, ScreenContext)]) async -> [Row] {
                         }
                     }
                 }
-                return Row(id: f.id, label: f.label, category: f.category, split: f.split ?? "dev", p: r.probability, action: r.action, rules: r.rules.map(\.id), summary: r.summary, difficulty: f.difficulty ?? "?")
+                return Row(id: f.id, label: f.label, category: f.category, split: f.split ?? "dev", p: r.probability, action: r.action, rules: r.rules.map(\.id), summary: r.summary, difficulty: f.difficulty ?? "?", claudeScam: claudeScam)
             }
         }
         for _ in 0..<6 { if let x = it.next() { add(x) } }
@@ -159,3 +163,19 @@ if verbose {
     for r in rows where r.split == "demo" { say("- `\(r.id)` label=\(r.label) \(r.summary)") }
 }
 if let markdownOut { try? out.write(toFile: markdownOut, atomically: true, encoding: .utf8) }
+
+if modelAll {
+    let asked = rows.filter { $0.claudeScam != nil }
+    let tp = asked.filter { $0.label == "scam" && $0.claudeScam == true }.count
+    let fn = asked.filter { $0.label == "scam" && $0.claudeScam == false }.count
+    let fp = asked.filter { $0.label != "scam" && $0.claudeScam == true }.count
+    let tn = asked.filter { $0.label != "scam" && $0.claudeScam == false }.count
+    print("\n## Claude alone on every screen (--model-all)\n")
+    print("asked \(asked.count) · recall \(pct(tp, tp + fn)) · false-alarm rate \(pct(fp, fp + tn)) · FP \(fp) · FN \(fn)")
+    let either = rows.filter { $0.label == "scam" }
+    let caught = either.filter { $0.action >= .interrupt || $0.claudeScam == true }.count
+    let benign = rows.filter { $0.label != "scam" }
+    let falsely = benign.filter { $0.claudeScam == true || ($0.claudeScam == nil && $0.action >= .interrupt) }.count
+    print("app policy (alarm if Claude says scam; Claude's 'safe' is final): recall \(pct(caught, either.count)) · false alarms \(falsely)/\(benign.count)")
+    for r in asked where (r.label == "scam") != (r.claudeScam == true) { print("- miss/false: `\(r.id)` [\(r.label)/\(r.category)] claude=\(r.claudeScam!)") }
+}

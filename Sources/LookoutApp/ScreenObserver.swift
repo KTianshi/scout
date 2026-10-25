@@ -25,16 +25,42 @@ struct Snapshot {
 
     func screenPoint(forImagePoint p: CGPoint) -> CGPoint { p.applying(imageToScreen) }
 
-    /// Snap a point to the closest actionable element if one is close.
-    func snap(_ p: CGPoint, within radius: CGFloat = 48) -> (CGPoint, UIElementInfo?) {
-        var best: (CGFloat, UIElementInfo)?
-        for e in elements where e.frame.width > 4 && e.frame.height > 4 && e.frame.width < 900 {
-            let inside = e.frame.insetBy(dx: -6, dy: -6).contains(p)
-            let c = CGPoint(x: e.frame.midX, y: e.frame.midY)
-            let d = inside ? 0 : hypot(c.x - p.x, c.y - p.y)
-            if d <= radius, best == nil || d < best!.0 { best = (d, e) }
+    /// Snap a point to the control the model meant. Prefers a nearby control whose name matches `label`
+    /// (e.g. "Attach files"), then the smallest control under the point, then the closest small one.
+    /// Big containers (toolbars, rows, panes) are never chosen: highlighting them points at nothing.
+    func snap(_ p: CGPoint, label: String? = nil, within radius: CGFloat = 48) -> (CGPoint, UIElementInfo?) {
+        // Text boxes are often wide (a chat's message field), so they get a bigger size limit than buttons.
+        let fields: Set<String> = ["AXTextArea", "AXTextField", "AXComboBox", "AXSecureTextField"]
+        let controls = elements.filter { e in
+            let big = fields.contains(e.role)
+            return e.frame.width > 4 && e.frame.height > 4 && e.frame.width < (big ? 1600 : 320) && e.frame.height < (big ? 400 : 140)
         }
-        if let (_, e) = best { return (CGPoint(x: e.frame.midX, y: e.frame.midY), e) }
+        func center(_ e: UIElementInfo) -> CGPoint { CGPoint(x: e.frame.midX, y: e.frame.midY) }
+        func dist(_ e: UIElementInfo) -> CGFloat {
+            e.frame.insetBy(dx: -6, dy: -6).contains(p) ? 0 : hypot(center(e).x - p.x, center(e).y - p.y)
+        }
+        // Claude copied a control's center from the list: that's the control it means, whatever it's called.
+        // (Screen points; the list's pixel centers map back to within a couple of points.)
+        if let e = controls.filter({ hypot(center($0).x - p.x, center($0).y - p.y) <= 3 })
+            .min(by: { hypot(center($0).x - p.x, center($0).y - p.y) < hypot(center($1).x - p.x, center($1).y - p.y) }) {
+            return (center(e), e)
+        }
+        if let label, label.count >= 3 {
+            let words = label.lowercased().split(separator: " ").filter { $0.count >= 4 }
+            // An exact name is strong evidence, so size limits don't apply (file rows and menu items are wide).
+            let named = elements.filter { $0.frame.width > 4 && $0.frame.height > 4 && $0.frame.height < 200 }.filter { e in
+                let l = e.label.lowercased()
+                return l.contains(label.lowercased()) || words.contains { l.contains($0) }
+            }
+            if let e = named.filter({ dist($0) <= radius * 3 }).min(by: { dist($0) < dist($1) }) { return (center(e), e) }
+        }
+        // The model named something we couldn't match: its own point is better than any nearby control.
+        // Geometry alone picks wrong ones: the nearest ("Recipients" became "Subject"), or one hidden under a
+        // window (Gmail's Compose button sits beneath the compose window, and won over the To field).
+        if label != nil { return (p, nil) }
+        let area = { (e: UIElementInfo) in e.frame.width * e.frame.height }
+        if let e = controls.filter({ dist($0) == 0 }).min(by: { area($0) < area($1) }) { return (center(e), e) }
+        if let e = controls.filter({ dist($0) <= radius }).min(by: { dist($0) < dist($1) }) { return (center(e), e) }
         return (p, nil)
     }
 
@@ -67,7 +93,10 @@ enum Permissions {
 @MainActor
 final class ScreenObserver {
     /// Live snapshot of the main display + frontmost window. Missing permissions degrade gracefully.
-    func snapshot(includeImage: Bool) async -> Snapshot {
+    /// The display to capture (where Lookout is); nil means the main display.
+    var displayID: CGDirectDisplayID?
+
+    func snapshot(includeImage: Bool, fast: Bool = false) async -> Snapshot {
         let front = NSWorkspace.shared.frontmostApplication
         let running = NSWorkspace.shared.runningApplications.compactMap { $0.localizedName }
         var ctx = ScreenContext(text: "", appName: front?.localizedName, runningApps: running)
@@ -75,7 +104,7 @@ final class ScreenObserver {
 
         if Permissions.accessibility, let pid = front?.processIdentifier, pid != getpid() {
             let ax = AXReader(pid: pid)
-            let r = ax.read()
+            let r = ax.read(timeBudget: fast ? 0.7 : nil)
             ctx.text = r.text
             ctx.windowTitle = r.windowTitle
             ctx.url = r.url
@@ -95,12 +124,15 @@ final class ScreenObserver {
     func captureMainDisplay() async -> (ClaudeClient.Image, CGAffineTransform)? {
         do {
             let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
-            guard let display = content.displays.first(where: { $0.displayID == CGMainDisplayID() }) ?? content.displays.first else { return nil }
+            let wanted = displayID ?? CGMainDisplayID()
+            guard let display = content.displays.first(where: { $0.displayID == wanted }) ?? content.displays.first else { return nil }
             let mine = content.applications.filter { $0.processID == getpid() }
             let filter = SCContentFilter(display: display, excludingApplications: mine, exceptingWindows: [])
             let cfg = SCStreamConfiguration()
             let maxEdge = LookoutConfig.screenshotMaxEdge
-            let scale = min(1.0, maxEdge / CGFloat(max(display.width, display.height)))
+            // display.width is in points; go up to the Retina pixel density so small icons stay legible.
+            let density = NSScreen.screens.first { ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID) == display.displayID }?.backingScaleFactor ?? 1
+            let scale = min(density, maxEdge / CGFloat(max(display.width, display.height)))
             cfg.width = Int(CGFloat(display.width) * scale)
             cfg.height = Int(CGFloat(display.height) * scale)
             cfg.showsCursor = false
@@ -173,7 +205,8 @@ struct AXReader {
         return CGRect(origin: p, size: s)
     }
 
-    func read(maxNodes: Int = 2500) -> Result {
+    /// `timeBudget` (help only): stop walking after this long. The guardian reads everything (scam text can be deep).
+    func read(maxNodes: Int = 2500, timeBudget: TimeInterval? = nil) -> Result {
         var r = Result()
         let app = AXUIElementCreateApplication(pid)
         AXUIElementSetMessagingTimeout(app, 0.4)
@@ -188,7 +221,10 @@ struct AXReader {
         var queue: [AXUIElement] = [w]
         var visited = 0
         let actionable: Set<String> = ["AXButton", "AXLink", "AXTextField", "AXSecureTextField", "AXMenuItem", "AXCheckBox", "AXPopUpButton", "AXTab", "AXRadioButton", "AXComboBox", "AXTextArea", "AXImage", "AXStaticText"]
-        while !queue.isEmpty && visited < maxNodes {
+        // Time budget as well as a node cap: huge lists (a Finder folder, a long inbox) took 2+ s to walk.
+        // Breadth-first means the window's toolbars and visible controls come first; the screenshot covers the rest.
+        let deadline = Date().addingTimeInterval(timeBudget ?? .infinity)
+        while !queue.isEmpty && visited < maxNodes && (visited % 50 != 0 || Date() < deadline) {
             let e = queue.removeFirst()
             visited += 1
             let role = str(e, kAXRoleAttribute) ?? ""

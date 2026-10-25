@@ -6,12 +6,13 @@ import LookoutCore
 /// Reading the DOM directly gives exact text and element positions with no TCC permissions,
 /// so the demo works even before Screen Recording / Accessibility are granted.
 @MainActor
-final class DemoBrowser: NSObject, WKNavigationDelegate {
+final class DemoBrowser: NSObject, WKNavigationDelegate, NSWindowDelegate {
     let window: NSWindow
     let web: WKWebView
     private var loadWaiter: CheckedContinuation<Void, Never>?
     private(set) var currentFile: URL?
     var onNavigate: ((URL) -> Void)?
+    var onClose: (() -> Void)?
 
     static let contentSize = NSSize(width: 1280, height: 800)
 
@@ -23,6 +24,7 @@ final class DemoBrowser: NSObject, WKNavigationDelegate {
                           backing: .buffered, defer: false)
         super.init()
         web.navigationDelegate = self
+        window.delegate = self
         window.contentView = web
         window.title = "Lookout Demo Browser"
         window.isReleasedWhenClosed = false
@@ -165,4 +167,8 @@ final class DemoBrowser: NSObject, WKNavigationDelegate {
     }
 
     func close() { window.orderOut(nil) }
+
+    nonisolated func windowWillClose(_ notification: Notification) {
+        Task { @MainActor in self.onClose?() }
+    }
 }

@@ -16,6 +16,16 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/Lookout"
 rsync -a --exclude ".DS_Store" "$ROOT/demo" "$APP/Contents/Resources/"
 mkdir -p "$APP/Contents/Resources/model" && cp "$ROOT/model/playbooks.json" "$APP/Contents/Resources/model/"
+# App icon, drawn by the app itself (AppIconView).
+ICONSET="$(mktemp -d)/AppIcon.iconset"
+mkdir -p "$ICONSET"
+"$BIN" --render-icon "$ICONSET/base.png"
+for s in 16 32 128 256 512; do
+  sips -z $s $s "$ICONSET/base.png" --out "$ICONSET/icon_${s}x${s}.png" >/dev/null
+  sips -z $((s*2)) $((s*2)) "$ICONSET/base.png" --out "$ICONSET/icon_${s}x${s}@2x.png" >/dev/null
+done
+rm "$ICONSET/base.png"
+iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/AppIcon.icns"
 VERSION="0.1.$(git -C "$ROOT" rev-list --count HEAD 2>/dev/null || echo 0)"
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -30,7 +40,8 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>CFBundleShortVersionString</key><string>$VERSION</string>
   <key>CFBundleVersion</key><string>$VERSION</string>
   <key>LSMinimumSystemVersion</key><string>14.0</string>
-  <key>LSUIElement</key><true/>
+  <key>LSUIElement</key><false/>
+  <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>NSHighResolutionCapable</key><true/>
   <key>NSMicrophoneUsageDescription</key><string>Lookout listens while you hold Option and Space, so you can ask for help out loud.</string>
   <key>NSSpeechRecognitionUsageDescription</key><string>Lookout turns your spoken question into text so it can help you.</string>
@@ -42,8 +53,14 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 PLIST
 xattr -cr "$APP"
 IDENTITY="${LOOKOUT_SIGN_IDENTITY:-Lookout Dev}"
+# Fall back to an Xcode "Apple Development" certificate if there is one (also stable across rebuilds).
+if ! security find-identity -v -p codesigning 2>/dev/null | grep -q "\"$IDENTITY\""; then
+  DEV="$(security find-identity -v -p codesigning 2>/dev/null | sed -n 's/.*"\(Apple Development:[^"]*\)".*/\1/p' | head -1)"
+  [ -n "$DEV" ] && IDENTITY="$DEV"
+fi
 if security find-identity -v -p codesigning 2>/dev/null | grep -q "\"$IDENTITY\""; then
-  sign() { codesign --force --deep --options runtime --sign "$IDENTITY" "$APP"; }
+  # No hardened runtime: it would block the microphone without extra entitlements, and we don't notarize.
+  sign() { codesign --force --deep --sign "$IDENTITY" "$APP"; }
   echo "Signing with stable identity '$IDENTITY'."
 else
   sign() { codesign --force --deep --sign - "$APP"; }

@@ -43,6 +43,33 @@
   .pdf::after { content: "PDF"; position: absolute; left: 0; right: 0; bottom: 10px; color: #d93025; font-weight: 800; font-size: 14px; text-shadow: none; }
   .pdf::before { content: ""; position: absolute; right: 0; top: 0; border-left: 16px solid #ddd; border-bottom: 16px solid #ddd; border-top: 16px solid #a9b9cc; border-right: 16px solid #a9b9cc; border-width: 0 16px 16px 0; border-color: transparent #c9d5e2 #ddd transparent; }
   .menubar { position: absolute; top: 0; left: 0; right: 0; height: 0; }
+  /* attachment */
+  .att { display: none; margin: 0 22px 14px; align-items: center; gap: 10px; width: 300px; padding: 10px 12px; border: 1px solid #e3e3e6; border-radius: 10px; background: #fafafa; }
+  .att.on { display: flex; }
+  .att .ic { width: 30px; height: 38px; background: #fff; border: 1px solid #ddd; border-radius: 3px; color: #d93025; font-weight: 800; font-size: 9px; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 4px; }
+  .att .nm { font-size: 13.5px; font-weight: 600; } .att .sz { font-size: 12px; color: #8e8e93; }
+  /* open panel (sheet) */
+  .sheet { display: none; position: absolute; left: 50%; top: 52px; transform: translateX(-50%); width: 640px; height: 400px; background: #f7f7f8; border-radius: 0 0 12px 12px; box-shadow: 0 18px 50px rgba(0,0,0,.35), 0 0 0 1px rgba(0,0,0,.15); z-index: 5; flex-direction: column; }
+  .sheet.on { display: flex; }
+  .sheet .top { height: 44px; display: flex; align-items: center; justify-content: center; border-bottom: 1px solid #e2e2e4; font-weight: 600; color: #333; }
+  .sheet .main { flex: 1; display: flex; min-height: 0; }
+  .sheet .side { width: 150px; background: #ececee; padding: 10px 8px; font-size: 13px; color: #555; }
+  .sheet .side div { padding: 5px 8px; border-radius: 6px; } .sheet .side .sel { background: #d9d9dd; color: #111; }
+  .sheet .files { flex: 1; padding: 8px; overflow: auto; background: #fff; }
+  .file { display: flex; width: 100%; align-items: center; gap: 10px; padding: 7px 10px; border: 0; background: transparent; border-radius: 6px; font: inherit; font-size: 13.5px; color: #1d1d1f; text-align: left; }
+  .file .fi { width: 18px; height: 22px; border: 1px solid #ccc; border-radius: 2px; background: #fff; flex: none; }
+  .file .fi.pdfi { border-color: #e7b3ae; background: #fff4f3; }
+  .file .when { margin-left: auto; color: #8e8e93; font-size: 12px; }
+  .file.sel { background: #0a63d6; color: #fff; } .file.sel .when { color: #dbe8ff; }
+  .sheet .bot { height: 54px; display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding: 0 16px; border-top: 1px solid #e2e2e4; }
+  .btn { height: 28px; padding: 0 16px; border-radius: 6px; border: 1px solid #cfcfd3; background: #fff; font: inherit; font-size: 13px; }
+  .btn.primary { background: #0a63d6; border-color: #0a63d6; color: #fff; }
+  .btn:disabled { opacity: .45; }
+  /* sent */
+  .compose { transition: transform .45s ease, opacity .45s ease; }
+  .compose.sent { transform: translateY(-40px) scale(.96); opacity: 0; pointer-events: none; }
+  .toast { display: none; position: absolute; left: 50%; top: 300px; transform: translateX(-50%); background: rgba(30,30,32,.9); color: #fff; padding: 14px 22px; border-radius: 12px; font-size: 16px; font-weight: 600; }
+  .toast.on { display: block; }
 </style>
 </head>
 <body>
@@ -50,10 +77,10 @@
 
 <div class="finder"><div class="pdf"></div>Dr Patel letter.pdf</div>
 
-<div class="compose" role="dialog" aria-label="New Message">
+<div class="compose" id="compose" role="dialog" aria-label="New Message">
   <div class="ctb">
     <div class="lights"><i></i><i></i><i></i></div>
-    <button class="tbtn send" type="button" title="Send" aria-label="Send" onclick="return false;">
+    <button class="tbtn send" type="button" title="Send" aria-label="Send" id="send">
       <svg width="20" height="20" viewBox="0 0 24 24"><path d="M3 11.5 21 3l-6.5 18-3-7.5z" fill="none" stroke="#0a63d6" stroke-width="1.9" stroke-linejoin="round"/><path d="M11.5 13.5 21 3" stroke="#0a63d6" stroke-width="1.9"/></svg>
     </button>
     <span class="ctitle">Doctor's letter</span>
@@ -61,7 +88,7 @@
     <button class="tbtn" type="button" title="Reply/Header fields" aria-label="Header fields">
       <svg width="20" height="20" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10" stroke="#555" stroke-width="1.8"/></svg>
     </button>
-    <button class="tbtn" type="button" title="Attach a file" aria-label="Attach a file" data-lookout-target="attach">
+    <button class="tbtn" type="button" title="Attach a file" aria-label="Attach a file" data-lookout-target="attach" id="attach">
       <svg width="20" height="20" viewBox="0 0 24 24"><path d="M20.5 11.5 12 20a5 5 0 0 1-7.1-7.1l8.8-8.8a3.4 3.4 0 0 1 4.8 4.8l-8.8 8.8a1.7 1.7 0 0 1-2.4-2.4l8-8" fill="none" stroke="#555" stroke-width="1.8" stroke-linecap="round"/></svg>
     </button>
     <button class="tbtn" type="button" title="Format text" aria-label="Format text"><span style="font-size:16px;font-family:Georgia,serif;color:#555">Aa</span></button>
@@ -85,6 +112,40 @@
     <p>I've attached it below. Thank you, sweetheart.</p>
     <p class="sig">Love,<br>Mom</p>
   </div>
+  <div class="att" id="att"><div class="ic">PDF</div><div><div class="nm">Dr Patel letter.pdf</div><div class="sz">84 KB</div></div></div>
+  <div class="sheet" id="sheet" role="dialog" aria-label="Choose a file">
+    <div class="top">Choose a file to attach</div>
+    <div class="main">
+      <div class="side"><div>Recents</div><div class="sel">Desktop</div><div>Documents</div><div>Downloads</div><div>Pictures</div></div>
+      <div class="files">
+        <button class="file" type="button" aria-label="Birthday card for Tyler.jpg"><span class="fi"></span>Birthday card for Tyler.jpg<span class="when">Oct 19</span></button>
+        <button class="file" type="button" aria-label="Dr Patel letter.pdf"><span class="fi pdfi"></span>Dr Patel letter.pdf<span class="when">Today</span></button>
+        <button class="file" type="button" aria-label="Grocery list.pdf"><span class="fi pdfi"></span>Grocery list.pdf<span class="when">Oct 21</span></button>
+        <button class="file" type="button" aria-label="Recipes"><span class="fi"></span>Recipes<span class="when">Sep 30</span></button>
+      </div>
+    </div>
+    <div class="bot"><button class="btn" type="button" id="cancel">Cancel</button><button class="btn primary" type="button" id="choose" disabled>Choose File</button></div>
+  </div>
 </div>
+<div class="toast" id="toast">✓ Message sent to Sarah</div>
+<script>
+  // A working mini flow so a step-by-step walkthrough has somewhere to go:
+  // paperclip → pick the file → Choose File → attachment appears → Send.
+  const $ = id => document.getElementById(id);
+  let picked = null;
+  $("attach").onclick = () => { $("sheet").classList.add("on"); };
+  $("cancel").onclick = () => { $("sheet").classList.remove("on"); };
+  document.querySelectorAll(".file").forEach(b => b.onclick = () => {
+    document.querySelectorAll(".file").forEach(x => x.classList.remove("sel"));
+    b.classList.add("sel"); picked = b.getAttribute("aria-label"); $("choose").disabled = false;
+  });
+  $("choose").onclick = () => {
+    if (!picked) return;
+    $("sheet").classList.remove("on");
+    $("att").querySelector(".nm").textContent = picked;
+    $("att").classList.add("on");
+  };
+  $("send").onclick = () => { $("compose").classList.add("sent"); setTimeout(() => $("toast").classList.add("on"), 350); };
+</script>
 </body>
 </html>
