@@ -270,13 +270,22 @@ struct AuroraBackground: View {
 
 extension View {
     /// Liquid Glass on macOS 26, frosted material before that.
+    /// (Compile-time guard: the Glass API only exists in the macOS 26 SDK / Swift 6.2 toolchains.)
     @ViewBuilder func glassCard(cornerRadius: CGFloat = 20, tint: Color? = nil) -> some View {
+        #if compiler(>=6.2)
         if #available(macOS 26, *) {
             self.glassEffect(tint.map { Glass.regular.tint($0.opacity(0.35)) } ?? .regular, in: .rect(cornerRadius: cornerRadius))
         } else {
-            self.background(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous).fill(.regularMaterial))
-                .overlay(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous).fill((tint ?? .clear).opacity(0.18)))
+            frostedCard(cornerRadius: cornerRadius, tint: tint)
         }
+        #else
+        frostedCard(cornerRadius: cornerRadius, tint: tint)
+        #endif
+    }
+
+    @ViewBuilder func frostedCard(cornerRadius: CGFloat, tint: Color?) -> some View {
+        self.background(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous).fill(.regularMaterial))
+            .overlay(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous).fill((tint ?? .clear).opacity(0.18)))
     }
 }
 
@@ -644,7 +653,11 @@ struct SafetyPane: View {
             Label("Check permissions…", systemImage: "lock.shield").font(.system(size: 15, weight: .semibold)).padding(.horizontal, 6)
         }
         .controlSize(.large)
+        #if compiler(>=6.2)
         if #available(macOS 26, *) { b.buttonStyle(.glass) } else { b.buttonStyle(.bordered) }
+        #else
+        b.buttonStyle(.bordered)
+        #endif
     }
 }
 
