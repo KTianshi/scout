@@ -26,6 +26,7 @@ Put your key in `~/.config/lookout/secrets.env` (or export it):
 ```
 ANTHROPIC_API_KEY=sk-ant-...
 CARTESIA_API_KEY=sk_car_...           # Scout's voice (Sonic). The voice and speed are picked in Settings.
+GEMINI_API_KEY=...                    # optional: "Make your own buddy" draws custom buddies with Nano Banana (needs billing on).
 ```
 
 The family features (alerts to the family app, "check with Sarah first" approvals) are off. `LOOKOUT_FAMILY=1` turns them back on, with `ELDER_NAME`, `FAMILY_NAME` and `node family/server.js`.

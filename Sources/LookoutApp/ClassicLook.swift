@@ -173,20 +173,20 @@ struct PixelArt: View {
 enum PixelIcon: String {
     case voice, buddy, talking, safety, eye, hand, check, arrow
     // Buddies
-    case dog, owl, mouse, orb, cat, bear, chick, ghost, smiley
+    case dog, owl, mouse, orb, chick, smiley
+    /// The buddy made in Settings; drawings only, no hand-placed pixels.
+    case custom
 
     /// The pixel version of a buddy style (the cursor style uses `.arrow` directly).
     static func sprite(for style: BuddyStyle) -> PixelIcon? {
         switch style {
         case .cursor: return nil
+        case .custom: return .custom
         case .dog: return .dog
         case .owl: return .owl
         case .mouse: return .mouse
         case .orb: return .orb
-        case .cat: return .cat
-        case .bear: return .bear
         case .chick: return .chick
-        case .ghost: return .ghost
         case .classic: return .smiley
         }
     }
@@ -337,42 +337,6 @@ enum PixelIcon: String {
             "................",
             "................",
         ]
-        case .cat: return [
-            "................",
-            ".KK..........KK.",
-            ".KOK........KOK.",
-            ".KOOK......KOOK.",
-            ".KOPOKKKKKKOPOK.",
-            ".KOOOOOOOOOOOOK.",
-            "KOOOOOOOOOOOOOOK",
-            "KOOKKOOOOOOKKOOK",
-            "KOOKKOOOOOOKKOOK",
-            "KOOOOOOOOOOOOOOK",
-            "KKKOOOOPPOOOOKKK",
-            "KOOOOOOKKOOOOOOK",
-            ".KKOOOKOOKOOOKK.",
-            "..KOOOOOOOOOOK..",
-            "...KKKKKKKKKK...",
-            "................",
-        ]
-        case .bear: return [
-            "................",
-            ".KKK........KKK.",
-            "KNNNK......KNNNK",
-            "KNTNKKKKKKKKNTNK",
-            "KNNNNNNNNNNNNNNK",
-            ".KNNNNNNNNNNNNK.",
-            ".KNNKKNNNNKKNNK.",
-            "KNNNKKNNNNKKNNNK",
-            "KNNNNNTTTTNNNNNK",
-            "KNNNNTTKKTTNNNNK",
-            "KNNNNTTKKTTNNNNK",
-            ".KNNNTTTTTTNNNK.",
-            ".KNNNNTKKTNNNNK.",
-            "..KNNNNNNNNNNK..",
-            "...KKKKKKKKKK...",
-            "................",
-        ]
         case .chick: return [
             "................",
             "......KKKK......",
@@ -390,24 +354,6 @@ enum PixelIcon: String {
             ".....KO..OK.....",
             "....KOO..OOK....",
             "................",
-        ]
-        case .ghost: return [
-            "................",
-            ".....KKKKKK.....",
-            "...KKWWWWWWKK...",
-            "..KWWWWWWWWWWK..",
-            ".KWWWWWWWWWWWWK.",
-            ".KWWKKWWWWKKWWK.",
-            ".KWWKKWWWWKKWWK.",
-            ".KWWWWWWWWWWWWK.",
-            "KKWWWWWPPWWWWWKK",
-            "KWWWWWWPPWWWWWWK",
-            ".KWWWWWWWWWWWWK.",
-            ".KWWWWWWWWWWWWK.",
-            ".KWWWWWWWWWWWWK.",
-            ".KWWWKWWWWKWWWK.",
-            ".KWWK.KWWK.KWWK.",
-            "..KK...KK...KK..",
         ]
         case .dog: return [
             "................",
@@ -463,6 +409,7 @@ enum PixelIcon: String {
             "......KKKK......",
             "................",
         ]
+        case .custom: return []
         // The blue smiley buddy: the yellow face, recolored.
         case .smiley: return PixelIcon.buddy.rows.map { String($0.map { $0 == "Y" ? "b" : $0 }) }
         // The classic white arrow pointer.
@@ -591,7 +538,8 @@ enum SpriteArt {
         let key = "\(icon.rawValue)-\(face)"
         if let i = cache[key] { return i }
         if missing.contains(key) { return nil }
-        if let d = directory, let i = NSImage(contentsOf: d.appendingPathComponent("\(key).png")) {
+        let folder = icon == .custom ? BuddyMaker.dir : directory
+        if let d = folder, let i = NSImage(contentsOf: d.appendingPathComponent("\(key).png")) {
             cache[key] = i
             return i
         }
@@ -600,6 +548,12 @@ enum SpriteArt {
     }
 
     static func has(_ icon: PixelIcon) -> Bool { image(icon, .base) != nil }
+
+    /// Drops cached pictures for a buddy whose drawings just changed.
+    static func forget(_ icon: PixelIcon) {
+        cache = cache.filter { !$0.key.hasPrefix("\(icon.rawValue)-") }
+        missing = missing.filter { !$0.hasPrefix("\(icon.rawValue)-") }
+    }
 }
 
 /// One expression of a buddy: the generated drawing (scaled with hard pixel edges), or the hand-placed pixels.

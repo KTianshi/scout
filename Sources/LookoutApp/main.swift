@@ -22,7 +22,16 @@ let app = NSApplication.shared
 
 MainActor.assumeIsolated {
 
-if let dir = opt("--render-ui") {
+if let desc = opt("--make-buddy") {
+    // Dev: draw a custom buddy from a description without opening Settings, then exit.
+    app.setActivationPolicy(.accessory)
+    Task { @MainActor in
+        await BuddyMaker.shared.make(name: opt("--buddy-name") ?? "My buddy", description: desc, photo: nil)
+        print(BuddyMaker.shared.error ?? "made a buddy in \(BuddyMaker.dir.path)")
+        exit(BuddyMaker.shared.error == nil ? 0 : 1)
+    }
+    app.run()
+} else if let dir = opt("--render-ui") {
     app.setActivationPolicy(.accessory)
     UIRenderer.run(dir: dir, companion: Companion())
     exit(0)

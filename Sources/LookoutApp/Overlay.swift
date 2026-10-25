@@ -40,19 +40,19 @@ enum BuddyMood: Equatable {
 /// How the buddy looks. Picked from the menu; remembered across launches.
 enum BuddyStyle: String, CaseIterable {
     // Scout the dog is the mascot and the default; Hoot, Mouse and Clicken are its friends.
-    case dog, owl, mouse, chick, cursor, orb, cat, bear, ghost, classic
+    case dog, owl, mouse, chick, cursor, orb, classic
+    /// Made in Settings with "Make your own buddy" (BuddyMaker).
+    case custom
 
     var title: String {
         switch self {
         case .dog: return "Scout the dog 🐶"
         case .owl: return "Hoot the owl 🦉"
         case .mouse: return "Mouse the mouse 🐭"
+        case .custom: return BuddyMaker.customName
         case .cursor: return "Blue cursor"
         case .orb: return "Glowing dot"
-        case .cat: return "Cat 🐱"
-        case .bear: return "Bear 🐻"
         case .chick: return "Clicken 🐥"
-        case .ghost: return "Ghost 👻"
         case .classic: return "Smiley face"
         }
     }
@@ -62,12 +62,10 @@ enum BuddyStyle: String, CaseIterable {
         case .dog: return "Scout"
         case .owl: return "Hoot"
         case .mouse: return "Mouse"
+        case .custom: return BuddyMaker.customName
         case .cursor: return "Cursor"
         case .orb: return "Glow"
-        case .cat: return "Cat"
-        case .bear: return "Bear"
         case .chick: return "Clicken"
-        case .ghost: return "Ghost"
         case .classic: return "Smiley"
         }
     }
@@ -76,16 +74,13 @@ enum BuddyStyle: String, CaseIterable {
         case .dog: return "🐶"
         case .owl: return "🦉"
         case .mouse: return "🐭"
-        case .cat: return "🐱"
-        case .bear: return "🐻"
         case .chick: return "🐥"
-        case .ghost: return "👻"
         default: return nil
         }
     }
 
     static var current: BuddyStyle {
-        get { UserDefaults.standard.string(forKey: "buddyStyle").flatMap(BuddyStyle.init) ?? .dog }
+        get { UserDefaults.standard.string(forKey: "buddyStyle").flatMap(BuddyStyle.init).flatMap { $0 == .custom && !BuddyMaker.hasCustom ? nil : $0 } ?? .dog }
         set { UserDefaults.standard.set(newValue.rawValue, forKey: "buddyStyle") }
     }
 }

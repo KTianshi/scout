@@ -235,7 +235,7 @@ struct SidebarRow: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 10) {
-                if classic, let px = PixelIcon(rawValue: pane.rawValue) {
+                if classic, let px = pane == .buddy ? PixelIcon.dog : PixelIcon(rawValue: pane.rawValue) {
                     px.view.frame(width: 28, height: 28)
                 } else {
                     Image(systemName: pane.icon)
@@ -467,16 +467,20 @@ struct PillButton: View {
 
 struct BuddyPane: View {
     @ObservedObject var model: SettingsModel
+    @ObservedObject var maker = BuddyMaker.shared
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             CardTitle(text: "Look")
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 4), spacing: 10) {
-                ForEach(BuddyStyle.allCases, id: \.self) { s in
+                ForEach(BuddyStyle.allCases.filter { $0 != .custom || BuddyMaker.hasCustom }, id: \.self) { s in
                     StyleTile(style: s, selected: model.style == s) { model.pickStyle(s) }
                 }
             }
+            .id(maker.version)
         }
+
+        MakeBuddyCard(model: model, maker: maker)
 
         VStack(alignment: .leading, spacing: 8) {
             CardTitle(text: "Behavior")
@@ -494,6 +498,76 @@ struct BuddyPane: View {
             }
             .settingsGroup()
         }
+    }
+}
+
+/// "Make your own buddy": a name, a few words (and maybe a photo), and Nano Banana draws it.
+struct MakeBuddyCard: View {
+    @ObservedObject var model: SettingsModel
+    @ObservedObject var maker: BuddyMaker
+    @State private var name = ""
+    @State private var looks = ""
+    @State private var photo: URL?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            CardTitle(text: "Make your own buddy")
+            VStack(alignment: .leading, spacing: 12) {
+                if !BuddyMaker.hasKey {
+                    Text("Add a Gemini key (GEMINI_API_KEY) to secrets.env to draw your own buddy.")
+                        .lfont(14).foregroundStyle(.secondary)
+                } else {
+                    TextField("Name, like Daisy", text: $name).textFieldStyle(.roundedBorder).lfont(15)
+                    TextField("What it looks like, like a fluffy white cat with blue eyes", text: $looks).textFieldStyle(.roundedBorder).lfont(15)
+                    HStack(spacing: 10) {
+                        Button(photo == nil ? "Use a photo…" : "Change photo…") { pickPhoto() }
+                        if let photo {
+                            Text(photo.lastPathComponent).lfont(13).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+                            Button { self.photo = nil } label: { Image(systemName: "xmark.circle.fill") }
+                                .buttonStyle(.plain).foregroundStyle(.secondary).accessibilityLabel("Remove photo")
+                        }
+                    }
+                    Text("Your words and photo are sent to Google to draw the buddy. It takes about two minutes.")
+                        .lfont(13).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    HStack(spacing: 12) {
+                        Button {
+                            let n = name.trimmingCharacters(in: .whitespaces)
+                            Task {
+                                await maker.make(name: n.isEmpty ? "My buddy" : n, description: looks, photo: photo)
+                                if maker.error == nil, BuddyMaker.hasCustom { model.pickStyle(.custom) }
+                            }
+                        } label: {
+                            Text(BuddyMaker.hasCustom ? "Make a new one" : "Make my buddy").lfont(15, .semibold).padding(.horizontal, 6)
+                        }
+                        .lookoutButton(primary: true)
+                        .disabled(maker.working || (looks.trimmingCharacters(in: .whitespaces).isEmpty && photo == nil))
+                        if maker.working {
+                            ProgressView().controlSize(.small)
+                            Text(maker.progress).lfont(13).foregroundStyle(.secondary)
+                        } else if BuddyMaker.hasCustom {
+                            Button("Delete \(BuddyMaker.customName)") {
+                                if model.style == .custom { model.pickStyle(.dog) }
+                                maker.delete()
+                            }
+                            .buttonStyle(.plain).foregroundStyle(.secondary).lfont(13)
+                        }
+                    }
+                    if let e = maker.error {
+                        Label(e, systemImage: "exclamationmark.triangle.fill").lfont(13).foregroundStyle(.orange)
+                    }
+                }
+            }
+            .padding(14)
+            .settingsGroup()
+        }
+    }
+
+    func pickPhoto() {
+        let p = NSOpenPanel()
+        p.allowedContentTypes = [.image]
+        p.allowsMultipleSelection = false
+        p.message = "Pick a photo of your pet (or anything) to base your buddy on."
+        if p.runModal() == .OK { photo = p.url }
     }
 }
 
