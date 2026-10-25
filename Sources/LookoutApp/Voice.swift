@@ -374,6 +374,10 @@ final class Listener {
 
     static var speechAuthorized: Bool { SFSpeechRecognizer.authorizationStatus() == .authorized }
     static var micAuthorized: Bool { AVCaptureDevice.authorizationStatus(for: .audio) == .authorized }
+    /// Never asked yet: the Mac will show its own pop-ups, so there's nothing to find in System Settings.
+    static var micUndecided: Bool {
+        AVCaptureDevice.authorizationStatus(for: .audio) == .notDetermined || SFSpeechRecognizer.authorizationStatus() == .notDetermined
+    }
 
     /// Words the recognizer should expect: running app names plus everyday services it tends to mishear
     /// ("Calendly" came back as "Cally").

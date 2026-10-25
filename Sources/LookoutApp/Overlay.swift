@@ -496,8 +496,17 @@ struct BuddyView: View {
     var pointing: Bool
     var level: CGFloat
     var rotation: Double = -35
+    @AppStorage(ClassicLook.key) private var classicLook = false
 
     var body: some View {
+        if classicLook, let sprite = PixelIcon.sprite(for: style) {
+            EmojiBuddy(emoji: "", mood: mood, pointing: pointing, level: level, sprite: sprite)
+        } else {
+            styled
+        }
+    }
+
+    @ViewBuilder private var styled: some View {
         switch style {
         case .cursor: CursorBuddy(mood: mood, level: level, rotation: rotation)
         case .orb: OrbBuddy(mood: mood, pointing: pointing, level: level)
@@ -518,14 +527,26 @@ struct CursorBuddy: View {
     static let amber = Color(red: 1, green: 0.55, blue: 0.2)
     var color: Color { mood == .alarmed ? Self.amber : mood == .happy ? Color(red: 0.25, green: 0.78, blue: 0.5) : Self.blue }
 
+    @AppStorage(ClassicLook.key) private var classicLook = false
+
     var body: some View {
         ZStack {
-            EquilateralTriangle()
-                .fill(color)
-                .frame(width: 16, height: 16)
-                .rotationEffect(.degrees(rotation))
-                .shadow(color: color, radius: mood == .alarmed ? 12 : 8)
-                .opacity(mood == .listening || mood == .thinking ? 0 : 1)
+            Group {
+                if classicLook {
+                    // The classic white arrow. It already leans like a pointer, so it turns relative to the triangle's resting angle.
+                    PixelIcon.arrow.view
+                        .frame(width: 14, height: 22)
+                        .rotationEffect(.degrees(rotation + 35), anchor: .topLeading)
+                        .shadow(color: mood == .alarmed ? Self.amber : .black.opacity(0.35), radius: mood == .alarmed ? 8 : 1.5, x: 0.5, y: 1)
+                } else {
+                    EquilateralTriangle()
+                        .fill(color)
+                        .frame(width: 16, height: 16)
+                        .rotationEffect(.degrees(rotation))
+                        .shadow(color: color, radius: mood == .alarmed ? 12 : 8)
+                }
+            }
+            .opacity(mood == .listening || mood == .thinking ? 0 : 1)
             CursorWaveform(level: level, color: color)
                 .opacity(mood == .listening ? 1 : 0)
             CursorSpinner(color: color)
@@ -669,6 +690,8 @@ struct EmojiBuddy: View {
     var mood: BuddyMood
     var pointing: Bool
     var level: CGFloat
+    /// Classic look: a pixel sprite in place of the emoji.
+    var sprite: PixelIcon? = nil
     @State private var bob = false
     @State private var pulse = false
 
@@ -687,8 +710,10 @@ struct EmojiBuddy: View {
                 .frame(width: 44, height: 44)
                 .blur(radius: 10)
                 .opacity(mood == .idle ? 0.25 : 0.6)
-            Text(emoji)
-                .font(.system(size: 44))
+            Group {
+                if let sprite { sprite.view.frame(width: 40, height: 40) }
+                else { Text(emoji).font(.system(size: 44)) }
+            }
                 .shadow(color: .black.opacity(0.25), radius: 4, y: 2)
                 .scaleEffect(mood == .listening ? 1 + level * 0.2 : 1)
             if pointing {

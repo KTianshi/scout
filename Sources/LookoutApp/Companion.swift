@@ -49,7 +49,7 @@ final class Companion {
     private var pausedApprovalFor: Int?
     private var knownRemoteApps: Set<pid_t> = []
     private var dismissedRemoteApps: Set<pid_t> = []
-    private var stuck = StuckDetector()
+    private(set) var stuck = StuckDetector()
 
     // MARK: Start
 
@@ -87,8 +87,8 @@ final class Companion {
         let hello = missing
             ? "Hi, I'm Lookout. I need a couple of permissions before I can see your screen. I've opened a window to help."
             : "Hi, I'm Lookout. Hold \(TalkShortcut.current.spoken) any time to ask me something."
-        overlay.say(hello)
-        if missing && !demoBrowser.window.isVisible { setup.show() }
+        // With the setup window open, say it but don't draw a bubble over the window's button.
+        if missing && !demoBrowser.window.isVisible { setup.show() } else { overlay.say(hello) }
         // Only speak up when something is needed (permissions). Every other launch is silent: a voice out of
         // nowhere after a restart is startling, especially for an older person.
         if missing { await speech.speak(hello) } else { try? await Task.sleep(nanoseconds: 3_000_000_000) }
@@ -780,7 +780,10 @@ final class Companion {
         let cleared = clearedPages[page].map { Date().timeIntervalSince($0) < 600 } ?? false
         // Claude already called this page a scam: don't re-ask every pass (a blinking cursor changes the fingerprint).
         let knownScam = scamPages[page].map { Date().timeIntervalSince($0) < 120 } ?? false
-        stuck.observe(fingerprint: snap.context.fingerprint, window: (snap.context.appName ?? "") + (snap.context.windowTitle ?? ""))
+        // Without screen text every screen looks "unchanged", so ordinary clicking would read as stuck.
+        if !snap.context.text.isEmpty {
+            stuck.observe(fingerprint: snap.context.fingerprint, window: (snap.context.appName ?? "") + (snap.context.windowTitle ?? ""))
+        }
         // Preview first: if this screen is suspicious enough for outside checks (Claude, and CRS on the
         // sender), the playbook observation is committed once, together with their answers as evidence.
         var result = pipeline.evaluate(snap.context, commitPlaybook: false)
@@ -1156,14 +1159,13 @@ final class Companion {
     func offerHelpBecauseStuck() {
         guard !busy, !listening, !card.isShowing else { return }
         overlay.setMood(.happy)
-        overlay.say("Want some help? Just hold \(TalkShortcut.current.spoken) and tell me what you're trying to do.", title: "Need a hand?")
         card.show(title: "Want some help?", message: "I can show you where to click.", alarmed: false, buttons: [
             .init(title: "Yes, please", primary: true) { [weak self] in
                 guard let self else { return }
                 if Listener.canUseMicrophone { self.overlay.say("Hold \(TalkShortcut.current.spoken), and tell me what you're trying to do.") }
                 else { AppDelegate.shared?.askTyped() }
             },
-            .init(title: "No thanks", primary: false) { [weak self] in self?.overlay.reset() },
+            .init(title: "No thanks", primary: false) { [weak self] in self?.stuck.snooze(); self?.overlay.reset() },
         ])
         Task { await speech.speak("Want some help? I'm right here.") }
     }
@@ -1216,8 +1218,12 @@ final class StuckDetector {
     private var lastOffer = Date.distantPast
     private var monitor: Any?
     private var onStuck: (() -> Void)?
-    var window: TimeInterval = 40
-    var minClicks = 6
+    var window: TimeInterval = 60
+    var minClicks = 10
+    /// At most one offer every 15 minutes; "No thanks" quiets it for 2 hours.
+    var cooldown: TimeInterval = 900
+
+    func snooze() { lastOffer = Date().addingTimeInterval(7200 - cooldown) }
 
     func start(onStuck: @escaping () -> Void) {
         self.onStuck = onStuck
@@ -1236,7 +1242,7 @@ final class StuckDetector {
         }
         clicks.removeAll { now.timeIntervalSince($0) > window }
         guard StuckHelp.enabled else { clicks.removeAll(); return }
-        if now.timeIntervalSince(sameSince) >= window, clicks.count >= minClicks, now.timeIntervalSince(lastOffer) > 180 {
+        if now.timeIntervalSince(sameSince) >= window, clicks.count >= minClicks, now.timeIntervalSince(lastOffer) > cooldown {
             lastOffer = now
             clicks.removeAll()
             onStuck?()

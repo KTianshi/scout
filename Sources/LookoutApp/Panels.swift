@@ -227,10 +227,14 @@ struct PayPauseView: View {
 final class SetupWindow {
     private var window: NSWindow?
     func show() {
+        DebugShot.take("setup")
         if let w = window { w.makeKeyAndOrderFront(nil); NSApp.activate(ignoringOtherApps: true); return }
-        let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 760, height: 720), styleMask: [.titled, .closable], backing: .buffered, defer: false)
+        let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 440, height: 560), styleMask: [.titled, .closable, .fullSizeContentView], backing: .buffered, defer: false)
         w.title = "Set up Lookout"
-        w.contentView = NSHostingView(rootView: SetupView())
+        w.titleVisibility = .hidden
+        w.titlebarAppearsTransparent = true
+        w.isMovableByWindowBackground = true
+        w.contentView = NSHostingView(rootView: SetupView(close: { [weak w] in w?.close() }).lookoutTheme())
         w.center()
         w.isReleasedWhenClosed = false
         w.makeKeyAndOrderFront(nil)
@@ -239,69 +243,172 @@ final class SetupWindow {
     }
 }
 
+/// Permissions, one at a time: one icon, one short sentence, a picture of exactly what to turn on, one button.
 struct SetupView: View {
+    var close: () -> Void = {}
+    /// For rendering previews: force a step (0...2) or the finished state (3).
+    var previewStep: Int? = nil
+    @Environment(\.classic) private var classic
     @State private var tick = 0
-    let timer = Timer.publish(every: 1.5, on: .main, in: .common).autoconnect()
+    @State private var skipped: Set<String> = []
+    let timer = Timer.publish(every: 1.0, on: .main, in: .common).autoconnect()
 
-    struct Item: Identifiable {
+    struct Step: Identifiable {
         let id: String
         var icon: String
+        var pixel: PixelIcon
         var title: String
         var why: String
         var granted: Bool
         var pane: String
+        /// Turned on with a switch in System Settings (false: the Mac asks with its own pop-ups).
+        var inSettings = true
+        /// One extra line for after System Settings opens.
+        var after: String = ""
         var request: () -> Void
     }
 
-    var items: [Item] {
+    var steps: [Step] {
         _ = tick
         return [
-            Item(id: "screen", icon: "rectangle.dashed.badge.record", title: "See your screen",
-                 why: "So I can spot fake warnings and show you where to click.", granted: Permissions.screenRecording,
-                 pane: "Privacy_ScreenCapture", request: Permissions.requestScreenRecording),
-            Item(id: "ax", icon: "hand.point.up.left.fill", title: "Read buttons and text",
-                 why: "So I can point at the exact button you need.", granted: Permissions.accessibility,
-                 pane: "Privacy_Accessibility", request: Permissions.requestAccessibility),
-            Item(id: "mic", icon: "mic.fill", title: "Hear your questions",
-                 why: "Hold \(TalkShortcut.current.spoken), then just talk to me.", granted: Listener.micAuthorized && Listener.speechAuthorized,
-                 pane: "Privacy_Microphone", request: { Task { _ = await Listener.requestPermissions() } }),
+            Step(id: "screen", icon: "eye", pixel: .eye, title: "Let me see your screen",
+                 why: "So I can spot fake warnings and point to the right button.", granted: Permissions.screenRecording,
+                 pane: "Privacy_ScreenCapture", after: "If your Mac asks, click Quit & Reopen.", request: Permissions.requestScreenRecording),
+            Step(id: "ax", icon: "hand.point.up.left", pixel: .hand, title: "Let me read buttons",
+                 why: "So I can point at exactly what to click.", granted: Permissions.accessibility,
+                 pane: "Privacy_Accessibility", after: "Type your Mac password if asked.", request: Permissions.requestAccessibility),
+            Step(id: "mic", icon: "mic", pixel: .talking, title: "Let me hear you",
+                 why: "Hold \(TalkShortcut.current.spoken) and just ask.", granted: Listener.micAuthorized && Listener.speechAuthorized,
+                 pane: "Privacy_Microphone", inSettings: !Listener.micUndecided,
+                 request: { if Listener.micUndecided { Task { _ = await Listener.requestPermissions() } } else { Permissions.openSettings("Privacy_Microphone") } }),
         ]
     }
 
+    /// The first step that is neither done nor skipped; nil when everything is handled.
+    var current: Step? {
+        if let p = previewStep { return p < steps.count ? steps[p] : nil }
+        return steps.first { !$0.granted && !skipped.contains($0.id) }
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 22) {
-            Text("Hi! I'm Lookout.").font(.system(size: 40, weight: .bold, design: .rounded))
-            Text("I need your OK for three things. Click each blue button, then switch Lookout on in the window that opens.")
-                .font(.system(size: 22, design: .rounded)).foregroundStyle(.secondary)
-            ForEach(items) { item in
-                HStack(spacing: 18) {
-                    Image(systemName: item.icon).font(.system(size: 34)).frame(width: 56)
-                        .foregroundStyle(item.granted ? .green : .blue)
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(item.title).font(.system(size: 24, weight: .semibold, design: .rounded))
-                        Text(item.why).font(.system(size: 18, design: .rounded)).foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                    if item.granted {
-                        Label("Done", systemImage: "checkmark.circle.fill").font(.system(size: 22, weight: .semibold)).foregroundStyle(.green)
-                    } else {
-                        HStack(spacing: 6) {
-                            Image(systemName: "arrow.right").font(.system(size: 22, weight: .bold)).foregroundStyle(.blue)
-                            Button("Allow") { item.request(); Permissions.openSettings(item.pane) }
-                                .font(.system(size: 20, weight: .semibold)).controlSize(.large).buttonStyle(.borderedProminent)
-                        }
-                    }
+        VStack(spacing: 0) {
+            HStack(spacing: 6) {
+                ForEach(steps) { st in
+                    Capsule()
+                        .fill(dotColor(st))
+                        .frame(width: st.id == current?.id ? 22 : 7, height: 7)
                 }
-                .padding(18)
-                .background(RoundedRectangle(cornerRadius: 16).fill(Color.gray.opacity(0.1)))
             }
-            Text("Tip: after switching on Screen Recording, macOS may ask you to quit and reopen Lookout. That's normal.")
-                .font(.system(size: 17, design: .rounded)).foregroundStyle(.secondary)
-            Text("Even without these, you can try the demo from the Lookout menu at the top of your screen.")
-                .font(.system(size: 17, design: .rounded)).foregroundStyle(.secondary)
+            .padding(.top, 34)
+            .animation(.easeInOut(duration: 0.25), value: current?.id)
+            .padding(.bottom, 22)
+
+            if let st = current {
+                VStack(spacing: 14) {
+                    stepIcon(st.icon, pixel: st.pixel)
+                        .foregroundStyle(classic ? ClassicLook.blue : Color.accentColor)
+                        .frame(width: 72, height: 72)
+                        .background(Circle().fill(classic ? Color.white : Color.accentColor.opacity(0.12)))
+                        .overlay(Circle().stroke(classic ? ClassicLook.blue : .clear, lineWidth: 3))
+                        .padding(.bottom, 6)
+                    Text(st.title)
+                        .lfont(24, .semibold)
+                        .foregroundStyle(classic ? ClassicLook.blue : .primary)
+                        .multilineTextAlignment(.center)
+                    Text(st.why)
+                        .lfont(17)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                    howTo(st).padding(.top, 8)
+                }
+                .id(st.id)
+                .transition(.asymmetric(insertion: .move(edge: .trailing).combined(with: .opacity), removal: .move(edge: .leading).combined(with: .opacity)))
+            } else {
+                VStack(spacing: 14) {
+                    stepIcon("checkmark", pixel: .check)
+                        .foregroundStyle(.green)
+                        .frame(width: 72, height: 72)
+                        .background(Circle().fill(classic ? Color.white : Color.green.opacity(0.14)))
+                        .overlay(Circle().stroke(classic ? Color(red: 0.24, green: 0.62, blue: 0.12) : .clear, lineWidth: 3))
+                        .padding(.bottom, 6)
+                    Text(skipped.isEmpty ? "You're all set" : "Ready when you are")
+                        .lfont(24, .semibold)
+                        .foregroundStyle(classic ? ClassicLook.blue : .primary)
+                    Text(skipped.isEmpty ? "I'll stay in the corner of your screen." : "You can finish this later from the Lookout menu.")
+                        .lfont(17)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+                .transition(.opacity)
+            }
+
+            Spacer(minLength: 20)
+
+            VStack(spacing: 12) {
+                if let st = current {
+                    Button {
+                        if st.inSettings { st.request(); Permissions.openSettings(st.pane) } else { st.request() }
+                    } label: {
+                        Text(st.inSettings ? "Open System Settings" : "Allow").lfont(17, .semibold).frame(maxWidth: .infinity).padding(.vertical, 6)
+                    }
+                    .lookoutButton(primary: true)
+                    .keyboardShortcut(.defaultAction)
+                    notNow(st)
+                } else {
+                    Button { close() } label: {
+                        Text("Done").lfont(17, .semibold).frame(maxWidth: .infinity).padding(.vertical, 6)
+                    }
+                    .lookoutButton(primary: true)
+                    .keyboardShortcut(.defaultAction)
+                }
+            }
+            .frame(height: 84, alignment: .top)
+            .padding(.bottom, 28)
         }
-        .padding(36)
-        .frame(width: 760)
+        .padding(.horizontal, 40)
+        .frame(width: 440, height: 560)
+        .foregroundStyle(classic ? Color.black : Color.primary)
+        .background(alignment: .top) {
+            if classic { ZStack(alignment: .top) { ClassicLook.face; ClassicBanner().frame(height: 108) } }
+        }
+        .animation(.easeInOut(duration: 0.35), value: current?.id)
         .onReceive(timer) { _ in tick += 1 }
     }
+
+    /// Exactly what to do, as a short numbered list.
+    func howTo(_ st: Step) -> some View {
+        let lines = st.inSettings
+            ? ["Click Open System Settings below.", "Find Lookout in the list.", "Turn on the switch next to it."] + (st.after.isEmpty ? [] : [st.after])
+            : ["Click Allow below.", "Your Mac asks twice: once for the microphone, once for speech.", "Click OK or Allow both times."]
+        return VStack(alignment: .leading, spacing: 6) {
+            ForEach(Array(lines.enumerated()), id: \.offset) { i, line in
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text("\(i + 1).").lfont(15, .semibold).frame(width: 18, alignment: .trailing)
+                    Text(line).lfont(15).fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    @ViewBuilder func stepIcon(_ symbol: String, pixel: PixelIcon) -> some View {
+        if classic { pixel.view.frame(width: 40, height: 40) }
+        else { Image(systemName: symbol).font(.system(size: 30)) }
+    }
+
+    @ViewBuilder func notNow(_ st: Step) -> some View {
+        let b = Button { withAnimation(.easeInOut(duration: 0.3)) { _ = skipped.insert(st.id) } } label: { Text("Not now").lfont(15) }
+        if classic { b.lookoutButton(primary: false) } else { b.buttonStyle(.plain).foregroundStyle(.secondary) }
+    }
+
+    func dotColor(_ st: Step) -> Color {
+        if let p = previewStep, let i = steps.firstIndex(where: { $0.id == st.id }) {
+            return i < p ? .green : (i == p ? .accentColor : Color.primary.opacity(0.15))
+        }
+        if st.granted { return .green }
+        if st.id == current?.id { return .accentColor }
+        return Color.primary.opacity(0.15)
+    }
 }
+
