@@ -1042,12 +1042,13 @@ final class Companion {
         let nc = NSWorkspace.shared.notificationCenter
         nc.addObserver(forName: NSWorkspace.didLaunchApplicationNotification, object: nil, queue: .main) { [weak self] n in
             guard let app = n.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication else { return }
-            MainActor.assumeIsolated { self?.checkRemote(app) }
+            Task { @MainActor in self?.checkRemote(app) }
         }
         nc.addObserver(forName: NSWorkspace.didTerminateApplicationNotification, object: nil, queue: .main) { [weak self] n in
             guard let app = n.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication else { return }
-            MainActor.assumeIsolated {
-                if self?.knownRemoteApps.remove(app.processIdentifier) != nil {
+            let pid = app.processIdentifier
+            Task { @MainActor in
+                if self?.knownRemoteApps.remove(pid) != nil {
                     self?.pipeline.engine.forget([.remoteAccessAppRunning])
                 }
             }
@@ -1159,6 +1160,15 @@ final class Companion {
 
 /// "Seems stuck": same window, screen not changing, and repeated clicks for a while.
 @MainActor
+/// "Need a hand?" when someone seems stuck. Off by default: it guessed wrong too often (waiting for a
+/// verification code looks like being stuck). Settings ▸ Buddy turns it on.
+enum StuckHelp {
+    nonisolated static var enabled: Bool {
+        get { UserDefaults.standard.bool(forKey: "stuckHelp") }
+        set { UserDefaults.standard.set(newValue, forKey: "stuckHelp") }
+    }
+}
+
 final class StuckDetector {
     private var clicks: [Date] = []
     private var sameSince = Date()
@@ -1173,7 +1183,8 @@ final class StuckDetector {
     func start(onStuck: @escaping () -> Void) {
         self.onStuck = onStuck
         monitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown]) { [weak self] _ in
-            MainActor.assumeIsolated { self?.clicks.append(Date()) }
+            // (Not MainActor.assumeIsolated: that check crashed the follow timer.)
+            Task { @MainActor in self?.clicks.append(Date()) }
         }
     }
 
@@ -1185,6 +1196,7 @@ final class StuckDetector {
             return
         }
         clicks.removeAll { now.timeIntervalSince($0) > window }
+        guard StuckHelp.enabled else { clicks.removeAll(); return }
         if now.timeIntervalSince(sameSince) >= window, clicks.count >= minClicks, now.timeIntervalSince(lastOffer) > 180 {
             lastOffer = now
             clicks.removeAll()

@@ -45,6 +45,7 @@ final class SettingsModel: ObservableObject {
     @Published var autoGuide = GuideMode.automatic
     @Published var wakeWord = WakeListener.enabled
     @Published var deepCheck = DeepCheck.enabled
+    @Published var stuckHelp = StuckHelp.enabled
     @Published var elderName = LookoutConfig.elderName
     @Published var familyName = LookoutConfig.familyName
 
@@ -100,6 +101,11 @@ final class SettingsModel: ObservableObject {
         shortcut = s
         TalkShortcut.current = s
         shortcutTaken = !companion.registerTalkShortcut()
+    }
+
+    func setStuckHelp(_ on: Bool) {
+        stuckHelp = on
+        StuckHelp.enabled = on
     }
 
     func setDeepCheck(_ on: Bool) {
@@ -427,6 +433,11 @@ struct BuddyPane: View {
                 ToggleRow(icon: "eye.fill", tint: .blue, title: "Show Lookout on my screen",
                           detail: model.visible ? "Your buddy is on screen." : "Hidden. Lookout still warns you and answers when you ask.",
                           isOn: Binding(get: { model.visible }, set: { model.setVisible($0) }))
+                Divider().padding(.leading, 58)
+                ToggleRow(icon: "hand.wave.fill", tint: .teal, title: "Offer help when I seem stuck",
+                          detail: model.stuckHelp ? "If you stay on one screen and keep clicking, Lookout asks if you want help."
+                                                  : "Off. Lookout only helps when you ask.",
+                          isOn: Binding(get: { model.stuckHelp }, set: { model.setStuckHelp($0) }))
                 Divider().padding(.leading, 58)
                 ToggleRow(icon: "cursorarrow.motionlines", tint: .purple, title: "Follow my pointer",
                           detail: model.follows ? "Lookout stays next to your mouse pointer." : "Lookout waits in the corner. Drag it anywhere, or click it to ask.",
