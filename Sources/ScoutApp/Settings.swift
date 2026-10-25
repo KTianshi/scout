@@ -487,8 +487,8 @@ struct BuddyPane: View {
                           isOn: Binding(get: { model.visible }, set: { model.setVisible($0) }))
                 Divider().padding(.leading, 14)
                 ToggleRow(icon: "hand.wave.fill", tint: .teal, title: "Offer help when I seem stuck",
-                          detail: model.stuckHelp ? "If you stay on one screen and keep clicking, Scout asks if you want help."
-                                                  : "Off. Scout only helps when you ask.",
+                          detail: model.stuckHelp ? "Scout offers help if you keep clicking on one screen."
+                                                  : "Scout only helps when you ask.",
                           isOn: Binding(get: { model.stuckHelp }, set: { model.setStuckHelp($0) }))
                 Divider().padding(.leading, 14)
                 ToggleRow(icon: "cursorarrow.motionlines", tint: .purple, title: "Follow my pointer",
