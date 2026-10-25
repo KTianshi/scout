@@ -148,7 +148,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         switch self {
         case .voice: return "Voice"
         case .buddy: return "Buddy"
-        case .talking: return "Talking"
+        case .talking: return "Asking"
         case .safety: return "Safety"
         }
     }
@@ -712,7 +712,7 @@ struct TalkingPane: View {
         VStack(alignment: .leading, spacing: 8) {
             CardTitle(text: "Hands-free")
             ToggleRow(icon: "waveform.badge.mic", tint: .pink, title: "Start by saying “Hey Scout”",
-                      detail: "Talk without pressing keys. Scout only listens for its name, and nothing leaves your Mac until you say it.",
+                      detail: "Talk without pressing any keys: just say its name first.",
                       isOn: Binding(get: { model.wakeWord }, set: { model.setWakeWord($0) }))
                 .settingsGroup()
         }
