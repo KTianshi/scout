@@ -200,23 +200,17 @@ final class SystemSpeech: NSObject, SpeechOutput, AVSpeechSynthesizerDelegate {
 /// Cartesia voices offered in the menu: clear and friendly, picked for older listeners.
 struct LookoutVoice: Equatable {
     let id: String
-    let name: String
-
-    /// "Katie (clear, friendly)" → "Katie" and "Clear, friendly".
-    var label: String { String(name.prefix { $0 != " " }) }
-    var detail: String {
-        guard let open = name.firstIndex(of: "(") else { return "" }
-        let d = name[name.index(after: open)...].dropLast()
-        return d.prefix(1).uppercased() + d.dropFirst()
-    }
+    /// Described by how it sounds, not a person's name: it's the buddy's voice, and the buddy may be a dog.
+    let label: String
+    let detail: String
 
     static let all: [LookoutVoice] = [
-        .init(id: "f786b574-daa5-4673-aa0c-cbe3e8534c02", name: "Katie (clear, friendly)"),
-        .init(id: "db6b0ed5-d5d3-463d-ae85-518a07d3c2b4", name: "Skylar (warm, American)"),
-        .init(id: "9626c31c-bec5-4cca-baa8-f8ba9e84c8bc", name: "Jacqueline (reassuring)"),
-        .init(id: "47c38ca4-5f35-497b-b1a3-415245fb35e1", name: "Daniel (crisp, male)"),
-        .init(id: "0ad65e7f-006c-47cf-bd31-52279d487913", name: "Rupert (caring, older male)"),
-        .init(id: "b24f41fd-00a3-4cd8-992a-a0c9f13f3ef1", name: "Clive (calm, British)"),
+        .init(id: "f786b574-daa5-4673-aa0c-cbe3e8534c02", label: "Clear and friendly", detail: "Higher voice"),
+        .init(id: "db6b0ed5-d5d3-463d-ae85-518a07d3c2b4", label: "Warm and bright", detail: "Higher voice, American"),
+        .init(id: "9626c31c-bec5-4cca-baa8-f8ba9e84c8bc", label: "Calm and reassuring", detail: "Higher voice"),
+        .init(id: "47c38ca4-5f35-497b-b1a3-415245fb35e1", label: "Crisp and clear", detail: "Lower voice"),
+        .init(id: "0ad65e7f-006c-47cf-bd31-52279d487913", label: "Kind and gentle", detail: "Lower, older voice"),
+        .init(id: "b24f41fd-00a3-4cd8-992a-a0c9f13f3ef1", label: "Calm and British", detail: "Lower voice"),
     ]
 
     static var current: LookoutVoice {

@@ -505,8 +505,9 @@ struct BuddyView: View {
     @AppStorage(ClassicLook.key) private var classicLook = false
 
     var body: some View {
-        // The mascots use their drawings in both looks; the other buddies turn into pixels in the classic look.
-        if let sprite = PixelIcon.sprite(for: style), classicLook || SpriteArt.has(sprite) {
+        // Every buddy is pixel art in both looks. Only the cursor differs: a modern blue triangle normally,
+        // the classic white arrow in the classic look (drawn by CursorBuddy).
+        if let sprite = PixelIcon.sprite(for: style), sprite != .custom || SpriteArt.has(.custom) {
             EmojiBuddy(emoji: "", mood: mood, pointing: pointing, level: level, sprite: sprite)
         } else {
             styled

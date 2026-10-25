@@ -475,6 +475,13 @@ extension PixelIcon {
         case (.chick, .happy): return patches(.blink)
         case (.chick, .alarmed): return [(3, 6, "K"), (3, 9, "K"), (7, 7, "KK"), (8, 7, "OO")]
 
+        case (.smiley, .blink): return [(5, 5, "b"), (5, 10, "b"), (6, 5, "b"), (6, 10, "b")]
+        case (.smiley, .talk): return [(10, 5, "KKKKKK")]
+        case (.smiley, .look): return [(4, 5, "K"), (4, 10, "K"), (7, 5, "b"), (7, 10, "b")]
+        case (.smiley, .happy): return patches(.blink)
+        case (.smiley, .alarmed): return [(4, 5, "K"), (4, 10, "K"), (9, 3, "b"), (9, 12, "b"), (10, 4, "b"), (10, 11, "b"),
+                                          (11, 5, "bbbbbb"), (10, 7, "KK"), (11, 7, "KK")]
+
         default: return []
         }
     }
