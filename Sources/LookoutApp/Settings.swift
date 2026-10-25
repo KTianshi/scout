@@ -565,14 +565,16 @@ struct TalkingPane: View {
         }
         VStack(alignment: .leading, spacing: 8) {
             CardTitle(text: "Hands-free")
-            ToggleRow(icon: "waveform.badge.mic", tint: .pink, title: "Say “Hey Lookout”",
-                      detail: "Your voice stays on this Mac until you say it.",
+            ToggleRow(icon: "waveform.badge.mic", tint: .pink, title: "Start by saying “Hey Lookout”",
+                      detail: "Talk without pressing keys. Lookout only listens for its name, and nothing leaves your Mac until you say it.",
                       isOn: Binding(get: { model.wakeWord }, set: { model.setWakeWord($0) }))
                 .settingsGroup()
         }
         VStack(alignment: .leading, spacing: 8) {
             CardTitle(text: "Step by step")
-            ToggleRow(icon: "figure.walk", tint: .orange, title: "Walk me through it automatically",
+            ToggleRow(icon: "figure.walk", tint: .orange, title: "Give me the next step on its own",
+                      detail: model.autoGuide ? "After each click, Lookout looks again and tells you what to do next."
+                                              : "Lookout waits until you ask for the next step.",
                       isOn: Binding(get: { model.autoGuide }, set: { model.setAutoGuide($0) }))
                 .settingsGroup()
         }
@@ -610,12 +612,15 @@ struct SafetyPane: View {
         VStack(alignment: .leading, spacing: 8) {
             CardTitle(text: "Protection")
             ToggleRow(icon: "shield.lefthalf.filled", tint: .green, title: "Watch for scams",
+                      detail: "Spots warning signs, like fake virus alerts or requests for gift cards, and stops you before you call or pay.",
                       isOn: Binding(get: { model.guardian }, set: { model.setGuardian($0) }))
                 .settingsGroup()
-            ToggleRow(icon: "sparkle.magnifyingglass", tint: .indigo, title: "Deep check with Claude",
-                      detail: "Catches scams with no warning signs. Screen text is sent to Claude.",
+            ToggleRow(icon: "sparkle.magnifyingglass", tint: .indigo, title: "Double-check with Claude",
+                      detail: "Claude also reads each new screen to catch scams with no warning signs, like a friendly stranger asking for money. This sends screen text to Claude.",
                       isOn: Binding(get: { model.deepCheck }, set: { model.setDeepCheck($0) }))
                 .settingsGroup()
+                .disabled(!model.guardian)
+                .opacity(model.guardian ? 1 : 0.5)
         }
         if LookoutConfig.familyEnabled {
         VStack(alignment: .leading, spacing: 8) {
