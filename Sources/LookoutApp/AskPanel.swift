@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 
 /// A Spotlight-style box for typing a question. It's a non-activating panel, so the app the person was
-/// using stays in front and Lookout answers about that screen, not about this box.
+/// using stays in front and Scout answers about that screen, not about this box.
 @MainActor
 final class AskPanel {
     private var panel: KeyPanel?
@@ -64,7 +64,7 @@ struct AskView: View {
                     .frame(width: 64, height: 64)
                     .scaleEffect(0.6)
                     .frame(width: 40, height: 40)
-                TextField("Ask Lookout anything…", text: $text)
+                TextField("Ask Scout anything…", text: $text)
                     .textFieldStyle(.plain)
                     .font(.system(size: 24, weight: .medium))
                     .focused($focused)

@@ -108,13 +108,13 @@ final class CartesiaSpeech: NSObject, SpeechOutput, AVAudioPlayerDelegate {
         }
     }
 
-    /// Lines Lookout says during scams and common moments, generated ahead of time so they play
+    /// Lines Scout says during scams and common moments, generated ahead of time so they play
     /// instantly and keep working offline.
     static func standardLines() -> [String] {
         var lines = HardRules.all.map(\.spoken)
         let fam = LookoutConfig.familyName
         lines += [
-            "Hi, I'm Lookout. Hold \(TalkShortcut.current.spoken) any time to ask me something.",
+            "Hi, I'm Scout. Hold \(TalkShortcut.current.spoken) any time to ask me something.",
             "There. It's gone. You did great.",
             "Good choice. Nothing was sent.",
             "Want some help? I'm right here.",
@@ -271,7 +271,7 @@ enum TalkShortcut: String, CaseIterable {
         case .optionSpace: return "⌥ Space"
         }
     }
-    /// How Lookout says it out loud.
+    /// How Scout says it out loud.
     var spoken: String {
         switch self {
         case .ctrlOptionSpace: return "Control, Option and Space"
@@ -384,7 +384,7 @@ final class Listener {
     var hints: [String] = []
     static let commonNames = ["Calendly", "Gmail", "Google Calendar", "Google Docs", "Google Drive", "Zoom", "FaceTime", "WhatsApp",
                               "Facebook", "Instagram", "YouTube", "Netflix", "Spotify", "Amazon", "PayPal", "Venmo", "Zelle", "iCloud",
-                              "Safari", "Chrome", "Slack", "Outlook", "Medicare", "Lookout", "PDF", "Wi-Fi", "Bluetooth", "AirDrop"]
+                              "Safari", "Chrome", "Slack", "Outlook", "Medicare", "Scout", "Lookout", "PDF", "Wi-Fi", "Bluetooth", "AirDrop"]
 
     func start() throws {
         latest = ""
@@ -443,10 +443,10 @@ final class Listener {
     }
 }
 
-// MARK: - "Hey Lookout"
+// MARK: - "Hey Scout"
 
 /// Optional hands-free wake word. Listens with Apple's on-device recognizer only (never the network), so nothing
-/// leaves the Mac until the person says "Hey Lookout". Then everything they say until a short pause is the question.
+/// leaves the Mac until the person says "Hey Scout". Then everything they say until a short pause is the question.
 @MainActor
 final class WakeListener {
     static var enabled: Bool {
@@ -471,11 +471,14 @@ final class WakeListener {
     private var lastChange = Date()
 
     /// "hey lookout", and how the recognizer tends to hear it.
-    static let phrases = ["hey lookout", "hey look out", "hey lookouts", "hey look at", "hi lookout", "hi look out", "okay lookout",
-                          "ok lookout", "hey, lookout", "hey lookup"]
-    /// Said on its own at the start of an utterance ("Lookout, what is this?"). Only at the start, so a sentence
-    /// that merely contains "look out" doesn't wake it.
-    static let leading = ["lookout", "look out"]
+    /// "Hey Scout" (the new name), and how the recognizer tends to hear it ("Scott" most of all). "Hey Scout"
+    /// still works during the rename.
+    static let phrases = ["hey scout", "hey scott", "hey skout", "hey scouts", "hey scot", "hi scout", "hi scott",
+                          "okay scout", "ok scout", "hey, scout", "hey, scott",
+                          "hey lookout", "hey look out", "hey lookouts", "hi lookout", "okay lookout", "ok lookout", "hey, lookout"]
+    /// Said on its own at the start of an utterance ("Scout, what is this?"). Only at the start, so a sentence
+    /// that merely contains the word doesn't wake it.
+    static let leading = ["scout", "lookout"]
 
     var canRun: Bool { recognizer?.supportsOnDeviceRecognition == true && Listener.micAuthorized && Listener.speechAuthorized }
 
@@ -528,7 +531,7 @@ final class WakeListener {
         req.requiresOnDeviceRecognition = true
         req.shouldReportPartialResults = true
         req.taskHint = .dictation
-        req.contextualStrings = ["Hey Lookout", "Lookout"] + Listener.commonNames
+        req.contextualStrings = ["Hey Scout", "Scout", "Hey Lookout", "Lookout"] + Listener.commonNames
         feed.swap(req)
         startedAt = Date()
         transcript = ""

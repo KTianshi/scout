@@ -3,7 +3,7 @@
 ## OpenClicky — MIT License
 https://github.com/jasonkneen/openclicky — Copyright (c) 2026 Jason Kneen
 
-Lookout does not include OpenClicky source files. These parts are adapted from its patterns (rewritten, not copied verbatim):
+Scout does not include OpenClicky source files. These parts are adapted from its patterns (rewritten, not copied verbatim):
 - `Sources/LookoutCore/PointTags.swift` — the `[POINT:x,y:label]` tag protocol and the trailing-partial-tag stripping used while streaming (from `CompanionManager+PointTagParsing.swift`).
 - `Sources/LookoutApp/Overlay*.swift` — transparent, click-through, all-spaces overlay window setup (from `OverlayWindow.swift`).
 - `Sources/LookoutApp/Voice.swift` — Apple Speech streaming transcription session shape (from `AppleSpeechTranscriptionProvider.swift`).
@@ -12,7 +12,7 @@ Lookout does not include OpenClicky source files. These parts are adapted from i
 ## Clicky — MIT License
 https://github.com/farzaa/clicky — Copyright (c) 2026 Farza
 
-Adapted (rewritten in Lookout's code, not copied verbatim):
+Adapted (rewritten in Scout's code, not copied verbatim):
 - `Sources/LookoutApp/Overlay.swift` — the default "Cursor" buddy: the glowing #3380FF equilateral triangle beside the pointer, its listening waveform and thinking spinner, the typed "right here!" pointer tag with its pop-in, and flying back to the pointer when done (from `OverlayWindow.swift`).
 - `Sources/LookoutApp/Overlay.swift` — `flyArc`: quadratic bezier flight with smoothstep easing and a mid-flight scale pulse (from `OverlayWindow.animateBezierFlightArc`).
 - `Sources/LookoutCore/ClaudeClient.swift`, `CartesiaClient.swift` — `warmUp()`: pre-establishing the TLS connection before the first real request (from `ClaudeAPI.warmUpTLSConnectionIfNeeded`).

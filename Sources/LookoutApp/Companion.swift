@@ -39,7 +39,7 @@ final class Companion {
     /// Pages Claude confidently called safe, and when. The guardian stays quiet there for a while.
     private var clearedPages: [String: Date] = [:]
     private var scamPages: [String: Date] = [:]
-    /// Developer tools are full of scam words (code, docs, chats about Lookout itself) and aren't where our users get scammed.
+    /// Developer tools are full of scam words (code, docs, chats about Scout itself) and aren't where our users get scammed.
     static let ignoredApps: Set<String> = ["Terminal", "iTerm2", "Xcode", "Code", "Visual Studio Code", "Cursor", "Warp", "Ghostty", "Claude"]
     private var lastConfirmedFingerprint: Int?
     private var stableFingerprint: Int?
@@ -71,7 +71,7 @@ final class Companion {
         if let c = speech as? CartesiaSpeech, c.client.isConfigured {
             Task { let n = await c.client.prewarm(CartesiaSpeech.standardLines()); Log.info("cartesia: prewarmed \(n) lines") }
         }
-        Log.info("Lookout started. voice=\(speech.engineName) model=\(claude.model) key=\(claude.isConfigured ? "yes" : "no") screen=\(Permissions.screenRecording) ax=\(Permissions.accessibility) mic=\(Listener.canUseMicrophone)")
+        Log.info("Scout started. voice=\(speech.engineName) model=\(claude.model) key=\(claude.isConfigured ? "yes" : "no") screen=\(Permissions.screenRecording) ax=\(Permissions.accessibility) mic=\(Listener.canUseMicrophone)")
         Task { await greet() }
     }
 
@@ -85,8 +85,8 @@ final class Companion {
         overlay.setMood(.happy)
         let missing = (!Permissions.screenRecording || !Permissions.accessibility) && !demoBrowser.window.isVisible
         let hello = missing
-            ? "Hi, I'm Lookout. I need a couple of permissions before I can see your screen. I've opened a window to help."
-            : "Hi, I'm Lookout. Hold \(TalkShortcut.current.spoken) any time to ask me something."
+            ? "Hi, I'm Scout. I need a couple of permissions before I can see your screen. I've opened a window to help."
+            : "Hi, I'm Scout. Hold \(TalkShortcut.current.spoken) any time to ask me something."
         // With the setup window open, say it but don't draw a bubble over the window's button.
         if missing && !demoBrowser.window.isVisible { setup.show() } else { overlay.say(hello) }
         // Only speak up when something is needed (permissions). Every other launch is silent: a voice out of
@@ -103,7 +103,7 @@ final class Companion {
         let screen = overlay.screen.frame
         overlay.moveTo(CGPoint(x: screen.width / 2 - 200, y: screen.height / 2 - 120))
         let lines: [(String?, String)] = [
-            ("Hello!", "Hi, I'm Lookout. I'll stay close by, right next to your pointer."),
+            ("Hello!", "Hi, I'm Scout. I'll stay close by, right next to your pointer."),
             ("I can help", "If you get stuck, hold \(TalkShortcut.current.spoken) and just ask me. I'll point to the right spot."),
             ("I watch out for you", "If something looks like a scam, I'll stop you gently and explain." + (LookoutConfig.familyEnabled ? " And I'll let \(LookoutConfig.familyName) know." : "")),
             ("One last thing", "I need your OK to see the screen. I'll open a window that shows you how."),
@@ -133,7 +133,7 @@ final class Companion {
         return ok
     }
 
-    /// Esc is only grabbed while Lookout is talking or pointing, so it never steals Esc from other apps otherwise.
+    /// Esc is only grabbed while Scout is talking or pointing, so it never steals Esc from other apps otherwise.
     func updateEscapeKey() {
         if busy {
             HotKeys.shared.register(id: HotKeys.escapeID, keyCode: UInt32(kVK_Escape), modifiers: 0,
@@ -143,7 +143,7 @@ final class Companion {
         }
     }
 
-    /// Silence Lookout immediately: cancel the current answer, stop speaking, put the buddy back.
+    /// Silence Scout immediately: cancel the current answer, stop speaking, put the buddy back.
     func stopEverything() {
         generation += 1
         activeTask?.cancel()
@@ -227,10 +227,10 @@ final class Companion {
         guard !listening else { return }
         wake.stop()   // one microphone user at a time
         prepareForQuestion()
-        // Talking over Lookout interrupts it.
+        // Talking over Scout interrupts it.
         stopEverything()
         guard Listener.canUseMicrophone else {
-            overlay.say("I can't hear yet. Click the Lookout menu at the top and choose “Ask Lookout…” to type instead.")
+            overlay.say("I can't hear yet. Click the Scout menu at the top and choose “Ask Scout…” to type instead.")
             return
         }
         Task {
@@ -263,11 +263,11 @@ final class Companion {
         }
     }
 
-    // MARK: "Hey Lookout"
+    // MARK: "Hey Scout"
 
     let wake = WakeListener()
 
-    /// Keeps the wake-word listener running only while it can't hear Lookout itself or clash with push-to-talk.
+    /// Keeps the wake-word listener running only while it can't hear Scout itself or clash with push-to-talk.
     func startWakeWord() {
         wake.onWake = { [weak self] in
             guard let self else { return }
@@ -383,7 +383,7 @@ final class Companion {
             // Stream: fly as soon as the point arrives, speak each sentence as it completes.
             let speaker = SentenceQueue(speech: speech) { [weak self] in self?.generation == gen }
             var watcher: ActionWatcher?
-            var actedEarly = false   // they did the step while Lookout was still explaining it
+            var actedEarly = false   // they did the step while Scout was still explaining it
             var reply = "", spokenUpTo = 0, pointed = false
             var tFirst: TimeInterval?
             let title = "Step \(stepNo)"
@@ -523,7 +523,7 @@ final class Companion {
         overlay.reset()
     }
 
-    /// Testing only (LOOKOUT_TEST_GUIDE_CLICK=1): click what Lookout pointed at, 2.5 s later, so the follow-along
+    /// Testing only (LOOKOUT_TEST_GUIDE_CLICK=1): click what Scout pointed at, 2.5 s later, so the follow-along
     /// loop can be exercised end to end without a person. Clicks only inside the front window of the app named by
     /// LOOKOUT_TEST_GUIDE_APP (e.g. Calculator), or the demo browser when that's unset.
     func testAutoClick(at p: CGPoint) {
@@ -587,7 +587,7 @@ final class Companion {
         return s
     }
 
-    /// What Lookout and the person have done together recently. Updated as each step is given (not when a
+    /// What Scout and the person have done together recently. Updated as each step is given (not when a
     /// guide finishes), so a guide cut short by "what now?" is still remembered and can be continued.
     struct Turn {
         var question: String
@@ -949,7 +949,7 @@ final class Companion {
                                     title: Companion.alertTitle(verdict: verdict, rule: r.rules.first),
                                     explanation: [verdict?.familySummary.isEmpty == false ? verdict!.familySummary : r.explanation, r.stageLine, Companion.evidenceLine(pipeline)].compactMap { $0 }.joined(separator: " "),
                                     risk: r.probability, url: snap.context.url, app: snap.context.appName, screenshot: thumb,
-                                    action: "Lookout interrupted and explained the warning signs"))
+                                    action: "Scout interrupted and explained the warning signs"))
         }
         DebugShot.take("interrupt")
         // Let the buddy and the card appear first, then speak: a calmer start than a voice out of nowhere.
@@ -1129,13 +1129,13 @@ final class Companion {
             },
         ], near: buddyScreenPoint)
         await family.send(.init(type: "remote_access", title: "\(name) opened on \(LookoutConfig.elderName)'s Mac",
-                                explanation: "A remote-control program started. Lookout asked whether it was expected.", risk: pipeline.engine.assess(currentScreen: []).probability, app: name, action: "Asked \(LookoutConfig.elderName) whether to end the session"))
+                                explanation: "A remote-control program started. Scout asked whether it was expected.", risk: pipeline.engine.assess(currentScreen: []).probability, app: name, action: "Asked \(LookoutConfig.elderName) whether to end the session"))
         await speech.speak(msg)
     }
 
     func endRemoteSession(_ app: NSRunningApplication) {
         let name = app.localizedName ?? "the program"
-        // Test safety switch: only ever terminate Lookout's own dummy apps.
+        // Test safety switch: only ever terminate Scout's own dummy apps.
         if ProcessInfo.processInfo.environment["LOOKOUT_TERMINATE_ONLY_DEMO"] == "1", !(app.bundleIdentifier ?? "").hasPrefix("com.lookout.demo") {
             Log.info("remote shield: refusing to terminate non-demo app \(name) (LOOKOUT_TERMINATE_ONLY_DEMO)")
             return
@@ -1250,14 +1250,14 @@ final class StuckDetector {
     }
 }
 
-/// LOOKOUT_DEBUG_SHOTS=1: saves an image of Lookout's own windows only (never other apps)
-/// to ~/Library/Application Support/Lookout/shots/. Demo/debug only.
+/// LOOKOUT_DEBUG_SHOTS=1: saves an image of Scout's own windows only (never other apps)
+/// to ~/Library/Application Support/Scout/shots/. Demo/debug only.
 enum DebugShot {
     static var enabled: Bool { ProcessInfo.processInfo.environment["LOOKOUT_DEBUG_SHOTS"] == "1" }
     static func take(_ name: String) {
         guard enabled else { return }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
-            // Only Lookout's own windows (never other apps' content), composited over a plain background.
+            // Only Scout's own windows (never other apps' content), composited over a plain background.
             // Front-to-back order from the window server, filtered to this process.
             let info = CGWindowListCopyWindowInfo(.optionOnScreenOnly, kCGNullWindowID) as? [[String: Any]] ?? []
             let pid = Int(getpid())
@@ -1284,7 +1284,7 @@ enum DeepCheck {
     }
 }
 
-/// How help moves between steps. Default (automatic): Lookout watches for the click and gives the next step
+/// How help moves between steps. Default (automatic): Scout watches for the click and gives the next step
 /// on its own, like someone watching over your shoulder. Off: one answer per question, like Clicky.
 enum GuideMode {
     static var automatic: Bool {
@@ -1324,7 +1324,7 @@ final class ActionWatcher {
     private var keys = 0
 
     private var localMonitor: Any?
-    /// Extra state that changes when the person moves on inside Lookout's own windows (the demo browser's page).
+    /// Extra state that changes when the person moves on inside Scout's own windows (the demo browser's page).
     static var extraWindowKey: (@MainActor () -> String)?
 
     init() {
@@ -1385,7 +1385,7 @@ final class ActionWatcher {
         return false
     }
 
-    /// What they've done so far (for when Lookout noticed it while still talking).
+    /// What they've done so far (for when Scout noticed it while still talking).
     func currentAction() -> Action {
         stop()
         return Action(click: lastClick?.point, typed: keys)

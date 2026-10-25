@@ -241,12 +241,12 @@ final class Overlay {
         }
     }
 
-    /// The display Lookout is on, for screenshots (it lives on the screen with the pointer).
+    /// The display Scout is on, for screenshots (it lives on the screen with the pointer).
     var displayID: CGDirectDisplayID? {
         screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID
     }
 
-    /// Multiple monitors: when the pointer moves to another screen (and Lookout isn't busy pointing or
+    /// Multiple monitors: when the pointer moves to another screen (and Scout isn't busy pointing or
     /// talking), the overlay moves there with it, like Clicky.
     private func followPointerToItsScreen() {
         guard !isPinned, state.bubble == nil, let w = window else { return }
