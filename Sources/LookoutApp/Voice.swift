@@ -118,7 +118,7 @@ final class CartesiaSpeech: NSObject, SpeechOutput, AVAudioPlayerDelegate {
             "There. It's gone. You did great.",
             "Good choice. Nothing was sent.",
             "Want some help? I'm right here.",
-            "Okay.", "Nice.", "Got it.", "Perfect.", "Perfect. You're all set.",
+            "Perfect. You're all set.",
             "This looks like a scam. Let's stop here.",
         ]
         if LookoutConfig.familyEnabled {

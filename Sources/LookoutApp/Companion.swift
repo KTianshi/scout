@@ -340,10 +340,8 @@ final class Companion {
 
     // MARK: Help mode
 
-    /// Short, cached acknowledgments said the moment they finish a step (prewarmed in standardLines).
     /// Claude effort for a question's first answer (LOOKOUT_HELP_EFFORT overrides, for measuring).
     static var firstStepEffort: String { ProcessInfo.processInfo.environment["LOOKOUT_HELP_EFFORT"] ?? "medium" }
-    static let acks = ["Okay.", "Nice.", "Got it.", "Perfect."]
     static let allSet = "Perfect. You're all set."
 
     /// The guide's turn in `turns`, so its prompt shows the other turns as history.
@@ -385,6 +383,7 @@ final class Companion {
             // Stream: fly as soon as the point arrives, speak each sentence as it completes.
             let speaker = SentenceQueue(speech: speech) { [weak self] in self?.generation == gen }
             var watcher: ActionWatcher?
+            var actedEarly = false   // they did the step while Lookout was still explaining it
             var reply = "", spokenUpTo = 0, pointed = false
             var tFirst: TimeInterval?
             let title = "Step \(stepNo)"
@@ -394,6 +393,7 @@ final class Companion {
                                                      image: snap.image, maxTokens: 600, effort: stepNo == 1 ? Self.firstStepEffort : "low") {
                     if Task.isCancelled || generation != gen { speaker.cancel(); interrupter?.stop(); watcher?.stop(); return }
                     if spokenUpTo == 0, interrupter?.sawClick == true { superseded = true; break }
+                    if let w = watcher, w.ready() { actedEarly = true; break }
                     reply += delta
                     if tFirst == nil { tFirst = Date().timeIntervalSince(t0) }
                     let body = reply.replacingOccurrences(of: "[DONE]", with: "", options: .caseInsensitive)
@@ -445,8 +445,31 @@ final class Companion {
             updateTurn(turn, step: text, finished: done)
             given.append(text)
             let w8 = watcher ?? ActionWatcher()
-            await speaker.finish()
+            // Finish talking, unless they do the step first: then stop mid-sentence and move on, so nobody waits
+            // through a long explanation of something they've already done.
+            if !actedEarly {
+                var finishedTalking = false
+                let talk = Task { @MainActor in await speaker.finish(); finishedTalking = true }
+                while !finishedTalking && !Task.isCancelled && generation == gen {
+                    if w8.ready() { actedEarly = true; break }
+                    try? await Task.sleep(nanoseconds: 50_000_000)
+                }
+                if actedEarly { talk.cancel() }
+            }
+            if actedEarly {
+                speaker.cancel()
+                speech.stop()
+                Log.info("guide: step done while still talking; moving on")
+            }
             if Task.isCancelled || generation != gen { w8.stop(); return }
+            if done && actedEarly {
+                w8.stop()
+                overlay.release()
+                overlay.setMood(.happy)
+                overlay.say(Self.allSet, title: nil)
+                await speech.speak(Self.allSet)
+                break
+            }
             if done {
                 // The last step still needs doing ("click Send"): wait for it, then close like a person would.
                 if pointed, GuideMode.automatic {
@@ -480,7 +503,7 @@ final class Companion {
             overlay.setMood(.idle)
             // Stays true until the next step starts talking: the step they just did may open another app.
             guideWaiting = true
-            let action = await w8.wait(timeout: 90)
+            let action = actedEarly ? w8.currentAction() : await w8.wait(timeout: 90)
             if Task.isCancelled || generation != gen { guideWaiting = false; return }
             guard let action else {
                 guideWaiting = false
@@ -489,10 +512,8 @@ final class Companion {
                 break
             }
             lastAction = action
-            // Like a person watching over their shoulder: a quick "okay" while looking at what changed.
+            // Straight on to the next step (no "nice"/"got it" filler: it read as a pause, not a person).
             overlay.setMood(.thinking)
-            let ack = Self.acks[stepNo % Self.acks.count]
-            Task { await speech.speak(ack) }
         }
         let summary = given.joined(separator: " ")
         Task { await family.send(.init(type: "help", title: "Helped with: \(question.prefix(80))", explanation: String(summary.prefix(300)), app: nil)) }
@@ -1344,20 +1365,32 @@ final class ActionWatcher {
         return "\(app.processIdentifier)|\(title)|\(extraWindowKey?() ?? "")"
     }
 
-    /// Returns once they've clicked (and the screen had a moment to update) or finished typing (2 s pause).
+    /// True once they've done something and the screen had a moment to update: a click (0.35 s ago, not
+    /// followed by typing), a pause after typing (1.3 s), or a new window, tab or app (Enter submitted a form).
+    func ready() -> Bool {
+        if let k = lastKey, Date().timeIntervalSince(k) > 1.3 { return true }
+        if let c = lastClick, lastKey.map({ $0 < c.at }) ?? true, Date().timeIntervalSince(c.at) > 0.35 { return true }
+        // (An Accessibility round-trip, so at most twice a second: a slow app must not stall the overlay.)
+        if windowChangedAt == nil, Date().timeIntervalSince(lastWindowCheck) >= 0.5 {
+            lastWindowCheck = Date()
+            if Self.frontWindowKey() != startWindow { windowChangedAt = Date() }
+        }
+        if let w = windowChangedAt, Date().timeIntervalSince(w) > 0.4 { return true }
+        return false
+    }
+
+    /// What they've done so far (for when Lookout noticed it while still talking).
+    func currentAction() -> Action {
+        stop()
+        return Action(click: lastClick?.point, typed: keys)
+    }
+
+    /// Returns once ready(), or nil after the timeout with nothing done.
     func wait(timeout: TimeInterval) async -> Action? {
         let start = Date()
         while !Task.isCancelled && Date().timeIntervalSince(start) < timeout {
-            if let k = lastKey, Date().timeIntervalSince(k) > 1.3 { break }
-            if let c = lastClick, lastKey.map({ $0 < c.at }) ?? true, Date().timeIntervalSince(c.at) > 0.5 { break }
-            // A new window, tab or app (Enter submitted a form, a link opened) counts too.
-            // (An Accessibility round-trip, so at most twice a second: a slow app must not stall the overlay.)
-            if windowChangedAt == nil, Date().timeIntervalSince(lastWindowCheck) >= 0.5 {
-                lastWindowCheck = Date()
-                if Self.frontWindowKey() != startWindow { windowChangedAt = Date() }
-            }
-            if let w = windowChangedAt, Date().timeIntervalSince(w) > 0.6 { break }
-            try? await Task.sleep(nanoseconds: 120_000_000)
+            if ready() { break }
+            try? await Task.sleep(nanoseconds: 100_000_000)
         }
         stop()
         guard !Task.isCancelled, lastClick != nil || lastKey != nil || windowChangedAt != nil else { return nil }
