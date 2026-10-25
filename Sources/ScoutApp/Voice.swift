@@ -428,8 +428,25 @@ final class Listener {
                               "Facebook", "Instagram", "YouTube", "Netflix", "Spotify", "Amazon", "PayPal", "Venmo", "Zelle", "iCloud",
                               "Safari", "Chrome", "Slack", "Outlook", "Medicare", "Scout", "Lookout", "PDF", "Wi-Fi", "Bluetooth", "AirDrop"]
 
+    /// Cartesia Ink transcription, fed from the same tap; Apple Speech below is the backup (see CartesiaSTT).
+    private var stt: CartesiaSTT?
+    /// Once Cartesia is producing words, its partials are the ones shown.
+    private var cartesiaHeard = false
+
     func start() throws {
         latest = ""
+        cartesiaHeard = false
+        stt?.cancel()
+        stt = nil
+        if CartesiaSTT.isConfigured {
+            let s = CartesiaSTT(hints: Self.commonNames + hints)
+            s.onPartial = { [weak self] text in
+                guard let self else { return }
+                self.cartesiaHeard = true
+                self.onPartial?(text)
+            }
+            stt = s
+        }
         let req = SFSpeechAudioBufferRecognitionRequest()
         req.contextualStrings = Array(Set(Self.commonNames + hints)).prefix(100).map { $0 }
         req.shouldReportPartialResults = true
@@ -440,8 +457,10 @@ final class Listener {
         req.requiresOnDeviceRecognition = false
         request = req
         Microphone.stop(engine)
+        let cartesia = stt
         engine = Microphone.start(label: "push-to-talk") { [weak req, weak self] buffer, _ in
             req?.append(buffer)
+            cartesia?.append(buffer)
             guard let ch = buffer.floatChannelData?[0] else { return }
             var sum: Float = 0
             let n = Int(buffer.frameLength)
@@ -456,7 +475,7 @@ final class Listener {
             let isFinal = result?.isFinal ?? false
             Task { @MainActor in
                 guard let self else { return }
-                if let text { self.latest = text; self.onPartial?(text) }
+                if let text { self.latest = text; if !self.cartesiaHeard { self.onPartial?(text) } }
                 if isFinal || error != nil { self.deliver() }
             }
         }
@@ -467,6 +486,15 @@ final class Listener {
         Microphone.stop(engine)
         engine = nil
         request?.endAudio()
+        let cartesia = stt
+        stt = nil
+        // Cartesia answers about 0.1 s after release; Apple is only waited for when Cartesia had nothing.
+        if let cartesia, let text = await cartesia.finish(), !text.isEmpty {
+            task?.cancel()
+            task = nil
+            return text
+        }
+        if cartesia != nil { Log.info("heard via Apple Speech (Cartesia had nothing)") }
         return await withCheckedContinuation { c in
             finish = c
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in self?.deliver() }

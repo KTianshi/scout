@@ -60,6 +60,12 @@ final class FixtureRunner {
                     result = pipeline.applyModelVerdict(v, ctx: snap.context, sender: sender)
                     line(String(format: "claude (%.1fs): scam=%@ conf=%.2f type=%@ point=%@", Date().timeIntervalSince(t0), v.isScam ? "yes" : "no", v.confidence, v.scamType, v.point.map { "\(Int($0.x)),\(Int($0.y)) \($0.label ?? "")" } ?? "none"))
                     line("after claude: \(result.summary)")
+                    // Same rule as the app (Companion): Claude's "not a scam" is final unless a hard rule fired or
+                    // CRS rated the sender high risk.
+                    if !v.isScam, result.rules.isEmpty, sender?.verdict != .high, result.action > .quiet {
+                        result.decision.action = .quiet
+                        line("cleared by Claude (as in the app)")
+                    }
                 } catch {
                     line("claude error: \(error.localizedDescription)")
                 }
