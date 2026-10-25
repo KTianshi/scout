@@ -490,7 +490,8 @@ enum PixelIcon: String {
         }
     }
 
-    var view: PixelArt { PixelArt(rows: rows) }
+    /// The generated drawing when there is one, otherwise the hand-placed pixels.
+    @ViewBuilder var view: some View { SpriteImage(icon: self, face: .base) }
 }
 
 // MARK: - Animation
@@ -550,7 +551,7 @@ struct AnimatedSprite: View {
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 0.08)) { ctx in
-            PixelArt(rows: icon.rows(face(ctx.date.timeIntervalSinceReferenceDate + offset)))
+            SpriteImage(icon: icon, face: face(ctx.date.timeIntervalSinceReferenceDate + offset))
         }
     }
 
@@ -563,6 +564,54 @@ struct AnimatedSprite: View {
         case .thinking: return Int(t / 0.7) % 2 == 0 ? .look : .base
         case .alarmed: return .alarmed
         case .happy: return .happy
+        }
+    }
+}
+
+// MARK: - Generated sprites
+
+/// Buddy drawings made with Nano Banana by scripts/gen-sprites.py, one PNG per expression
+/// (Resources/sprites/<buddy>-<face>.png). Anything missing falls back to the hand-placed pixels.
+@MainActor
+enum SpriteArt {
+    static let directory: URL? = {
+        let fm = FileManager.default
+        var c: [URL] = []
+        if let r = Bundle.main.resourceURL { c.append(r.appendingPathComponent("sprites")) }
+        c.append(URL(fileURLWithPath: fm.currentDirectoryPath).appendingPathComponent("Resources/sprites"))
+        // Executable inside .build/<arch>/debug → repo root
+        var u = URL(fileURLWithPath: CommandLine.arguments[0]).resolvingSymlinksInPath()
+        for _ in 0..<6 { u.deleteLastPathComponent(); c.append(u.appendingPathComponent("Resources/sprites")) }
+        return c.first { fm.fileExists(atPath: $0.path) }
+    }()
+    private static var cache: [String: NSImage] = [:]
+    private static var missing: Set<String> = []
+
+    static func image(_ icon: PixelIcon, _ face: SpriteFace) -> NSImage? {
+        let key = "\(icon.rawValue)-\(face)"
+        if let i = cache[key] { return i }
+        if missing.contains(key) { return nil }
+        if let d = directory, let i = NSImage(contentsOf: d.appendingPathComponent("\(key).png")) {
+            cache[key] = i
+            return i
+        }
+        missing.insert(key)
+        return nil
+    }
+
+    static func has(_ icon: PixelIcon) -> Bool { image(icon, .base) != nil }
+}
+
+/// One expression of a buddy: the generated drawing (scaled with hard pixel edges), or the hand-placed pixels.
+struct SpriteImage: View {
+    var icon: PixelIcon
+    var face: SpriteFace
+
+    var body: some View {
+        if let img = SpriteArt.image(icon, face) ?? SpriteArt.image(icon, .base) {
+            Image(nsImage: img).interpolation(.none).resizable().aspectRatio(contentMode: .fit)
+        } else {
+            PixelArt(rows: icon.rows(face))
         }
     }
 }

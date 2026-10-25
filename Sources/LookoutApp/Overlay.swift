@@ -510,7 +510,8 @@ struct BuddyView: View {
     @AppStorage(ClassicLook.key) private var classicLook = false
 
     var body: some View {
-        if classicLook, let sprite = PixelIcon.sprite(for: style) {
+        // The mascots use their drawings in both looks; the other buddies turn into pixels in the classic look.
+        if let sprite = PixelIcon.sprite(for: style), classicLook || SpriteArt.has(sprite) {
             EmojiBuddy(emoji: "", mood: mood, pointing: pointing, level: level, sprite: sprite)
         } else {
             styled

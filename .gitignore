@@ -13,3 +13,4 @@ family/data/
 .venv/
 __pycache__/
 .pytest_cache/
+Resources/sprites/*@preview.png

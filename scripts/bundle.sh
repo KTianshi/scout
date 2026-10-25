@@ -16,6 +16,8 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/Scout"
 rsync -a --exclude ".DS_Store" "$ROOT/demo" "$APP/Contents/Resources/"
 mkdir -p "$APP/Contents/Resources/model" && cp "$ROOT/model/playbooks.json" "$APP/Contents/Resources/model/"
+# Buddy drawings (scripts/gen-sprites.py); the large previews stay out of the app.
+[ -d "$ROOT/Resources/sprites" ] && rsync -a --exclude "*@preview.png" --exclude ".DS_Store" "$ROOT/Resources/sprites" "$APP/Contents/Resources/"
 # App icon, drawn by the app itself (AppIconView).
 ICONSET="$(mktemp -d)/AppIcon.iconset"
 mkdir -p "$ICONSET"
