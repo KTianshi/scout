@@ -44,7 +44,7 @@ final class AskPanel {
     func hide() {
         if let o = resignObserver { NotificationCenter.default.removeObserver(o) }
         resignObserver = nil
-        panel?.orderOut(nil)
+        WindowRetirement.retire(panel)   // Return / a suggestion button closes this panel from inside its own click
         panel = nil
     }
 }
