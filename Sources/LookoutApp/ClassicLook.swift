@@ -84,24 +84,35 @@ private struct LookoutButton: ViewModifier {
     }
 }
 
-/// Glossy green "go" button, or the beige push button.
+/// Glossy green "go" button, or the beige push button. Hover lights an orange rim; pressing darkens it.
 struct ClassicButtonStyle: ButtonStyle {
     var go: Bool
+    func makeBody(configuration c: Configuration) -> some View { ClassicButtonBody(go: go, label: c.label, pressed: c.isPressed) }
+}
 
-    func makeBody(configuration c: Configuration) -> some View {
+private struct ClassicButtonBody<Label: View>: View {
+    var go: Bool
+    var label: Label
+    var pressed: Bool
+    @State private var hover = false
+
+    var body: some View {
         let shape = RoundedRectangle(cornerRadius: go ? 14 : 4, style: .continuous)
-        return c.label
+        let top = go ? Color(red: 0.50, green: 0.83, blue: 0.36) : Color.white
+        let bottom = go ? Color(red: 0.24, green: 0.62, blue: 0.12) : ClassicLook.face
+        label
             .foregroundStyle(go ? Color.white : Color.black)
             .shadow(color: go ? Color(red: 0.17, green: 0.37, blue: 0.07) : .clear, radius: 0, x: 1, y: 1)
             .padding(.horizontal, 18)
             .padding(.vertical, go ? 8 : 5)
-            .background(shape.fill(LinearGradient(
-                colors: go ? [Color(red: 0.50, green: 0.83, blue: 0.36), Color(red: 0.24, green: 0.62, blue: 0.12)]
-                           : [.white, ClassicLook.face],
-                startPoint: .top, endPoint: .bottom)))
+            .background(shape.fill(LinearGradient(colors: pressed ? [bottom, top] : [top, bottom], startPoint: .top, endPoint: .bottom)))
+            .overlay(shape.inset(by: 1.5).stroke(Color(red: 0.97, green: 0.70, blue: 0.19), lineWidth: hover && !pressed ? 2.5 : 0))
             .overlay(shape.stroke(go ? Color(red: 0.17, green: 0.48, blue: 0.04) : Color(red: 0, green: 0.235, blue: 0.455), lineWidth: 1))
-            .brightness(c.isPressed ? -0.08 : 0)
+            .brightness(pressed ? -0.1 : (hover ? 0.06 : 0))
+            .offset(y: pressed ? 1 : 0)
             .contentShape(shape)
+            .onHover { hover = $0 }
+            .animation(.easeOut(duration: 0.12), value: hover)
     }
 }
 
@@ -121,4 +132,194 @@ struct ClassicBanner: View {
             .clipped()
         }
     }
+}
+
+// MARK: - 8-bit icons
+
+/// A tiny bitmap drawn as crisp squares. Each string is one row; each character a palette color ("." is clear).
+struct PixelArt: View {
+    var rows: [String]
+
+    static let palette: [Character: Color] = [
+        "K": .black, "W": .white,
+        "s": Color(white: 0.78),
+        "b": Color(red: 0.45, green: 0.70, blue: 1.0), "B": Color(red: 0.10, green: 0.35, blue: 0.85),
+        "G": Color(red: 0.25, green: 0.70, blue: 0.20),
+        "Y": Color(red: 1.0, green: 0.84, blue: 0.15),
+        "p": Color(red: 0.72, green: 0.55, blue: 0.95),
+    ]
+
+    var body: some View {
+        Canvas { ctx, size in
+            let cols = rows.map(\.count).max() ?? 1
+            let px = min(size.width / CGFloat(cols), size.height / CGFloat(rows.count))
+            let ox = (size.width - px * CGFloat(cols)) / 2, oy = (size.height - px * CGFloat(rows.count)) / 2
+            for (y, row) in rows.enumerated() {
+                for (x, ch) in row.enumerated() {
+                    guard let c = Self.palette[ch] else { continue }
+                    // A hair of overlap so neighbouring squares never show a seam.
+                    ctx.fill(Path(CGRect(x: ox + CGFloat(x) * px, y: oy + CGFloat(y) * px, width: px + 0.3, height: px + 0.3)), with: .color(c))
+                }
+            }
+        }
+    }
+}
+
+enum PixelIcon: String {
+    case voice, buddy, talking, safety, eye, hand, check, arrow
+
+    var rows: [String] {
+        switch self {
+        case .voice: return [
+            "................",
+            "................",
+            ".......K....B...",
+            "......KK.....B..",
+            ".....KbK..B...B.",
+            "KKKKKbbK...B..B.",
+            "KssKbbbK...B..B.",
+            "KssKbbbK...B..B.",
+            "KssKbbbK...B..B.",
+            "KKKKKbbK...B..B.",
+            ".....KbK..B...B.",
+            "......KK.....B..",
+            ".......K....B...",
+            "................",
+            "................",
+            "................",
+        ]
+        case .buddy: return [
+            "................",
+            ".....KKKKKK.....",
+            "...KKYYYYYYKK...",
+            "..KYYYYYYYYYYK..",
+            ".KYYYYYYYYYYYYK.",
+            ".KYYYKYYYYKYYYK.",
+            "KYYYYKYYYYKYYYYK",
+            "KYYYYKYYYYKYYYYK",
+            "KYYYYYYYYYYYYYYK",
+            "KYYKYYYYYYYYKYYK",
+            ".KYYKYYYYYYKYYK.",
+            ".KYYYKKKKKKYYYK.",
+            "..KYYYYYYYYYYK..",
+            "...KKYYYYYYKK...",
+            ".....KKKKKK.....",
+            "................",
+        ]
+        case .talking: return [
+            "................",
+            "......KKKK......",
+            ".....KppppK.....",
+            ".....KpWppK.....",
+            ".....KpWppK.....",
+            ".....KppppK.....",
+            "...K.KppppK.K...",
+            "...K.KppppK.K...",
+            "...K..KKKK..K...",
+            "....K......K....",
+            ".....KKKKKK.....",
+            ".......KK.......",
+            ".......KK.......",
+            ".....KKKKKK.....",
+            "................",
+            "................",
+        ]
+        case .safety: return [
+            "................",
+            ".KKKKKKKKKKKKKK.",
+            ".KGGGGGGGGGGGGK.",
+            ".KGGGGGGGGGGWGK.",
+            ".KGGGGGGGGGWWGK.",
+            ".KGGGGGGGGWWWGK.",
+            ".KGWGGGGGWWWGGK.",
+            ".KGWWGGGWWWGGGK.",
+            "..KGWWGWWWGGGK..",
+            "..KGGWWWWGGGGK..",
+            "...KGGWWGGGGK...",
+            "....KGGGGGGK....",
+            ".....KGGGGK.....",
+            "......KGGK......",
+            ".......KK.......",
+            "................",
+        ]
+        case .eye: return [
+            "................",
+            "................",
+            "................",
+            ".....KKKKKK.....",
+            "...KKWWWWWWKK...",
+            "..KWWWWBBWWWWK..",
+            ".KWWWWBBBBWWWWK.",
+            "KWWWWBBKWBBWWWWK",
+            "KWWWWBBKKBBWWWWK",
+            ".KWWWWBBBBWWWWK.",
+            "..KWWWWBBWWWWK..",
+            "...KKWWWWWWKK...",
+            ".....KKKKKK.....",
+            "................",
+            "................",
+            "................",
+        ]
+        case .hand: return [
+            ".....KK.........",
+            "....KWWK........",
+            "....KWWK........",
+            "....KWWK........",
+            "....KWWKKK......",
+            "....KWWKWWKK....",
+            "....KWWKWWKWKK..",
+            ".KK.KWWKWWKWKWK.",
+            "KWWKKWWWWWWWKWK.",
+            "KWWWKWWWWWWWWWK.",
+            ".KWWWWWWWWWWWWK.",
+            "..KWWWWWWWWWWWK.",
+            "..KWWWWWWWWWWK..",
+            "...KWWWWWWWWWK..",
+            "....KWWWWWWWK...",
+            "....KKKKKKKKK...",
+        ]
+        case .check: return [
+            "................",
+            "................",
+            ".............KK.",
+            "............KGGK",
+            "...........KGGK.",
+            "..........KGGK..",
+            ".KK......KGGK...",
+            "KGGK....KGGK....",
+            ".KGGK..KGGK.....",
+            "..KGGKKGGK......",
+            "...KGGGGK.......",
+            "....KGGK........",
+            ".....KK.........",
+            "................",
+            "................",
+            "................",
+        ]
+        // The classic white arrow pointer.
+        case .arrow: return [
+            "K...........",
+            "KK..........",
+            "KWK.........",
+            "KWWK........",
+            "KWWWK.......",
+            "KWWWWK......",
+            "KWWWWWK.....",
+            "KWWWWWWK....",
+            "KWWWWWWWK...",
+            "KWWWWWWWWK..",
+            "KWWWWWWWWWK.",
+            "KWWWWWWKKKKK",
+            "KWWWKWWK....",
+            "KWWK.KWWK...",
+            "KWK..KWWK...",
+            "KK....KWWK..",
+            "K.....KWWK..",
+            ".......KWWK.",
+            "........KK..",
+        ]
+        }
+    }
+
+    var view: PixelArt { PixelArt(rows: rows) }
 }

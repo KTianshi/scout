@@ -256,6 +256,7 @@ struct SetupView: View {
     struct Step: Identifiable {
         let id: String
         var icon: String
+        var pixel: PixelIcon
         var title: String
         var why: String
         var granted: Bool
@@ -266,13 +267,13 @@ struct SetupView: View {
     var steps: [Step] {
         _ = tick
         return [
-            Step(id: "screen", icon: "eye", title: "Let me see your screen",
+            Step(id: "screen", icon: "eye", pixel: .eye, title: "Let me see your screen",
                  why: "So I can spot fake warnings and point to the right button.", granted: Permissions.screenRecording,
                  pane: "Privacy_ScreenCapture", request: Permissions.requestScreenRecording),
-            Step(id: "ax", icon: "hand.point.up.left", title: "Let me read buttons",
+            Step(id: "ax", icon: "hand.point.up.left", pixel: .hand, title: "Let me read buttons",
                  why: "So I can point at exactly what to click.", granted: Permissions.accessibility,
                  pane: "Privacy_Accessibility", request: Permissions.requestAccessibility),
-            Step(id: "mic", icon: "mic", title: "Let me hear you",
+            Step(id: "mic", icon: "mic", pixel: .talking, title: "Let me hear you",
                  why: "Hold \(TalkShortcut.current.spoken) and just ask.", granted: Listener.micAuthorized && Listener.speechAuthorized,
                  pane: "Privacy_Microphone", request: { Task { _ = await Listener.requestPermissions() } }),
         ]
@@ -300,8 +301,7 @@ struct SetupView: View {
 
             if let st = current {
                 VStack(spacing: 14) {
-                    Image(systemName: st.icon)
-                        .lfont(30, .regular)
+                    stepIcon(st.icon, pixel: st.pixel)
                         .foregroundStyle(classic ? ClassicLook.blue : Color.accentColor)
                         .frame(width: 72, height: 72)
                         .background(Circle().fill(classic ? Color.white : Color.accentColor.opacity(0.12)))
@@ -321,14 +321,15 @@ struct SetupView: View {
                 .transition(.asymmetric(insertion: .move(edge: .trailing).combined(with: .opacity), removal: .move(edge: .leading).combined(with: .opacity)))
             } else {
                 VStack(spacing: 14) {
-                    Image(systemName: "checkmark")
-                        .lfont(30, .semibold)
+                    stepIcon("checkmark", pixel: .check)
                         .foregroundStyle(.green)
                         .frame(width: 72, height: 72)
-                        .background(Circle().fill(Color.green.opacity(0.14)))
+                        .background(Circle().fill(classic ? Color.white : Color.green.opacity(0.14)))
+                        .overlay(Circle().stroke(classic ? Color(red: 0.24, green: 0.62, blue: 0.12) : .clear, lineWidth: 3))
                         .padding(.bottom, 6)
                     Text(skipped.isEmpty ? "You're all set" : "Ready when you are")
                         .lfont(24, .semibold)
+                        .foregroundStyle(classic ? ClassicLook.blue : .primary)
                     Text(skipped.isEmpty ? "I'll stay in the corner of your screen." : "You can finish this later from the Lookout menu.")
                         .lfont(17)
                         .foregroundStyle(.secondary)
@@ -366,6 +367,11 @@ struct SetupView: View {
         }
         .animation(.easeInOut(duration: 0.35), value: current?.id)
         .onReceive(timer) { _ in tick += 1 }
+    }
+
+    @ViewBuilder func stepIcon(_ symbol: String, pixel: PixelIcon) -> some View {
+        if classic { pixel.view.frame(width: 40, height: 40) }
+        else { Image(systemName: symbol).font(.system(size: 30)) }
     }
 
     @ViewBuilder func notNow(_ st: Step) -> some View {

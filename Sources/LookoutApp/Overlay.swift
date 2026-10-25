@@ -511,14 +511,26 @@ struct CursorBuddy: View {
     static let amber = Color(red: 1, green: 0.55, blue: 0.2)
     var color: Color { mood == .alarmed ? Self.amber : mood == .happy ? Color(red: 0.25, green: 0.78, blue: 0.5) : Self.blue }
 
+    @AppStorage(ClassicLook.key) private var classicLook = false
+
     var body: some View {
         ZStack {
-            EquilateralTriangle()
-                .fill(color)
-                .frame(width: 16, height: 16)
-                .rotationEffect(.degrees(rotation))
-                .shadow(color: color, radius: mood == .alarmed ? 12 : 8)
-                .opacity(mood == .listening || mood == .thinking ? 0 : 1)
+            Group {
+                if classicLook {
+                    // The classic white arrow. It already leans like a pointer, so it turns relative to the triangle's resting angle.
+                    PixelIcon.arrow.view
+                        .frame(width: 14, height: 22)
+                        .rotationEffect(.degrees(rotation + 35), anchor: .topLeading)
+                        .shadow(color: mood == .alarmed ? Self.amber : .black.opacity(0.35), radius: mood == .alarmed ? 8 : 1.5, x: 0.5, y: 1)
+                } else {
+                    EquilateralTriangle()
+                        .fill(color)
+                        .frame(width: 16, height: 16)
+                        .rotationEffect(.degrees(rotation))
+                        .shadow(color: color, radius: mood == .alarmed ? 12 : 8)
+                }
+            }
+            .opacity(mood == .listening || mood == .thinking ? 0 : 1)
             CursorWaveform(level: level, color: color)
                 .opacity(mood == .listening ? 1 : 0)
             CursorSpinner(color: color)

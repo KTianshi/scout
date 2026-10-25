@@ -190,10 +190,14 @@ struct SettingsSidebar: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 8) {
-                BuddyView(style: model.style, mood: .idle, pointing: false, level: 0)
-                    .frame(width: 64, height: 64)
-                    .scaleEffect(0.5)
-                    .frame(width: 32, height: 32)
+                if classic && model.style == .cursor {
+                    PixelIcon.arrow.view.frame(width: 16, height: 24).frame(width: 32, height: 32)
+                } else {
+                    BuddyView(style: model.style, mood: .idle, pointing: false, level: 0)
+                        .frame(width: 64, height: 64)
+                        .scaleEffect(0.5)
+                        .frame(width: 32, height: 32)
+                }
                 Text("Lookout").lfont(18, .semibold)
             }
             .padding(.leading, 4)
@@ -225,14 +229,8 @@ struct SidebarRow: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 10) {
-                if classic {
-                    Image(systemName: pane.icon)
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .frame(width: 28, height: 28)
-                        .background(RoundedRectangle(cornerRadius: 7, style: .continuous)
-                            .fill(LinearGradient(colors: [pane.tint.opacity(0.65), pane.tint], startPoint: .top, endPoint: .bottom)))
-                        .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous).stroke(.black.opacity(0.2), lineWidth: 1))
+                if classic, let px = PixelIcon(rawValue: pane.rawValue) {
+                    px.view.frame(width: 28, height: 28)
                 } else {
                     Image(systemName: pane.icon)
                         .font(.system(size: 15))
