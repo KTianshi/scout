@@ -32,7 +32,8 @@ BUDDIES = {
     "dog": "Scout, a friendly beagle puppy: floppy brown ears, tan face, white muzzle, black nose, small pink tongue",
     "owl": "Hoot, a round gray owl: big white eyes with black pupils, ear tufts, orange beak and feet, light gray belly",
     "mouse": "Mouse, a small gray mouse: big round ears with pink insides, black eyes, pink nose, whiskers",
-    "chick": "Clicken, a round yellow baby chick: orange beak and feet, little wings, black eyes",
+    "chick": "Clicken, a round yellow baby chick: orange beak, little wings, big round black eyes each with a "
+             "clear white shine pixel, the same on both eyes",
 }
 
 FACES = {
@@ -102,7 +103,7 @@ def clean(raw_path, out_path, size=None):
         c = px[x, y]
         r, g, b, _ = c
         # Only background-looking colors: magenta, the corner color, or a pinkish smudge. The outline stops it.
-        magenta = r > 90 and b > 90 and g < min(r, b) - 30
+        magenta = r > 55 and b > 55 and g < min(r, b) - 30
         if not (magenta or any(all(abs(c[i] - k[i]) <= 40 for i in range(3)) for k in corners)):
             continue
         clear[i] = 1
