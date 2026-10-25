@@ -36,7 +36,7 @@ Without a key, Scout still runs the on-device scam detector and hard rules, and 
 ## Using it
 
 - **Ask:** hold the talk keys (⌃⌥ Space by default), talk, let go. Or the Ask box: menu 👁 ▸ *Ask Scout…* (⌘L), or click the buddy when it rests in a corner. Optional: turn on *Say "Hey Scout"* for hands-free (on-device until the wake word).
-- **Next step:** ask "what next?" By default Scout watches for your click and gives the next step on its own, like someone watching over your shoulder; turn off *Walk me through it automatically* (Settings ▸ Talking) for one step per question.
+- **Next step:** ask "what next?" By default Scout watches for your click and gives the next step on its own, like someone watching over your shoulder; turn off *Give me the next step on its own* (Settings ▸ Asking) for one step per question.
 - **Stop:** Esc, hold the talk keys to talk over it, or switch apps.
 - **Explain:** say "What does this letter mean?", or menu ▸ *Explain what's on screen*.
 - **Dictation:** say "type …" with a text box focused (needs Accessibility).
