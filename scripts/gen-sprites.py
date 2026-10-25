@@ -35,9 +35,9 @@ BUDDIES = {
     "chick": "Clicken, a round yellow baby chick: orange beak and feet, little wings, black eyes",
 }
 
-# Sprites touched up by hand afterwards (Clicken: white eye shine, no smile under the beak). Skipped
+# Sprites touched up by hand afterwards (Clicken: white eye shine, no smile under the beak; Scout: white muzzle). Skipped
 # unless named with --only, so a re-run can't overwrite the edits.
-HAND_EDITED = {"chick"}
+HAND_EDITED = {"chick", "dog"}
 
 FACES = {
     "blink": "the eyes are closed (a short horizontal line for each eye)",

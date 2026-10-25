@@ -21,9 +21,11 @@ final class BuddyMaker: ObservableObject {
     static var hasKey: Bool { !(Secrets.shared["GEMINI_API_KEY"] ?? "").isEmpty }
     nonisolated static let dir = Log.dir.appendingPathComponent("buddies", isDirectory: true)
 
+    /// Kept in the buddy's own folder (name.txt), so it always travels with its drawings.
     nonisolated static var customName: String {
-        get { UserDefaults.standard.string(forKey: "customBuddyName") ?? "My buddy" }
-        set { UserDefaults.standard.set(newValue, forKey: "customBuddyName") }
+        let s = (try? String(contentsOf: dir.appendingPathComponent("name.txt"), encoding: .utf8))?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return s.isEmpty ? "My buddy" : s
     }
     nonisolated static var hasCustom: Bool { FileManager.default.fileExists(atPath: dir.appendingPathComponent("custom-base.png").path) }
 
@@ -62,6 +64,7 @@ final class BuddyMaker: ObservableObject {
             let raw = try await Self.generate(prompt, image: ref)
             guard let base = SpriteCleaner.clean(raw) else { throw MakerError("That drawing didn't come out clearly. Try again.") }
             try base.png.write(to: tmp.appendingPathComponent("custom-base.png"))
+            try name.write(to: tmp.appendingPathComponent("name.txt"), atomically: true, encoding: .utf8)
 
             for (i, (face, change)) in Self.faces.enumerated() {
                 progress = "Adding expressions (\(i + 1) of \(Self.faces.count))…"
@@ -77,7 +80,6 @@ final class BuddyMaker: ObservableObject {
             try? fm.removeItem(at: Self.dir)
             try fm.createDirectory(at: Self.dir.deletingLastPathComponent(), withIntermediateDirectories: true)
             try fm.moveItem(at: tmp, to: Self.dir)
-            Self.customName = name
             SpriteArt.forget(.custom)
             version += 1
             Log.info("buddy maker: made a custom buddy")

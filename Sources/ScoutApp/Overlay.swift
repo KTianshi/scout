@@ -468,7 +468,7 @@ struct BuddyOverlayView: View {
                     HighlightRing(rect: r, alarmed: state.mood == .alarmed)
                 }
                 if state.visible || state.bubble != nil || state.mood != .idle {
-                    BuddyView(style: state.style, mood: state.mood, pointing: state.pointing, level: state.listeningLevel, rotation: state.rotation)
+                    BuddyView(style: state.style, mood: state.mood, pointing: state.pointing, level: state.listeningLevel, rotation: state.rotation, plate: true)
                         .frame(width: 64, height: 64)
                         .scaleEffect((state.style == .cursor ? 1 : (state.pointing || state.mood == .alarmed ? 0.8 : 0.6)) * state.flightScale)
                         .position(state.position)
@@ -502,13 +502,15 @@ struct BuddyView: View {
     var pointing: Bool
     var level: CGFloat
     var rotation: Double = -35
+    /// A round backdrop that seats the buddy on the screen (the floating buddy, not the Settings tiles).
+    var plate = false
     @AppStorage(ClassicLook.key) private var classicLook = false
 
     var body: some View {
         // Every buddy is pixel art in both looks. Only the cursor differs: a modern blue triangle normally,
         // the classic white arrow in the classic look (drawn by CursorBuddy).
         if let sprite = PixelIcon.sprite(for: style), sprite != .custom || SpriteArt.has(.custom) {
-            EmojiBuddy(emoji: "", mood: mood, pointing: pointing, level: level, sprite: sprite)
+            EmojiBuddy(emoji: "", mood: mood, pointing: pointing, level: level, sprite: sprite, plate: plate)
         } else {
             styled
         }
@@ -700,6 +702,8 @@ struct EmojiBuddy: View {
     var level: CGFloat
     /// Classic look: a pixel sprite in place of the emoji.
     var sprite: PixelIcon? = nil
+    var plate = false
+    @AppStorage(ClassicLook.key) private var classicLook = false
     @State private var bob = false
     @State private var pulse = false
 
@@ -718,6 +722,13 @@ struct EmojiBuddy: View {
                 .frame(width: 44, height: 44)
                 .blur(radius: 10)
                 .opacity(mood == .idle ? 0.25 : 0.6)
+            if plate {
+                Circle()
+                    .fill(Color.white)
+                    .frame(width: 56, height: 56)
+                    .overlay(Circle().stroke(classicLook ? ClassicLook.blue : Color.black.opacity(0.08), lineWidth: classicLook ? 2 : 1))
+                    .shadow(color: .black.opacity(0.22), radius: 6, y: 2)
+            }
             Group {
                 if let sprite { AnimatedSprite(icon: sprite, mood: mood).frame(width: 40, height: 40) }
                 else { Text(emoji).font(.system(size: 44)) }
