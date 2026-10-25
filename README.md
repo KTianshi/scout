@@ -41,7 +41,8 @@ Without a key, Scout still runs the on-device scam detector and hard rules, and 
 - **Explain:** say "What does this letter mean?", or menu ▸ *Explain what's on screen*.
 - **Dictation:** say "type …" with a text box focused (needs Accessibility).
 - **Protection** runs by itself every 3 seconds (Settings ▸ Safety).
-- **Settings:** click the Dock icon. Voice (six Cartesia voices, speed), buddy look (glowing orb, cat, bear, chick, ghost, smiley), show/hide, follow the pointer, talk keys, hands-free, deep check.
+- **Settings:** click the Dock icon. Voice (twelve Cartesia voices, speed), buddy (Scout the dog, Hoot, Mouse, Clicken, cursor, glow, smiley, or make your own), classic look, show/hide, follow the pointer, talk keys, hands-free, deep check. Or just ask: "Hey Scout, talk slower", "use a deeper voice", "be the owl" (scam warnings can only be turned off in the window, never by voice).
+- **Listening:** push-to-talk is transcribed by Cartesia Ink (`ink-2`, streaming), with Apple Speech running on the same audio as a backup. `SCOUT_STT=apple` uses Apple only. "Hey Scout" always listens on-device.
 - **Demo:** menu ▸ *Demo* opens any scenario in Scout's own demo browser.
 
 ## Architecture
@@ -92,7 +93,7 @@ Scams are modelled as sequences of stages (pop-up → call → remote access →
 
 ### CRS sender check
 
-On suspicious screens, the sender's email address is checked with **CRS Fraud Finder** via the family server (`POST /api/crs/check-sender`; set `CRS_USERNAME` / `CRS_PASSWORD` in `~/.config/scout/secrets.env`). A high-risk result becomes evidence in the playbook model and a line in the buddy's warning ("that email address first appeared today and is rated very high risk"). Only the scammer's address is ever sent. See `DETECTION.md`.
+On suspicious screens, the sender's email address is checked with **CRS Fraud Finder** straight from the app (`CRSClient.swift`; set `CRS_USERNAME` / `CRS_PASSWORD` in `~/.config/scout/secrets.env`; without them it goes through the family server's `POST /api/crs/check-sender`). A high-risk result becomes evidence in the playbook model and a line in the buddy's warning ("that email address first appeared today and is rated very high risk"). Only the scammer's address is ever sent. See `DETECTION.md`.
 
 ### Benchmark (see `bench/RESULTS.md`)
 
