@@ -8,6 +8,7 @@ import ScoutCore
 final class CartesiaSTT: @unchecked Sendable {
     static var isConfigured: Bool {
         !(Secrets.shared["CARTESIA_API_KEY"] ?? "").isEmpty && (Secrets.shared["SCOUT_STT"] ?? "cartesia") != "apple"
+            && Connectivity.shared.isUsable(.cartesia)
     }
 
     /// Called on the main thread with everything heard so far (final words plus the words still being decided).
@@ -21,6 +22,7 @@ final class CartesiaSTT: @unchecked Sendable {
     private var finals = ""
     private var interim = ""
     private var failed = false
+    private var closing = false
     private var gotAny = false
     private var flushed: CheckedContinuation<Void, Never>?
     private let started = Date()
@@ -87,6 +89,7 @@ final class CartesiaSTT: @unchecked Sendable {
             lock.withLock { flushed = c }
             DispatchQueue.global().asyncAfter(deadline: .now() + timeout) { [weak self] in self?.resumeFlush() }
         }
+        lock.withLock { closing = true }
         socket.cancel(with: .normalClosure, reason: nil)
         let text: String? = lock.withLock {
             guard gotAny, !failed || !finals.isEmpty else { return nil }
@@ -97,7 +100,7 @@ final class CartesiaSTT: @unchecked Sendable {
         return text.isEmpty ? nil : text
     }
 
-    func cancel() { lock.lock(); let s = socket; socket = nil; lock.unlock(); s?.cancel(with: .goingAway, reason: nil); resumeFlush() }
+    func cancel() { lock.lock(); let s = socket; socket = nil; closing = true; lock.unlock(); s?.cancel(with: .goingAway, reason: nil); resumeFlush() }
 
     private func resumeFlush() {
         lock.lock(); let c = flushed; flushed = nil; lock.unlock()
@@ -117,7 +120,9 @@ final class CartesiaSTT: @unchecked Sendable {
         socket?.receive { [weak self] result in
             guard let self else { return }
             switch result {
-            case .failure:
+            case .failure(let e):
+                // A close we asked for isn't an outage.
+                if !self.lock.withLock({ self.closing }) { Connectivity.shared.reportFailure(.cartesia, error: e) }
                 self.markFailed("connection")
             case .success(let msg):
                 if case .string(let s) = msg, let o = (try? JSONSerialization.jsonObject(with: Data(s.utf8))) as? [String: Any] {
@@ -142,6 +147,7 @@ final class CartesiaSTT: @unchecked Sendable {
         case "flush_done", "done":
             resumeFlush()
         case "error":
+            if let code = (o["status_code"] as? NSNumber)?.intValue { Connectivity.shared.reportStatus(.cartesia, code: code) }
             markFailed("\(o["status_code"] ?? "") \(o["message"] ?? "")")
         default:
             break

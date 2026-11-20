@@ -41,6 +41,7 @@ final class CartesiaSpeech: NSObject, SpeechOutput, AVAudioPlayerDelegate {
         self.client = client
         // The menu's voice pick wins unless CARTESIA_VOICE_ID is set explicitly.
         if Secrets.shared["CARTESIA_VOICE_ID"] == nil { client.voiceID = ScoutVoice.current.id }
+        client.gate = .shared
         self.fallback = fallback ?? SystemSpeech()
         super.init()
     }
@@ -121,6 +122,7 @@ final class CartesiaSpeech: NSObject, SpeechOutput, AVAudioPlayerDelegate {
             "Want some help? I'm right here.",
             "Perfect. You're all set.",
             "This looks like a scam. Let's stop here.",
+            Companion.offlineLine,
         ]
         if ScoutConfig.familyEnabled {
             lines += ["\(fam) says it's OK. You can go ahead.", "\(fam) says please don't. This isn't safe. Nothing was sent."]
@@ -454,7 +456,10 @@ final class Listener {
         req.addsPunctuation = true
         // Push-to-talk uses Apple's server recognizer: noticeably better with names and brands ("Calendly" came back
         // as "Cally" on-device). The always-listening wake word stays on-device.
-        req.requiresOnDeviceRecognition = false
+        // With no internet, the server recognizer would hear nothing: use the on-device one instead.
+        let offline = Connectivity.shared.internetLooksBad()
+        req.requiresOnDeviceRecognition = offline && (recognizer?.supportsOnDeviceRecognition ?? false)
+        if offline { Log.info("push-to-talk: internet looks down, using on-device recognition") }
         request = req
         Microphone.stop(engine)
         let cartesia = stt

@@ -44,7 +44,9 @@ final class FixtureRunner {
         let pipeline = ScamPipeline()
         var result = pipeline.evaluate(snap.context)
         line("heuristics: \(result.summary)")
+        // Same network rules as the app: skipped while offline, and never waited on past the guardian's deadline.
         let claude = ClaudeClient()
+        claude.gate = .shared
         var verdict: ScamVerdict?
         var sender: SenderCheck?
         if let email = SenderCheck.extractSender(snap.context) {
@@ -52,10 +54,13 @@ final class FixtureRunner {
             line("sender: \(email) → CRS \(sender.map { "\($0.verdict.rawValue) score=\($0.score.map(String.init) ?? "-") firstSeen=\($0.firstSeen ?? "-") (\($0.source))" } ?? "not checked (family server not running or --no-model)")")
         }
         if useModel && result.shouldConfirmWithModel {
-            if claude.isConfigured {
+            if claude.isConfigured && !Connectivity.shared.isUsable(.claude) {
+                line("claude: skipped (offline), deciding on-device")
+            } else if claude.isConfigured {
                 let t0 = Date()
                 do {
-                    let v = try await claude.confirmScam(screen: snap.context, image: snap.image, heuristicSummary: result.summary)
+                    let ctx = snap.context, image = snap.image, summary = result.summary
+                    let v = try await withDeadline(Companion.checkDeadline) { try await claude.confirmScam(screen: ctx, image: image, heuristicSummary: summary) }
                     verdict = v
                     result = pipeline.applyModelVerdict(v, ctx: snap.context, sender: sender)
                     line(String(format: "claude (%.1fs): scam=%@ conf=%.2f type=%@ point=%@", Date().timeIntervalSince(t0), v.isScam ? "yes" : "no", v.confidence, v.scamType, v.point.map { "\(Int($0.x)),\(Int($0.y)) \($0.label ?? "")" } ?? "none"))
@@ -67,7 +72,7 @@ final class FixtureRunner {
                         line("cleared by Claude (as in the app)")
                     }
                 } catch {
-                    line("claude error: \(error.localizedDescription)")
+                    line(String(format: "claude error after %.1fs: %@ → deciding on-device", Date().timeIntervalSince(t0), error.localizedDescription))
                 }
             } else {
                 line("claude: skipped (no ANTHROPIC_API_KEY)")
