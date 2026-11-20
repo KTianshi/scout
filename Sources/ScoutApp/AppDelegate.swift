@@ -2,12 +2,13 @@ import AppKit
 import ScoutCore
 
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     static var shared: AppDelegate?
     let companion = Companion()
     private var statusItem: NSStatusItem!
     private var guardianItem: NSMenuItem!
     private var visibleItem: NSMenuItem!
+    private var offlineItem: NSMenuItem!
     var openDemoOnLaunch: String?? = nil
     /// Scripted question after launch (rehearsal / testing): --ask "..."
     var askOnLaunch: String?
@@ -42,6 +43,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             b.image?.isTemplate = true
         }
         let m = NSMenu()
+        m.delegate = self
+        // Only shown when the internet is down: protection keeps running on-device.
+        offlineItem = NSMenuItem(title: "No internet: still watching for scams", action: nil, keyEquivalent: "")
+        offlineItem.image = NSImage(systemSymbolName: "wifi.slash", accessibilityDescription: nil)
+        offlineItem.isEnabled = false
+        m.addItem(offlineItem)
         m.addItem(item("Ask Scout…", #selector(askTypedAction), "l"))
         m.addItem(item("Explain what's on screen", #selector(explainAction), "e"))
         m.addItem(.separator())
@@ -74,6 +81,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         m.addItem(.separator())
         m.addItem(item("Quit Scout", #selector(NSApplication.terminate(_:)), "q"))
         statusItem.menu = m
+    }
+
+    func menuWillOpen(_ menu: NSMenu) {
+        offlineItem.isHidden = Connectivity.shared.isUsable(.claude)
     }
 
     func item(_ t: String, _ s: Selector, _ k: String) -> NSMenuItem {

@@ -30,14 +30,18 @@ public final class ClaudeClient: @unchecked Sendable {
     public let apiKey: String?
     public var model: String
     public var useServerFallbacks = true
+    /// When set, calls are skipped at once while Claude is unreachable, and outcomes are reported to it.
+    /// The app sets this; the benchmark leaves it nil so every case really calls the API.
+    public var gate: Connectivity?
     private let session: URLSession
 
     public init(apiKey: String? = Secrets.shared.anthropicKey, model: String = ScoutConfig.model) {
         self.apiKey = apiKey
         self.model = model
         let cfg = URLSessionConfiguration.ephemeral
-        cfg.timeoutIntervalForRequest = 60
-        cfg.timeoutIntervalForResource = 120
+        // Idle timeout between bytes (streams send pings), so this only trips on a dead connection.
+        cfg.timeoutIntervalForRequest = 30
+        cfg.timeoutIntervalForResource = 90
         cfg.urlCache = nil
         self.session = URLSession(configuration: cfg)
     }
@@ -83,6 +87,7 @@ public final class ClaudeClient: @unchecked Sendable {
 
     func request(_ body: [String: Any]) throws -> URLRequest {
         guard let key = apiKey, !key.isEmpty else { throw ClientError.noKey }
+        if let gate, !gate.isUsable(.claude) { throw URLError(.notConnectedToInternet) }
         var r = URLRequest(url: ScoutConfig.apiBase.appendingPathComponent("v1/messages"))
         r.httpMethod = "POST"
         r.setValue("application/json", forHTTPHeaderField: "content-type")
@@ -99,6 +104,11 @@ public final class ClaudeClient: @unchecked Sendable {
 
     /// Non-streaming call; returns concatenated text blocks.
     public func complete(system: String, text: String, image: Image? = nil, maxTokens: Int = 2048, effort: String? = "low", schema: [String: Any]? = nil) async throws -> String {
+        do { return try await completeOnce(system: system, text: text, image: image, maxTokens: maxTokens, effort: effort, schema: schema) }
+        catch { if !(error is CancellationError) { gate?.reportFailure(.claude, error: error) }; throw error }
+    }
+
+    private func completeOnce(system: String, text: String, image: Image?, maxTokens: Int, effort: String?, schema: [String: Any]?) async throws -> String {
         var b = body(system: system, text: text, image: image, maxTokens: maxTokens, effort: effort, schema: schema, stream: false)
         var (data, resp) = try await session.data(for: request(b))
         var code = (resp as? HTTPURLResponse)?.statusCode ?? 0
@@ -108,6 +118,7 @@ public final class ClaudeClient: @unchecked Sendable {
             (data, resp) = try await session.data(for: request(b))
             code = (resp as? HTTPURLResponse)?.statusCode ?? 0
         }
+        gate?.reportStatus(.claude, code: code)
         guard code == 200 else { throw ClientError.http(code, String(decoding: data, as: UTF8.self)) }
         return try Self.parseText(data)
     }
@@ -130,8 +141,12 @@ public final class ClaudeClient: @unchecked Sendable {
             let task = Task {
                 do {
                     let b = self.body(system: system, text: text, image: image, maxTokens: maxTokens, effort: effort, schema: nil, stream: true)
-                    let (bytes, resp) = try await self.session.bytes(for: self.request(b))
+                    var req = try self.request(b)
+                    // Nothing at all for 15 s (the stream starts within a second or two normally): give up.
+                    req.timeoutInterval = 15
+                    let (bytes, resp) = try await self.session.bytes(for: req)
                     let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
+                    self.gate?.reportStatus(.claude, code: code)
                     if code != 200 {
                         var err = ""
                         for try await line in bytes.lines { err += line; if err.count > 2000 { break } }
@@ -159,6 +174,7 @@ public final class ClaudeClient: @unchecked Sendable {
                     }
                     continuation.finish()
                 } catch {
+                    if !Task.isCancelled { self.gate?.reportFailure(.claude, error: error) }
                     continuation.finish(throwing: error)
                 }
             }

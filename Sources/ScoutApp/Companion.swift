@@ -8,7 +8,10 @@ final class Companion {
     let overlay = Overlay()
     let speech: SpeechOutput = CartesiaSpeech()
     let observer = ScreenObserver()
-    let claude = ClaudeClient()
+    let claude: ClaudeClient = { let c = ClaudeClient(); c.gate = .shared; return c }()
+    let net = Connectivity.shared
+    /// The longest a scam check waits for Claude (and CRS) before deciding on-device. Typical answer: ~4 s.
+    static let checkDeadline: Double = 10
     let family = FamilyClient()
     let pipeline = ScamPipeline()
     let card = ActionCard()
@@ -46,6 +49,7 @@ final class Companion {
     private var stableSince = Date()
     private var lastSweepAt = Date.distantPast
     private var confirmInFlight = false
+    private var lastOfflineFingerprint: Int?
     private var pausedApprovalFor: Int?
     private var knownRemoteApps: Set<pid_t> = []
     private var dismissedRemoteApps: Set<pid_t> = []
@@ -68,6 +72,15 @@ final class Companion {
         startGuardian()
         startRemoteShield()
         stuck.start { [weak self] in self?.offerHelpBecauseStuck() }
+        net.onPathChange = { [weak self] ok in
+            Log.info(ok ? "network: back online" : "network: offline (protection continues on-device)")
+            // Lines that couldn't be cached while offline get another try.
+            if ok { Task { @MainActor in
+                guard let c = self?.speech as? CartesiaSpeech, c.client.isConfigured else { return }
+                let n = await c.client.prewarm(CartesiaSpeech.standardLines()); if n > 0 { Log.info("cartesia: prewarmed \(n) lines") }
+            } }
+        }
+        if !net.isOnline { Log.info("network: offline at launch (protection continues on-device)") }
         if let c = speech as? CartesiaSpeech, c.client.isConfigured {
             Task { let n = await c.client.prewarm(CartesiaSpeech.standardLines()); Log.info("cartesia: prewarmed \(n) lines") }
         }
@@ -358,7 +371,7 @@ final class Companion {
         card.hide()
         overlay.setMood(.thinking)
         overlay.say("Let me look…", title: question)
-        guard claude.isConfigured else {
+        guard claude.isConfigured && net.isUsable(.claude) else {
             await offlineHelp(question: question, snap: await snapshot(includeImage: true))
             return
         }
@@ -420,7 +433,7 @@ final class Companion {
                 if Task.isCancelled || generation != gen { return }
                 Log.info("help failed: \(error.localizedDescription)")
                 overlay.setMood(.idle)
-                let msg = "Sorry, I couldn't reach my helper just now. Please try again in a moment."
+                let msg = Connectivity.isNetworkError(error) ? Self.offlineLine : "Sorry, I couldn't reach my helper just now. Please try again in a moment."
                 overlay.say(msg)
                 await speech.speak(msg)
                 return
@@ -662,7 +675,11 @@ final class Companion {
     }
 
     /// Without an API key, do something useful in the demo: point at the page's marked target.
+    /// Said when a question needs Claude and the internet is down. Pre-generated, so it plays in Scout's voice.
+    static let offlineLine = "I can't reach the internet right now, so I can't look at that for you. I'm still watching for scams, though."
+
     func offlineHelp(question: String, snap: Snapshot) async {
+        if claude.isConfigured { Log.info("help: Claude unreachable, answering offline") }
         if let (name, r) = snap.knownTargetRects.first {
             let p = overlayPoint(fromScreenTopLeft: CGPoint(x: r.midX, y: r.midY))
             overlay.fly(to: p, highlight: overlayRect(fromScreenTopLeft: r))
@@ -672,7 +689,8 @@ final class Companion {
             overlay.setMood(.speaking); overlay.say(msg)
             await speech.speak(msg)
         } else {
-            let msg = "I need my internet helper for that, and it isn't set up yet. Ask your family to add the key."
+            let msg = claude.isConfigured ? Self.offlineLine
+                : "I need my internet helper for that, and it isn't set up yet. Ask your family to add the key."
             overlay.say(msg); await speech.speak(msg)
         }
         try? await Task.sleep(nanoseconds: 2_000_000_000)
@@ -689,8 +707,8 @@ final class Companion {
         overlay.setMood(.thinking)
         overlay.say("Let me read it…", title: "Explaining")
         let snap = await snapshot(includeImage: true)
-        guard claude.isConfigured else {
-            let msg = "I need my internet helper to read letters, and it isn't set up yet."
+        guard claude.isConfigured && net.isUsable(.claude) else {
+            let msg = claude.isConfigured ? Self.offlineLine : "I need my internet helper to read letters, and it isn't set up yet."
             overlay.say(msg); await speech.speak(msg); overlay.reset(); return
         }
         var text = "Question: \(question)\nScreen text:\n\(snap.context.text.prefix(8000))"
@@ -715,7 +733,7 @@ final class Companion {
             await family.send(.init(type: "help", title: "Explained a letter", explanation: String(buffer.prefix(400)), app: snap.context.appName))
         } catch {
             if Task.isCancelled { return }
-            let msg = "Sorry, I couldn't read it just now."
+            let msg = Connectivity.isNetworkError(error) ? Self.offlineLine : "Sorry, I couldn't read it just now."
             overlay.say(msg); await speech.speak(msg)
         }
         try? await Task.sleep(nanoseconds: 2_000_000_000)
@@ -794,15 +812,23 @@ final class Companion {
         // Outside checks (Kyle's flow): Claude and, when the screen shows a sender address, CRS Fraud Finder,
         // in parallel, from risk >= 0.10. Skipped on pages Claude already settled (cleared or confirmed scam).
         let senderEmail = SenderCheck.extractSender(snap.context)
+        // Offline (or Claude timed out moments ago): skip it and decide on-device right away.
+        let claudeUp = claude.isConfigured && net.isUsable(.claude)
         let willConfirm = !cleared && !knownScam && result.shouldConfirmWithModel && fp != lastConfirmedFingerprint && !confirmInFlight
-            && (claude.isConfigured || senderEmail != nil)
+            && (claudeUp || (senderEmail != nil && net.isOnline))
         // Deep check: Claude also reads screens the on-device rules found nothing on (friendly romance and
         // crypto chats have no trigger words). On the 154-screen benchmark Claude alone caught 79/79 scams
         // with 0/75 false alarms. Text only, once per settled screen, at most every 8 s.
-        let willSweep = !willConfirm && !cleared && !knownScam && DeepCheck.enabled && claude.isConfigured && !confirmInFlight
+        let willSweep = !willConfirm && !cleared && !knownScam && DeepCheck.enabled && claudeUp && !confirmInFlight
             && snap.context.text.count >= 80 && fp != lastConfirmedFingerprint
             && Date().timeIntervalSince(stableSince) >= 2 && Date().timeIntervalSince(lastSweepAt) >= 8
-        if !willConfirm && !willSweep { result = pipeline.commit(snap.context) }
+        if !willConfirm && !willSweep {
+            result = pipeline.commit(snap.context)
+            if claude.isConfigured && !claudeUp && result.shouldConfirmWithModel && fp != lastOfflineFingerprint {
+                lastOfflineFingerprint = fp
+                Log.info("guardian: Claude unreachable, deciding on-device")
+            }
+        }
         if result.probability > 0.05 { Log.info("guardian: \(result.summary)") }
         guard result.action > .quiet || willConfirm || willSweep else { return }
         if cleared && result.rules.isEmpty { return }
@@ -814,13 +840,16 @@ final class Companion {
             lastConfirmedFingerprint = fp
             // Background check: don't turn the buddy into a spinner while it's pointing or talking in a help answer.
             if willSweep { lastSweepAt = Date() } else if !busy { overlay.setMood(.thinking) }
-            if willConfirm { full = await snapshot(includeImage: claude.isConfigured) }
+            if willConfirm { full = await snapshot(includeImage: claudeUp) }
             let summary = result.summary
             let ctx = full.context, image = full.image
-            // Claude and CRS run in parallel; either can fail without blocking the other.
-            async let claudeAnswer: ScamVerdict? = claude.isConfigured
-                ? (try? await claude.confirmScam(screen: ctx, image: image, heuristicSummary: summary)) : nil
-            async let crsAnswer: SenderCheck? = (willConfirm && senderEmail != nil) ? await checkSenderCached(senderEmail!) : nil
+            // Claude and CRS run in parallel; either can fail without blocking the other, and neither may hold up
+            // a warning for long on slow Wi-Fi: past the deadline the on-device evidence decides.
+            let claude = self.claude, deadline = Self.checkDeadline
+            async let claudeAnswer: ScamVerdict? = claudeUp
+                ? await Self.answer("claude check", deadline) { try await claude.confirmScam(screen: ctx, image: image, heuristicSummary: summary) } : nil
+            async let crsAnswer: SenderCheck? = (willConfirm && senderEmail != nil && net.isOnline)
+                ? await Self.answer("crs check", deadline) { [weak self] in await self?.checkSenderCached(senderEmail!) } : nil
             verdict = await claudeAnswer
             let sender = await crsAnswer
             // Both answers enter the playbook HMM as evidence, committed once for this screen.
@@ -845,13 +874,22 @@ final class Companion {
                     if !busy && !card.isShowing { overlay.setMood(.idle) }   // a warning card still up keeps the buddy amber
                     return
                 }
-            } else if claude.isConfigured {
+            } else if claudeUp {
                 Log.info("claude check unavailable; deciding with on-device evidence\(sender != nil ? " and CRS" : "")")
             }
             confirmInFlight = false
             if !busy && !card.isShowing { overlay.setMood(.idle) }   // a warning card still up keeps the buddy amber
         }
         await act(on: result, verdict: verdict, snap: full)
+    }
+
+    /// An outside check's answer, or nil if it failed or took longer than `seconds`.
+    nonisolated static func answer<T: Sendable>(_ what: String, _ seconds: Double, _ op: @escaping @Sendable () async throws -> T?) async -> T? {
+        do { return try await withDeadline(seconds, op) }
+        catch {
+            if error is DeadlineExceeded { Log.info("\(what): no answer within \(Int(seconds)) s") }
+            return nil
+        }
     }
 
     /// Browsers where ⌘W closes just the scam tab. (Chrome's id is com.google.Chrome: the old case-sensitive

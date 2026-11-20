@@ -33,6 +33,8 @@ The family features (alerts to the family app, "check with Sarah first" approval
 
 Without a key, Scout still runs the on-device scam detector and hard rules, and help mode falls back to pointing at the demo page's marked target.
 
+**Bad Wi-Fi / no internet.** Protection never waits on the network. A scam check waits at most 10 s for Claude (typical answer: ~4 s), then the on-device detector decides. After a timeout, or with Wi-Fi off, Claude and Cartesia sit out for 30 s (10 min after a bad-key or out-of-credits answer) and are skipped instantly. Warnings and common lines are cached in Scout's voice, and anything else uses the system voice. Push-to-talk switches to Apple's on-device recognizer. The menu shows "No internet: still watching for scams". To rehearse a demo without turning Wi-Fi off, run with `SCOUT_OFFLINE=1` (e.g. `open --env SCOUT_OFFLINE=1 /Applications/Scout.app --args --demo`, or `SCOUT_OFFLINE=1 .build/debug/Scout --fixture demo/scenarios/tech-support.html`).
+
 ## Using it
 
 - **Ask:** hold the talk keys (⌃⌥ Space by default), talk, let go. Or the Ask box: menu 👁 ▸ *Ask Scout…* (⌘L), or click the buddy when it rests in a corner. Optional: turn on *Say "Hey Scout"* for hands-free (on-device until the wake word).

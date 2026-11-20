@@ -26,6 +26,9 @@ public final class CartesiaClient: @unchecked Sendable {
     public var speed: Double
     public var emotion: String?
     public let cacheDir: URL
+    /// When set, the network is skipped while Cartesia is unreachable (cached clips still play), and
+    /// outcomes are reported to it.
+    public var gate: Connectivity?
     private let session: URLSession
 
     public init(apiKey: String? = Secrets.shared["CARTESIA_API_KEY"],
@@ -43,8 +46,9 @@ public final class CartesiaClient: @unchecked Sendable {
         self.emotion = emotion
         self.cacheDir = cacheDir
         let cfg = URLSessionConfiguration.ephemeral
-        cfg.timeoutIntervalForRequest = 8
-        cfg.timeoutIntervalForResource = 20
+        // A short line normally comes back in well under a second. Past this, the system voice says it instead.
+        cfg.timeoutIntervalForRequest = 4
+        cfg.timeoutIntervalForResource = 10
         session = URLSession(configuration: cfg)
     }
 
@@ -86,14 +90,18 @@ public final class CartesiaClient: @unchecked Sendable {
     public func wav(_ text: String) async throws -> Data {
         if let d = cached(text) { return d }
         guard let key = apiKey, !key.isEmpty else { throw ClientError.noKey }
+        if let gate, !gate.isUsable(.cartesia) { throw URLError(.notConnectedToInternet) }
         var r = URLRequest(url: Self.baseURL.appendingPathComponent("tts/bytes"))
         r.httpMethod = "POST"
         r.setValue("application/json", forHTTPHeaderField: "content-type")
         r.setValue("Bearer \(key)", forHTTPHeaderField: "authorization")
         r.setValue(Self.apiVersion, forHTTPHeaderField: "cartesia-version")
         r.httpBody = try JSONSerialization.data(withJSONObject: body(text))
-        let (data, resp) = try await session.data(for: r)
+        let data: Data, resp: URLResponse
+        do { (data, resp) = try await session.data(for: r) }
+        catch { if !(error is CancellationError) { gate?.reportFailure(.cartesia, error: error) }; throw error }
         let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
+        gate?.reportStatus(.cartesia, code: code)
         guard code == 200 else { throw ClientError.http(code, String(decoding: data, as: UTF8.self)) }
         try? FileManager.default.createDirectory(at: cacheDir, withIntermediateDirectories: true)
         try? data.write(to: cacheURL(for: text), options: .atomic)
@@ -104,6 +112,7 @@ public final class CartesiaClient: @unchecked Sendable {
     public func prewarm(_ lines: [String]) async -> Int {
         var n = 0
         for l in lines where cached(l) == nil {
+            if let gate, !gate.isUsable(.cartesia) { break }   // offline: try again next launch
             if (try? await wav(l)) != nil { n += 1 }
         }
         return n
